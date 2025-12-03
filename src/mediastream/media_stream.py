@@ -1,39 +1,47 @@
+from __future__ import annotations
+
 from pathlib import Path
-import numpy as np
+from typing import Tuple
+
 import cv2 as cv
+import numpy as np
+
+
+def read_video_rgb(video_path: Path) -> Tuple[np.ndarray, float]:
+    """Load RGB frames deterministically so strict downstream steps retain true timing."""
+    if not video_path.exists():
+        raise FileNotFoundError(f"Video not found: {video_path}")
+
+    cap = cv.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise RuntimeError(f"Failed to open video: {video_path}")
+
+    fps = cap.get(cv.CAP_PROP_FPS) or 0.0
+    frames = []
+
+    while True:
+        ret, frame_bgr = cap.read()
+        if not ret:
+            break
+        frames.append(cv.cvtColor(frame_bgr, cv.COLOR_BGR2RGB))
+
+    cap.release()
+
+    if not frames:
+        raise RuntimeError(f"No frames decoded from {video_path}")
+
+    stack = np.stack(frames)
+    return stack, float(fps or 0.0)
 
 
 class MediaStream:
-    """Handles media streaming tasks"""
+    """Keeps backward compatibility with earlier imperative usage."""
 
     def __init__(self):
-        self.video_rgb = None
-        self.fps: int = 0
+        self.video_rgb: np.ndarray | None = None
+        self.fps: float = 0.0
 
     def read_video(self, video_path: Path) -> np.ndarray:
         """Loads video and returns it in RGB format."""
-        if not video_path.exists():
-            raise FileNotFoundError(f"Video not found: {video_path}")
-
-        cap = cv.VideoCapture(str(video_path))
-        self.fps = int(cap.get(cv.CAP_PROP_FPS))
-
-        frame_count = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
-        height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
-        width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
-
-        video_frames_rgb = np.empty((frame_count, height, width, 3), dtype=np.uint8)
-
-        idx = 0
-        while cap.isOpened():
-            ret, frame_bgr = cap.read()
-            if not ret:
-                break
-
-            video_frames_rgb[idx] = cv.cvtColor(frame_bgr, cv.COLOR_BGR2RGB)
-            idx += 1
-
-        cap.release()
-
-        self.video_rgb = video_frames_rgb[:idx]
+        self.video_rgb, self.fps = read_video_rgb(video_path)
         return self.video_rgb
