@@ -728,10 +728,6 @@ dependencies = [
     { name = "opencv-python" },
     { name = "pandas" },
     { name = "pose2sim" },
-]
-
-[package.optional-dependencies]
-filtering = [
     { name = "tensorflow" },
 ]
 
@@ -744,9 +740,8 @@ requires-dist = [
     { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pose2sim", specifier = ">=0.10.0" },
-    { name = "tensorflow", marker = "extra == 'filtering'", specifier = ">=2.13.0" },
+    { name = "tensorflow", specifier = ">=2.13.0" },
 ]
-provides-extras = ["filtering"]
 
 [[package]]
 name = "idna"

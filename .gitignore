@@ -22,3 +22,4 @@ wheels/
 data/input/*
 data/output/*
 models/*
+*:Zone.Identifier

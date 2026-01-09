@@ -2,6 +2,54 @@
 
 This document summarizes ALL changes and features built from initial MediaPipe-only setup to the complete augmented 3D pose estimation pipeline with advanced smoothing.
 
+## Latest Updates
+
+### ❌ Failed Approach: Rigid Cluster Constraints (January 2026)
+
+**Attempted**: Template-based rigid body constraints using Procrustes analysis
+- Created `rigid_cluster_constraints.py` with orthogonal Procrustes fitting
+- Goal: Lock augmented marker groups (shoulder clusters, foot markers) into rigid body templates
+- Computed median template from first 50 frames, then fit each frame via rotation/translation
+
+**What happened**: **INCREASED noise instead of reducing it**
+- Z-axis noise got significantly worse after applying rigid constraints
+- Thigh clusters, knee markers, and shoulder markers showed more scatter
+- Right shoulder cluster completely failed (no valid data in template)
+
+**Why it failed**:
+1. **LSTM markers don't follow perfect rigid body physics** - Pose2Sim's LSTM generates markers based on learned patterns, not physical constraints
+2. **Template captured systematic LSTM errors** - Median from first 50 frames locked in noise patterns
+3. **Procrustes forcing artifacts** - Forcing non-rigid data into rigid templates introduced new artifacts
+4. **Low confidence markers excluded** - Markers valid in <25% of frames excluded from template, leaving them unconstrained
+
+**Key lesson**: Don't force LSTM-generated augmented markers into rigid body templates. They're predictions, not physical measurements.
+
+**Status**: Reverted. Code remains in `src/anatomical/rigid_cluster_constraints.py` but NOT used in pipeline. Available via `--rigid-clusters` flag if needed for experimentation.
+
+---
+
+### Multi-Constraint Optimization (January 2026)
+
+**Created iterative biomechanical constraint system**:
+- `multi_constraint_optimization.py` - Cycles through 6 constraint types until convergence
+- Prevents "cascading violations" where fixing one constraint breaks another
+- **Results**: 44.8% improvement in joint angle accuracy, 31.5% improvement in bone length consistency
+- **Strategy**: MediaPipe markers corrected freely, augmented markers constrained relative to parents
+- Eliminates scattered markers (100% stable)
+- Processing time: ~45 seconds (was ~32 seconds)
+
+**Constraint cycle**:
+1. Bone length constraints (hip→knee→ankle consistency)
+2. Joint angle constraints (biomechanical limits: hip 0-120°, knee 0-160°, ankle ±30°)
+3. Ground plane constraints (feet on ground)
+4. Hip width constraint (anthropometric: 0.20 × height ±15%)
+5. Augmented marker constraints (fixed distance from MediaPipe parents)
+6. Heel Z-axis smoothing (temporal median filter)
+
+**Key insight**: Never lock markers - use relative parent-child constraints instead. Locking reduced effectiveness to 2.1% (vs 44.8% with relative constraints).
+
+**Controlled by**: `--multi-constraint-optimization` and `--multi-constraint-iterations N` flags
+
 ## Starting Point
 
 **Initial state**: Basic MediaPipe landmark extraction only - no TRC conversion, no augmentation, no smoothing.

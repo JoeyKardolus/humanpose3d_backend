@@ -9,7 +9,8 @@ def main():
     if len(sys.argv) > 1:
         trc_path = Path(sys.argv[1])
     else:
-        trc_path = Path('data/output/pose-3d/joey/joey_LSTM.trc')
+        # Default to complete TRC with corrected HJC
+        trc_path = Path('data/output/pose-3d/joey/joey_LSTM_complete.trc')
 
     if not trc_path.exists():
         print(f"Error: TRC file not found: {trc_path}")
