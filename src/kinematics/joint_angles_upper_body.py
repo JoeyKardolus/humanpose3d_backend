@@ -43,7 +43,7 @@ from .segment_coordinate_systems import (
 def compute_upper_body_angles(
     trc_path: Path,
     side: Literal["R", "L"] = "R",
-    smooth_window: int = 9,
+    smooth_window: int = 21,
     unwrap: bool = True,
     zero_mode: Literal["first_frame", "first_n_seconds", "global_mean"] = "first_n_seconds",
     zero_window_s: float = 0.5,

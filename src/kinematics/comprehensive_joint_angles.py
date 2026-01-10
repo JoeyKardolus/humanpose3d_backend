@@ -47,7 +47,7 @@ from .segment_coordinate_systems import (
 
 def compute_all_joint_angles(
     trc_path: Path,
-    smooth_window: int = 9,
+    smooth_window: int = 21,
     unwrap: bool = True,
     zero_mode: Literal["first_frame", "first_n_seconds", "global_mean"] = "first_n_seconds",
     zero_window_s: float = 0.5,
@@ -222,8 +222,18 @@ def compute_all_joint_angles(
             if pelvis is not None:
                 prev_pelvis = pelvis
 
-                # Pelvis angles relative to global frame (tilt, obliquity, rotation)
-                pelvis_angles[fi] = euler_xyz(pelvis.T)  # Global -> pelvis
+                # Pelvis angles: GLOBAL orientation using ZXY Euler sequence
+                # Following reference implementation compute_pelvis_global_angles.py
+                # pelvis matrix = rotation from pelvis to world (columns = pelvis axes in world)
+                # ZXY Euler of pelvis gives orientation of pelvis relative to world
+                # ZXY sequence returns [flex_Z, abd_X, rot_Y]:
+                #   - Flex/Ext: Rotation around Z (right) axis - sagittal plane tilt
+                #   - Abd/Add: Rotation around X (anterior) axis - frontal plane tilt
+                #   - Rotation: Rotation around Y (superior) axis - axial rotation
+                # Note: These are GLOBAL angles (pelvis orientation in world frame)
+                # The zero_angles() step later will subtract mean/first frame to get
+                # deviations from neutral posture
+                pelvis_angles[fi] = euler_zxy(pelvis)  # Pelvis orientation in world
 
         # Pelvis origin for trunk
         pelvis_origin = 0.5 * (rasis + lasis) if rasis is not None and lasis is not None else None
@@ -362,7 +372,7 @@ def compute_all_joint_angles(
         print("[comprehensive_angles] Post-processing angles (filter, unwrap, zero, clamp)...")
 
     # Post-process all angles: median filter -> unwrap -> zero -> clamp
-    def process_angle_array(angles, joint_type, dof_names):
+    def process_angle_array(angles, joint_type, dof_names, skip_clamp=False):
         """Apply full processing pipeline to angle array."""
         # Median filter to remove outliers
         filtered = median_filter_angles(angles, window_size=5)
@@ -374,17 +384,19 @@ def compute_all_joint_angles(
         # Zero to reference configuration
         filtered = zero_angles(filtered, times, zero_mode, zero_window_s)
 
-        # Clamp to biomechanical limits
-        if filtered.ndim == 2:  # Multi-DOF
-            for i, dof in enumerate(dof_names):
-                filtered[:, i] = clamp_biomechanical_angles(filtered[:, i], joint_type, dof)
-        else:  # Single DOF
-            filtered = clamp_biomechanical_angles(filtered, joint_type, dof_names[0])
+        # Clamp to biomechanical limits (skip for pelvis - uses global angles)
+        if not skip_clamp:
+            if filtered.ndim == 2:  # Multi-DOF
+                for i, dof in enumerate(dof_names):
+                    filtered[:, i] = clamp_biomechanical_angles(filtered[:, i], joint_type, dof)
+            else:  # Single DOF
+                filtered = clamp_biomechanical_angles(filtered, joint_type, dof_names[0])
 
         return filtered
 
     # Process all angle arrays
-    pelvis_angles = process_angle_array(pelvis_angles, "pelvis", ["flex", "abd", "rot"])
+    # Pelvis: skip clamping (global angles, already centered by zeroing)
+    pelvis_angles = process_angle_array(pelvis_angles, "pelvis", ["flex", "abd", "rot"], skip_clamp=True)
     hip_r_angles = process_angle_array(hip_r_angles, "hip", ["flex", "abd", "rot"])
     hip_l_angles = process_angle_array(hip_l_angles, "hip", ["flex", "abd", "rot"])
     knee_r_angles = process_angle_array(knee_r_angles, "knee", ["flex", "abd", "rot"])

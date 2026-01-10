@@ -130,10 +130,15 @@ def pelvis_axes(
 ) -> Optional[np.ndarray]:
     """Build pelvis anatomical coordinate system.
 
-    ISB-inspired pelvis frame:
-    - Z: Right (RASIS -> LASIS direction, but reversed for right-pointing)
-    - Y: Superior (PSIS midpoint -> ASIS midpoint)
-    - X: Anterior (Y × Z, points forward)
+    ISB-inspired pelvis frame following Wu et al. 2002:
+    - X: Anterior (cross product of Y×Z, points forward)
+    - Y: Superior (PSIS midpoint -> ASIS midpoint, primary axis)
+    - Z: Right (RASIS -> LASIS, medial-lateral axis)
+
+    This matches the reference implementation exactly:
+    - Y (superior) is PRIMARY axis (preserved direction)
+    - Z (right) is SECONDARY hint
+    - X (anterior) is derived from Y×Z cross product
 
     Args:
         rasis: Right ASIS position (3,) or None
@@ -143,7 +148,7 @@ def pelvis_axes(
         previous: Previous frame axes for continuity (3x3) or None
 
     Returns:
-        Rotation matrix (3x3) or None if invalid markers
+        Rotation matrix (3x3) with columns [X, Y, Z] or None if invalid markers
     """
     # Check for valid inputs
     if any(
@@ -156,24 +161,56 @@ def pelvis_axes(
     psis_mid = 0.5 * (rpsis + lpsis)
 
     # Z axis: medial-lateral (right pointing)
-    z_hint = rasis - lasis
+    # From left ASIS to right ASIS
+    z = normalize(rasis - lasis)
 
-    # Y axis: inferior-superior
-    y_hint = asis_mid - psis_mid
+    # Y axis: inferior-superior (primary axis)
+    # From PSIS midpoint to ASIS midpoint (pointing up)
+    y_temp = normalize(asis_mid - psis_mid)
 
-    axes = build_orthonormal_frame(z_hint, y_hint)
+    # X axis: anterior (derived from Y×Z cross product)
+    # Points forward (perpendicular to pelvis plane)
+    x = normalize(np.cross(y_temp, z))
 
-    if np.isnan(axes).any():
+    # Re-orthogonalize Y to ensure perfect orthogonality
+    # Y = Z × X (maintains Y close to original direction)
+    y = normalize(np.cross(z, x))
+
+    # Check for NaN axes
+    if np.isnan(x).any() or np.isnan(y).any() or np.isnan(z).any():
         return None
 
-    # Reorder to X=anterior, Y=superior, Z=right
-    # Current: Z=right, Y=superior, X=Z×Y=anterior
-    x = axes[:, 2]  # anterior (cross product)
-    y = axes[:, 1]  # superior
-    z = axes[:, 0]  # right
-
+    # Build rotation matrix with axes as columns
     result = np.column_stack([x, y, z])
-    return ensure_continuity(result, previous)
+
+    # Verify right-handedness (det = +1)
+    det = np.linalg.det(result)
+    if det < 0:
+        # Left-handed system - something went wrong in construction
+        # Re-orthogonalize more carefully
+        z = normalize(rasis - lasis)
+        y_temp = normalize(asis_mid - psis_mid)
+        # Ensure Y and Z are not parallel
+        if abs(np.dot(y_temp, z)) > 0.99:
+            return None  # Degenerate case
+        x = normalize(np.cross(y_temp, z))
+        y = normalize(np.cross(z, x))
+        result = np.column_stack([x, y, z])
+
+    # Axis continuity check (matching reference implementation)
+    # If all axes point in opposite direction from previous frame, flip them
+    # This prevents 180° discontinuities in Euler angles
+    if previous is not None and not np.isnan(previous).any():
+        score = (
+            np.dot(result[:, 0], previous[:, 0]) +  # X similarity
+            np.dot(result[:, 1], previous[:, 1]) +  # Y similarity
+            np.dot(result[:, 2], previous[:, 2])    # Z similarity
+        )
+        # If score < 0, all axes point opposite direction -> flip all
+        if score < 0:
+            result = -result
+
+    return result
 
 
 def femur_axes(

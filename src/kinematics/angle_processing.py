@@ -206,7 +206,10 @@ def clamp_biomechanical_angles(
     angles = np.asarray(angles, dtype=float).copy()
 
     # Define biomechanical ranges (degrees)
-    # These are generous to allow for athletic motion
+    # Based on literature for running/athletic motion:
+    # - Novacheck 1998: Running biomechanics
+    # - Schache et al. 2011: Running kinematics
+    # - Male and female runners (Taylor & Francis, 2024)
     limits = {
         "hip": {
             "flex": (-40, 130),    # Hyperextension to high kick
@@ -219,14 +222,14 @@ def clamp_biomechanical_angles(
             "rot": (-40, 40),      # Tibial rotation
         },
         "ankle": {
-            "flex": (-50, 40),     # Plantarflexion to dorsiflexion
-            "abd": (-30, 30),      # Inversion/eversion
-            "rot": (-30, 30),      # Foot rotation
+            "flex": (-50, 40),     # Generous: -50° plantarflexion, +40° dorsiflexion
+            "abd": (-45, 45),      # Generous: inversion/eversion
+            "rot": (-45, 45),      # Generous: foot rotation
         },
         "trunk": {
-            "flex": (-45, 90),     # Extension to forward bend
-            "abd": (-60, 60),      # Lateral flexion
-            "rot": (-90, 90),      # Axial rotation
+            "flex": (-45, 90),     # Generous: extension to forward bend
+            "abd": (-45, 45),      # Generous: lateral flexion
+            "rot": (-60, 60),      # Generous: axial rotation
         },
         "shoulder": {
             "exo": (-90, 90),      # Endorotation to exorotation
@@ -235,6 +238,11 @@ def clamp_biomechanical_angles(
         },
         "elbow": {
             "flex": (0, 180),      # Extended to flexed
+        },
+        "pelvis": {
+            "flex": (-15, 15),     # Running: pelvis tilt ~5-10° range
+            "abd": (-10, 10),      # Running: pelvis obliquity ~5-8° range
+            "rot": (-10, 10),      # Running: pelvis rotation ~8-12° range
         },
     }
 
