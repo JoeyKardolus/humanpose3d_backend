@@ -15,3 +15,11 @@ dependencies = [
     "tensorflow>=2.13.0",
 ]
 
+[dependency-groups]
+neural = [
+    "einops>=0.8.1",
+    "tensorboard>=2.18.0",
+    "torch>=2.9.1",
+    "torchvision>=0.24.1",
+]
+
