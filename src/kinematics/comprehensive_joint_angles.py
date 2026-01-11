@@ -47,7 +47,7 @@ from .segment_coordinate_systems import (
 
 def compute_all_joint_angles(
     trc_path: Path,
-    smooth_window: int = 21,
+    smooth_window: int = 9,  # Default 9 matches reference implementation
     unwrap: bool = True,
     zero_mode: Literal["first_frame", "first_n_seconds", "global_mean"] = "first_n_seconds",
     zero_window_s: float = 0.5,
@@ -113,12 +113,15 @@ def compute_all_joint_angles(
         coords = smoothed
 
     # Define marker candidates with priority order
+    # IMPORTANT: ASIS/PSIS markers must NOT fall back to Hip markers!
+    # Hip markers (RHip, LHip) are different anatomical points than ASIS markers.
+    # Using Hip as ASIS would give completely wrong pelvis orientation.
     marker_candidates = {
-        # Pelvis/hip markers
-        "asis_r": ["r.ASIS_study", "RASIS", "RHip"],
-        "asis_l": ["L.ASIS_study", "LASIS", "LHip"],
-        "psis_r": ["r.PSIS_study", "RPSIS"],
-        "psis_l": ["L.PSIS_study", "LPSIS"],
+        # Pelvis markers - NO Hip fallback! ASIS/PSIS are specific anatomical landmarks
+        "asis_r": ["r.ASIS_study", "RASIS", "r.ASIS", "R_ASIS"],
+        "asis_l": ["L.ASIS_study", "LASIS", "L.ASIS", "L_ASIS"],
+        "psis_r": ["r.PSIS_study", "RPSIS", "r.PSIS", "R_PSIS"],
+        "psis_l": ["L.PSIS_study", "LPSIS", "L.PSIS", "L_PSIS"],
 
         # Lower body - Right
         "hjc_r": ["RHJC_study", "RHJC"],
@@ -372,17 +375,31 @@ def compute_all_joint_angles(
         print("[comprehensive_angles] Post-processing angles (filter, unwrap, zero, clamp)...")
 
     # Post-process all angles: median filter -> unwrap -> zero -> clamp
-    def process_angle_array(angles, joint_type, dof_names, skip_clamp=False):
-        """Apply full processing pipeline to angle array."""
-        # Median filter to remove outliers
-        filtered = median_filter_angles(angles, window_size=5)
+    def process_angle_array(angles, joint_type, dof_names, skip_clamp=False, use_global_mean=False, skip_median_filter=False):
+        """Apply full processing pipeline to angle array.
+
+        Args:
+            angles: Angle array (N, 3) or (N,)
+            joint_type: Joint name for clamping limits
+            dof_names: DOF names for clamping
+            skip_clamp: Skip biomechanical clamping
+            use_global_mean: Use global_mean zeroing (for pelvis global angles)
+            skip_median_filter: Skip median filtering (for pelvis - matches reference)
+        """
+        # Median filter to remove outliers (skip for pelvis to match reference implementation)
+        if skip_median_filter:
+            filtered = angles.copy()
+        else:
+            filtered = median_filter_angles(angles, window_size=5)
 
         # Unwrap discontinuities
         if unwrap:
             filtered = unwrap_angles_deg(filtered)
 
         # Zero to reference configuration
-        filtered = zero_angles(filtered, times, zero_mode, zero_window_s)
+        # For pelvis global angles, use global_mean to match reference implementation
+        actual_zero_mode = "global_mean" if use_global_mean else zero_mode
+        filtered = zero_angles(filtered, times, actual_zero_mode, zero_window_s)
 
         # Clamp to biomechanical limits (skip for pelvis - uses global angles)
         if not skip_clamp:
@@ -395,8 +412,8 @@ def compute_all_joint_angles(
         return filtered
 
     # Process all angle arrays
-    # Pelvis: skip clamping (global angles, already centered by zeroing)
-    pelvis_angles = process_angle_array(pelvis_angles, "pelvis", ["flex", "abd", "rot"], skip_clamp=True)
+    # Pelvis: skip clamping, skip median filter, use global_mean zeroing (matches reference implementation)
+    pelvis_angles = process_angle_array(pelvis_angles, "pelvis", ["flex", "abd", "rot"], skip_clamp=True, use_global_mean=True, skip_median_filter=True)
     hip_r_angles = process_angle_array(hip_r_angles, "hip", ["flex", "abd", "rot"])
     hip_l_angles = process_angle_array(hip_l_angles, "hip", ["flex", "abd", "rot"])
     knee_r_angles = process_angle_array(knee_r_angles, "knee", ["flex", "abd", "rot"])

@@ -228,7 +228,7 @@ def extract_all_positions(bvh_path: Path) -> Tuple[Dict[str, BVHJoint], np.ndarr
 
     Returns:
         joints: Joint hierarchy
-        all_positions: (num_frames, num_joints, 3) array
+        all_positions: (num_frames, num_joints, 3) array in METERS
         frame_time: Time between frames
     """
     joints, motion_data, frame_time = parse_bvh(bvh_path)
@@ -249,6 +249,9 @@ def extract_all_positions(bvh_path: Path) -> Tuple[Dict[str, BVHJoint], np.ndarr
         for joint_idx, joint_name in enumerate(joint_names):
             if joint_name in frame_positions:
                 all_positions[frame_idx, joint_idx] = frame_positions[joint_name]
+
+    # CRITICAL: CMU mocap uses INCHES as units - convert to meters!
+    all_positions *= 0.0254  # inches to meters
 
     return joints, all_positions, frame_time
 

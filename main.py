@@ -39,6 +39,7 @@ from src.anatomical.joint_constraints import (
     soft_clamp_angles,
 )
 from src.markeraugmentation.markeraugmentation import run_pose2sim_augment
+from src.markeraugmentation.gpu_config import patch_pose2sim_gpu, get_gpu_info
 from src.mediastream.media_stream import read_video_rgb
 from src.posedetector.pose_detector import extract_world_landmarks
 from src.visualizedata.visualize_data import VisualizeData
@@ -313,6 +314,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+
+    # Enable GPU acceleration for Pose2Sim LSTM inference
+    patch_pose2sim_gpu()
+
     video_path = Path(args.video)
     if not video_path.exists():
         print(f"[main] video not found: {video_path}", file=sys.stderr)

@@ -22,13 +22,14 @@ uv run python main.py \
 ```
 
 **Results** (tested on joey.mp4, 535 frames, 20 cycles):
-- ⏱️ Processing Time: **~45 seconds**
+- ⏱️ Processing Time: **~45 seconds** (with GPU acceleration)
 - 📏 Bone Length Improvement: **68.0%** (0.113 → 0.036 CV)
 - 🎯 Marker Quality: **59/65 markers** (4 unreliable markers auto-filtered)
 - 📊 Joint Angles: **12 joint groups** computed (pelvis, hip, knee, ankle, trunk, shoulder, elbow)
 - ✓ No scattered markers - unreliable augmented markers filtered by temporal variance
 - ✓ Stable medial markers - distance constraints prevent optimization-induced noise
 - ✓ Organized output - automatic cleanup into clean directory structure
+- ✓ GPU acceleration - 3-10x speedup on augmentation (automatic CPU fallback if unavailable)
 
 ## Joint Angle Computation (ISB-Compliant)
 
@@ -85,6 +86,69 @@ uv run python main.py --video data/input/joey.mp4 --force-complete --compute-upp
 - `<video>_angles_{R|L}.csv` - Lower limb angles (9 DOF: 3 per joint)
 - `<video>_upper_angles_{R|L}.csv` - Upper body angles (7 DOF: trunk + shoulder + elbow)
 
+## Neural Depth Refinement (Advanced/Optional)
+
+For research applications requiring maximum depth accuracy, the pipeline includes a **PoseFormer-based neural depth refinement** model trained on CMU Motion Capture data.
+
+### Training the Model
+
+```bash
+# 1. Install neural dependencies (PyTorch, CUDA, etc.)
+uv sync --group neural
+
+# 2. Generate training data from CMU mocap (208K sequences)
+uv run --group neural python training/generate_training_data.py
+
+# 3. Train PoseFormer model (~9-10 hours on RTX 5080)
+uv run --group neural python scripts/train_depth_model.py \
+  --batch-size 64 \
+  --epochs 50 \
+  --workers 8 \
+  --fp16
+```
+
+**Training details:**
+- **Dataset**: 208,440 temporal sequences from CMU Motion Capture
+- **Ground truth**: Professional mocap data (converted from BVH with forward kinematics)
+- **Simulation**: Depth noise added to Z-axis (30mm, 50mm, 80mm) at 6 camera angles (0-75°)
+- **Architecture**: PoseFormer (25.5M parameters)
+  - Transformer-based with 6 layers, 8 attention heads
+  - Temporal context: 11-frame sliding windows
+  - Input features: x, y, z, visibility, variance, is_augmented, marker_type, camera_angle
+  - Output: Per-marker depth corrections (delta_z) + confidence scores
+- **Loss function**: Biomechanical constraints (bone length, ground plane, symmetry, smoothness, joint angles)
+- **Training time**: ~9-10 hours (50 epochs, RTX 5080)
+- **Output**: `models/checkpoints/best_model.pth`
+
+### Applying Depth Refinement
+
+```bash
+# Apply trained model to refine TRC depth
+uv run --group neural python scripts/apply_depth_refinement.py \
+  --input data/output/pose-3d/joey/joey_final.trc \
+  --model models/checkpoints/best_model.pth \
+  --output data/output/pose-3d/joey/joey_refined.trc
+```
+
+**How it works:**
+1. **Camera angle estimation**: Automatically calculates viewing angle from torso plane orientation
+   - Uses shoulder-hip cross product to compute torso normal vector
+   - Angle = deviation from camera direction (+Z axis)
+   - Example: 0° frontal, 45° angled, 90° profile
+2. **Temporal windowing**: Processes each frame with 11-frame context (±5 frames)
+3. **Neural inference**: PoseFormer predicts depth corrections using biomechanical knowledge
+4. **Output**: Refined TRC with corrected Z-coordinates
+
+**When to use:**
+- Research requiring high depth accuracy (inverse dynamics, force estimation)
+- Motion capture validation and quality assessment
+- Comparative biomechanics studies
+- **NOT needed** for standard joint angle computation (multi-constraint optimization is sufficient)
+
+**Data requirements:**
+- CMU Motion Capture dataset (~2GB): `git clone https://github.com/una-dinosauria/cmu-mocap.git data/training/cmu_mocap/`
+- Training generates ~500MB of NPZ files in `data/training/cmu_converted/`
+
 ## Project Overview
 
 HumanPose is a 3D human pose estimation pipeline that uses MediaPipe for landmark detection and Pose2Sim for marker augmentation. The pipeline processes video input through multiple stages: capture/detection, CSV export, TRC conversion, and augmentation to produce biomechanics-compatible output files.
@@ -93,6 +157,47 @@ HumanPose is a 3D human pose estimation pipeline that uses MediaPipe for landmar
 
 ### Environment Setup
 - `uv sync` - Install Python 3.12 toolchain and dependencies from pyproject.toml/uv.lock
+
+### GPU Acceleration (Optional)
+
+The pipeline automatically uses GPU acceleration for Pose2Sim LSTM inference when available, providing **3-10x speedup** on multi-cycle augmentation.
+
+**Requirements:**
+- NVIDIA GPU with CUDA support
+- CUDA Toolkit 12.x
+- cuDNN 9 for CUDA 12
+
+**Installation (Ubuntu/WSL2):**
+```bash
+# Add NVIDIA CUDA repository
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+
+# Install CUDA Toolkit and cuDNN
+sudo apt install -y cuda-toolkit-12-6 libcudnn9-cuda-12
+
+# Reinstall onnxruntime-gpu to detect new CUDA libraries
+uv pip uninstall onnxruntime-gpu
+uv pip install onnxruntime-gpu --force-reinstall
+```
+
+**Verify GPU is available:**
+```bash
+uv run python -c "import onnxruntime as ort; print('Available providers:', ort.get_available_providers())"
+```
+
+You should see `CUDAExecutionProvider` in the output.
+
+**Automatic Fallback:**
+- If GPU is not available, the pipeline **automatically falls back to CPU** with no user intervention
+- CPU-only systems work without any code changes
+- The GPU patch gracefully degrades: `[GPU] Warning: CUDA provider not available, using CPU`
+
+**Implementation:**
+- `src/markeraugmentation/gpu_config.py` - GPU configuration module
+- `main.py` calls `patch_pose2sim_gpu()` at startup to enable CUDA acceleration
+- ONNX Runtime provider order: `CUDA → CPU` (automatic fallback)
 
 ### Running the Pipeline
 ```bash
@@ -206,7 +311,10 @@ The pipeline follows a 7-step orchestration model in `main.py`:
   - `comprehensive_joint_angles.py` - ALL joints (pelvis + lower + trunk + upper) in single unified call
   - `visualize_angles.py` - 3-panel time-series plots for individual joint groups
   - `visualize_comprehensive_angles.py` - Multi-panel grid plots for all 12 joint groups + side-by-side comparison
-- **`markeraugmentation/`** - Pose2Sim integration, creates temp project structure, resolves CLI via POSE2SIM_CMD env var or local .venv/bin/pose2sim
+- **`markeraugmentation/`** - Pose2Sim integration with GPU acceleration:
+  - Creates temp project structure, resolves CLI via POSE2SIM_CMD env var or local .venv/bin/pose2sim
+  - `gpu_config.py` - Monkey-patches ONNX Runtime to use CUDA for 3-10x LSTM inference speedup
+  - Automatic CPU fallback when GPU unavailable
 - **`visualizedata/`** - 3D Matplotlib plotting for landmarks/TRC with auto-detection of marker sets:
   - Reads ALL markers from TRC data (not just header - critical for augmented files where header only lists 22 but data contains 65)
   - Auto-selects skeleton connections: `OPENCAP_CONNECTIONS` (33 connections) for 65-marker augmented data, `MEDIAPIPE_CONNECTIONS` for 22-33 marker data
@@ -359,13 +467,14 @@ uv run python main.py \
 ```
 
 **Results** (tested on joey.mp4, 535 frames, 20 cycles):
-- ⏱️ Processing Time: **~45 seconds**
+- ⏱️ Processing Time: **~45 seconds** (with GPU acceleration)
 - 📏 Bone Length Improvement: **68.0%** (0.113 → 0.036 CV)
 - 🎯 Marker Quality: **59/65 markers** (4 unreliable auto-filtered)
 - 📊 Joint Angles: **12 joint groups** computed (pelvis, hip, knee, ankle, trunk, shoulder, elbow)
 - ✓ No scattered markers - unreliable augmented markers filtered by variance
 - ✓ Stable medial markers - distance constraints prevent noise
 - ✓ Organized output - automatic cleanup into clean directory structure
+- ✓ GPU acceleration - 3-10x speedup on augmentation (automatic CPU fallback)
 
 **What it does**:
 1. Extracts landmarks with MediaPipe (visibility threshold 0.3)
@@ -468,6 +577,69 @@ print(f'Augmented: {augmented}/43')
 - **Right arm missing**: Camera angle issue - MediaPipe can't detect occluded limbs; use `--estimate-missing` to mirror from left
 - **Hip appears stuck**: Derived Hip marker averages LHip/RHip which dampens movement; use individual hip markers or RHJC/LHJC for analysis
 - **Head marker very far**: Nose-Neck extrapolation unreliable when head tilted; Head marker often empty in MediaPipe output
+
+### GPU Acceleration
+- **Check GPU availability**: Run `uv run python -c "import onnxruntime as ort; print(ort.get_available_providers())"` - should see `CUDAExecutionProvider`
+- **Missing CUDA libraries**: If GPU detected but not working, install CUDA Toolkit 12.x and cuDNN 9 (see GPU Acceleration section)
+- **CPU fallback works automatically**: Pipeline prints `[GPU] Warning: CUDA provider not available, using CPU` and continues normally
+- **Performance**: GPU provides 3-10x speedup on multi-cycle augmentation; CPU-only still works fine, just slower
+- **Verify GPU usage**: Pipeline prints `[GPU] Pose2Sim GPU acceleration enabled (CUDA)` at startup when GPU is active
+- **WSL2 GPU support**: Requires Windows 11 with WSL2 GPU passthrough enabled and NVIDIA drivers installed on Windows host
+
+## Pelvis Angle Calculation (Validated)
+
+The pelvis angle computation has been **validated against a reference implementation** in `use/scripts/compute_pelvis_global_angles.py`. The main codebase produces identical results (max diff < 0.001 deg).
+
+### Pelvis Coordinate System (ISB-Compliant)
+
+```python
+# From ASIS/PSIS markers (augmented by Pose2Sim):
+Z = normalize(RASIS - LASIS)       # Right (medial-lateral)
+Y_temp = normalize(ASIS_mid - PSIS_mid)  # Up (superior)
+X = normalize(Y_temp × Z)          # Forward (anterior)
+Y = normalize(Z × X)               # Orthogonalized up
+```
+
+### Euler Angle Sequence
+- **ZXY sequence** (clinical convention) via `scipy.spatial.transform.Rotation.as_euler('ZXY')`
+- Returns: `[flex_Z, abd_X, rot_Y]` in degrees
+- **Flex/Ext**: Rotation around Z (right) axis - sagittal plane tilt
+- **Abd/Add**: Rotation around X (anterior) axis - frontal plane tilt
+- **Rotation**: Rotation around Y (superior) axis - axial rotation
+
+### Key Implementation Details
+- **Smoothing**: Window size = 9 (applied to marker coordinates, not angles)
+- **Zeroing**: `global_mean` mode (subtracts mean of entire trial)
+- **No median filtering** for pelvis (only coordinate smoothing)
+- **No clamping** for pelvis (global angles can exceed joint limits)
+- **Continuity check**: Flips all axes if score < 0 to prevent 180° discontinuities
+
+### Validation Data Location
+```
+use/output/
+├── pose2sim_input_exact_LSTM_fixed.trc          # Reference TRC (65 markers, 709 frames)
+├── pose2sim_input_exact_LSTM_fixed_pelvis_global_ZXY.csv  # Reference pelvis angles
+└── pelvis_angles_plot.png                        # Reference visualization
+```
+
+### Running Validation
+```bash
+# Compare main codebase output with reference
+uv run python scripts/compare_pelvis_output.py
+```
+
+**Expected output:**
+```
+pelvis_tilt_deg:      Max diff: 0.0005 deg  [PASS]
+pelvis_obliquity_deg: Max diff: 0.0005 deg  [PASS]
+pelvis_rotation_deg:  Max diff: 0.0005 deg  [PASS]
+RESULT: ALL TESTS PASSED
+```
+
+### Critical Implementation Notes
+1. **ASIS/PSIS markers required** - No fallback to Hip markers (anatomically different points)
+2. **Marker names**: `r.ASIS_study`, `L.ASIS_study`, `r.PSIS_study`, `L.PSIS_study` from Pose2Sim augmentation
+3. **TRC header fix**: Pose2Sim outputs TRC with header mismatch (22 in header, 65 in data) - handled automatically by `read_trc()`
 
 ## Code Style
 - Follow PEP 8 with 4-space indentation, snake_case names

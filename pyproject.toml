@@ -13,6 +13,7 @@ dependencies = [
     "matplotlib>=3.7.0",
     "pose2sim>=0.10.0",
     "tensorflow>=2.13.0",
+    "onnxruntime-gpu>=1.23.0",
 ]
 
 [dependency-groups]
@@ -21,5 +22,6 @@ neural = [
     "tensorboard>=2.18.0",
     "torch>=2.9.1",
     "torchvision>=0.24.1",
+    "tqdm>=4.66.0",
 ]
 

@@ -102,41 +102,81 @@ def apply_cmu_mapping(
 
 def simulate_mediapipe_depth_error(
     ground_truth: np.ndarray,
+    marker_names: list,
     camera_angle_deg: float = 45.0,
     noise_std_mm: float = 50.0,
 ) -> np.ndarray:
-    """Simulate MediaPipe depth estimation errors.
+    """Simulate MediaPipe depth estimation errors with viewpoint-dependent visibility.
+
+    Monocular depth estimation works by:
+    - Markers FACING camera → good depth (low noise)
+    - Markers FACING AWAY or OCCLUDED → bad depth (high noise)
 
     Args:
-        ground_truth: (num_frames, num_markers, 3) array
+        ground_truth: (num_frames, num_markers, 3) array (body-relative coords)
+        marker_names: List of marker names
         camera_angle_deg: Camera viewing angle from frontal (degrees)
-        noise_std_mm: Standard deviation of depth noise in millimeters
+                         0° = frontal, 90° = side view, 180° = back view
+        noise_std_mm: Base standard deviation of depth noise in millimeters
 
     Returns:
-        Corrupted positions with realistic depth errors
+        Corrupted positions with realistic viewpoint-dependent depth errors
     """
     corrupted = ground_truth.copy()
-
-    # Convert to mm for easier manipulation
-    noise_std = noise_std_mm / 1000.0  # Convert to meters
-
-    # Simulate viewpoint-dependent depth error
-    # When camera is at angle, depth estimation becomes less reliable
-    angle_rad = np.deg2rad(camera_angle_deg)
-
-    # Depth noise increases with distance from camera center
-    # and with steeper viewing angle
-    depth_noise_scale = np.sin(angle_rad) * noise_std
-
-    # Add Gaussian noise to Z-coordinate (depth)
     num_frames, num_markers, _ = corrupted.shape
-    depth_noise = np.random.randn(num_frames, num_markers) * depth_noise_scale
-    corrupted[:, :, 2] += depth_noise
 
-    # Add small noise to X,Y as well (smaller magnitude)
-    xy_noise_scale = noise_std * 0.2
-    xy_noise = np.random.randn(num_frames, num_markers, 2) * xy_noise_scale
-    corrupted[:, :, :2] += xy_noise
+    # Convert to meters
+    noise_std = noise_std_mm / 1000.0
+
+    # Camera direction in XZ plane (Y is up, Z is forward, X is left/right)
+    # 0° = looking from front (along +Z)
+    # 90° = looking from right side (along +X)
+    # 180° = looking from back (along -Z)
+    angle_rad = np.deg2rad(camera_angle_deg)
+    camera_dir = np.array([np.sin(angle_rad), 0, np.cos(angle_rad)])  # Unit vector
+
+    # For each marker, compute visibility from camera viewpoint
+    visibility_noise_scale = np.ones(num_markers)
+
+    for marker_idx, marker_name in enumerate(marker_names):
+        # Determine which side of body the marker is on
+        # Left markers have negative X, right markers have positive X
+        is_left = 'L' in marker_name or 'l_' in marker_name.lower()
+        is_right = 'R' in marker_name or 'r_' in marker_name.lower()
+        is_center = not (is_left or is_right)
+
+        # Estimate marker surface normal (which way it "faces")
+        if is_left:
+            # Left side markers face left (-X direction)
+            marker_normal = np.array([-1.0, 0, 0])
+        elif is_right:
+            # Right side markers face right (+X direction)
+            marker_normal = np.array([1.0, 0, 0])
+        else:
+            # Center markers (face, spine, etc.) face forward (+Z direction)
+            marker_normal = np.array([0, 0, 1.0])
+
+        # Compute visibility: dot product of marker normal with camera direction
+        # High dot product = marker faces camera = high visibility = low noise
+        # Low/negative dot product = marker faces away = low visibility = high noise
+        visibility = np.dot(marker_normal, camera_dir)
+
+        # Convert visibility [-1, 1] to noise scale [0.5, 3.0]
+        # Facing camera (vis=1) → scale=0.5 (low noise)
+        # Perpendicular (vis=0) → scale=1.75
+        # Facing away (vis=-1) → scale=3.0 (high noise, occluded)
+        visibility_noise_scale[marker_idx] = 1.75 - 1.25 * visibility
+
+    # Apply depth noise based on visibility
+    for frame_idx in range(num_frames):
+        for marker_idx in range(num_markers):
+            # Depth noise scaled by visibility
+            depth_noise = np.random.randn() * noise_std * visibility_noise_scale[marker_idx]
+            corrupted[frame_idx, marker_idx, 2] += depth_noise
+
+            # XY noise (small, camera can see 2D projection well)
+            xy_noise_scale = noise_std * 0.1  # Much smaller than depth noise
+            corrupted[frame_idx, marker_idx, :2] += np.random.randn(2) * xy_noise_scale
 
     return corrupted
 
@@ -183,14 +223,25 @@ def convert_bvh_to_training_data(
         for marker_idx, marker_name in enumerate(marker_names):
             ground_truth_frame[marker_idx] = opencap_markers[marker_name]
 
+        # CRITICAL FIX: Center on pelvis to get body-relative coordinates
+        # CMU mocap gives absolute lab positions - person walks across room!
+        # We need skeleton structure, not room location
+        if 'Hip' in opencap_markers:
+            pelvis_center = opencap_markers['Hip']
+            ground_truth_frame -= pelvis_center  # Make all positions relative to pelvis
+        else:
+            # If no Hip marker, skip this frame
+            continue
+
         # Simulate multiple camera angles and noise levels
         for angle_idx in range(num_camera_angles):
             camera_angle = angle_idx * 15.0  # 0°, 15°, 30°, 45°, 60°, 75°
 
             for noise_std in noise_levels:
-                # Add depth corruption
+                # Add depth corruption with viewpoint-dependent noise
                 corrupted_frame = simulate_mediapipe_depth_error(
                     ground_truth_frame[np.newaxis, :, :],  # Add batch dim
+                    marker_names=marker_names,
                     camera_angle_deg=camera_angle,
                     noise_std_mm=noise_std
                 )[0]  # Remove batch dim

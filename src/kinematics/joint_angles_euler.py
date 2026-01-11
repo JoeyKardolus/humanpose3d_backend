@@ -29,6 +29,12 @@ from .angle_processing import (
 )
 from .segment_coordinate_systems import femur_axes, foot_axes, pelvis_axes, tibia_axes
 
+# Import for official Pose2Sim marker names
+try:
+    from ..datastream.trc_header_fix import get_pose2sim_augmented_markers
+except ImportError:
+    get_pose2sim_augmented_markers = None
+
 
 def read_trc(trc_path: Path) -> Tuple[Dict[str, int], np.ndarray, np.ndarray, np.ndarray]:
     """Read TRC file and extract marker coordinates.
@@ -72,24 +78,28 @@ def read_trc(trc_path: Path) -> Tuple[Dict[str, int], np.ndarray, np.ndarray, np
             marker_names.append(name)
         k += 3
 
-    # If data has more markers than header, use standard OpenCap augmented marker names
+    # If data has more markers than header, use official Pose2Sim augmented marker names
     if num_markers_in_data > len(marker_names):
-        # These are augmented markers added by Pose2Sim (from VisualizeData.load_trc_frames)
-        augmented_names = [
-            "C7_study", "r_shoulder_study", "L_shoulder_study",
-            "r.ASIS_study", "L.ASIS_study", "r.PSIS_study", "L.PSIS_study",
-            "r_knee_study", "L_knee_study", "r_mknee_study", "L_mknee_study",
-            "r_ankle_study", "L_ankle_study", "r_mankle_study", "L_mankle_study",
-            "r_calc_study", "L_calc_study", "r_toe_study", "L_toe_study",
-            "r_5meta_study", "L_5meta_study",
-            "r_lelbow_study", "L_lelbow_study", "r_melbow_study", "L_melbow_study",
-            "r_lwrist_study", "L_lwrist_study", "r_mwrist_study", "L_mwrist_study",
-            "r_thigh1_study", "r_thigh2_study", "r_thigh3_study",
-            "L_thigh1_study", "L_thigh2_study", "L_thigh3_study",
-            "r_sh1_study", "r_sh2_study", "r_sh3_study",
-            "L_sh1_study", "L_sh2_study", "L_sh3_study",
-            "RHJC_study", "LHJC_study",
-        ]
+        # Get official marker names from Pose2Sim (or fallback to hardcoded list)
+        if get_pose2sim_augmented_markers is not None:
+            augmented_names = get_pose2sim_augmented_markers()
+        else:
+            # Fallback: hardcoded list matching Pose2Sim 0.9.x output order
+            augmented_names = [
+                "C7_study", "r_shoulder_study", "L_shoulder_study",
+                "r.ASIS_study", "L.ASIS_study", "r.PSIS_study", "L.PSIS_study",
+                "r_knee_study", "L_knee_study", "r_mknee_study", "L_mknee_study",
+                "r_ankle_study", "L_ankle_study", "r_mankle_study", "L_mankle_study",
+                "r_calc_study", "L_calc_study", "r_toe_study", "L_toe_study",
+                "r_5meta_study", "L_5meta_study",
+                "r_lelbow_study", "L_lelbow_study", "r_melbow_study", "L_melbow_study",
+                "r_lwrist_study", "L_lwrist_study", "r_mwrist_study", "L_mwrist_study",
+                "r_thigh1_study", "r_thigh2_study", "r_thigh3_study",
+                "L_thigh1_study", "L_thigh2_study", "L_thigh3_study",
+                "r_sh1_study", "r_sh2_study", "r_sh3_study",
+                "L_sh1_study", "L_sh2_study", "L_sh3_study",
+                "RHJC_study", "LHJC_study",
+            ]
         num_augmented_needed = num_markers_in_data - len(marker_names)
         marker_names.extend(augmented_names[:num_augmented_needed])
 

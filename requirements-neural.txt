@@ -1,0 +1,21 @@
+# Neural Depth Refinement Dependencies
+# Install with: pip install -r requirements.txt -r requirements-neural.txt
+# Or use uv (recommended): uv sync --group neural
+
+# PyTorch with CUDA support
+torch>=2.9.1
+torchvision>=0.24.1
+
+# Transformer operations
+einops>=0.8.1
+
+# Training monitoring
+tensorboard>=2.18.0
+
+# Progress bars
+tqdm>=4.66.0
+
+# Note: PyTorch with CUDA requires:
+# - NVIDIA GPU with CUDA support
+# - CUDA Toolkit 12.x
+# - See: https://pytorch.org/get-started/locally/

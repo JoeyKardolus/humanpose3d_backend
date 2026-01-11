@@ -1,0 +1,28 @@
+# HumanPose3D Core Dependencies
+# Install with: pip install -r requirements.txt
+# Or use uv (recommended): uv sync
+
+# Pose Detection
+mediapipe>=0.10.21
+
+# Video I/O
+opencv-python>=4.11.0.86
+
+# Data Processing
+numpy>=1.24.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+
+# Marker Augmentation
+pose2sim>=0.10.0
+
+# Deep Learning (LSTM augmentation with GPU support)
+tensorflow>=2.13.0
+onnxruntime-gpu>=1.23.0
+
+# Development Tools
+jupyter>=1.1.1
+
+# Neural Depth Refinement (Optional)
+# Install with: pip install -r requirements-neural.txt
+# Or use uv: uv sync --group neural
