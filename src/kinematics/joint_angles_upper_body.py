@@ -43,7 +43,7 @@ from .segment_coordinate_systems import (
 def compute_upper_body_angles(
     trc_path: Path,
     side: Literal["R", "L"] = "R",
-    smooth_window: int = 21,
+    smooth_window: int = 9,  # Default 9 matches validated reference implementation
     unwrap: bool = True,
     zero_mode: Literal["first_frame", "first_n_seconds", "global_mean"] = "first_n_seconds",
     zero_window_s: float = 0.5,
@@ -91,10 +91,12 @@ def compute_upper_body_angles(
 
     # Define required markers with fallback names
     # Both sides need pelvis/hip markers for trunk reference
+    # IMPORTANT: ASIS/PSIS markers must NOT fall back to Hip markers!
+    # Hip markers (RHip, LHip) are different anatomical points than ASIS markers.
     marker_candidates = {
-        # Pelvis markers (optional - fallback to basic hip markers)
-        "asis_r": ["r.ASIS_study", "r.ASIS", "RASIS", "R_ASIS", "RHip"],
-        "asis_l": ["L.ASIS_study", "L.ASIS", "LASIS", "L_ASIS", "LHip"],
+        # Pelvis markers - NO Hip fallback! ASIS/PSIS are specific anatomical landmarks
+        "asis_r": ["r.ASIS_study", "r.ASIS", "RASIS", "R_ASIS"],
+        "asis_l": ["L.ASIS_study", "L.ASIS", "LASIS", "L_ASIS"],
         "psis_r": ["r.PSIS_study", "r.PSIS", "RPSIS", "R_PSIS"],
         "psis_l": ["L.PSIS_study", "L.PSIS", "LPSIS", "L_PSIS"],
         "c7": ["C7_study", "C7", "Neck"],

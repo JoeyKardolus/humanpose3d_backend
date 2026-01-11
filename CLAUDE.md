@@ -617,9 +617,14 @@ Y = normalize(Z × X)               # Orthogonalized up
 ### Validation Data Location
 ```
 use/output/
-├── pose2sim_input_exact_LSTM_fixed.trc          # Reference TRC (65 markers, 709 frames)
-├── pose2sim_input_exact_LSTM_fixed_pelvis_global_ZXY.csv  # Reference pelvis angles
-└── pelvis_angles_plot.png                        # Reference visualization
+├── pose2sim_input_exact_LSTM_fixed.trc              # Reference TRC (65 markers, 709 frames)
+├── pose2sim_input_exact_LSTM_fixed_pelvis_global_ZXY.csv  # Reference pelvis angles (ground truth)
+└── pelvis_angles_plot.png                            # Reference visualization
+
+Validation outputs (project root):
+├── pelvis_validation_sidebyside.png                  # Side-by-side comparison (recommended)
+├── pelvis_validation_comparison.png                  # Overlay + difference plot
+└── pelvis_angles_main_codebase.png                   # Main codebase output only
 ```
 
 ### Running Validation
