@@ -261,12 +261,17 @@ def validate(
             mse_loss = nn.functional.mse_loss(refined, ground_truth)
 
             # Combined loss
-            loss = 10.0 * mse_loss + biomech_total
+            loss = args.mse_weight * mse_loss + biomech_total
 
-            # Update loss dict
-            loss_dict = biomech_dict.copy()
-            loss_dict['mse'] = mse_loss.item()
-            loss_dict['total'] = loss.item()
+            # Update loss dict (extract scalar values, ignore diagnostics)
+            loss_dict = {
+                'mse': mse_loss.item(),
+                'total': loss.item(),
+            }
+            # Add biomechanical losses (skip nested diagnostics)
+            for key, value in biomech_dict.items():
+                if not isinstance(value, dict):
+                    loss_dict[key] = value
 
             # Accumulate
             for key, value in loss_dict.items():
