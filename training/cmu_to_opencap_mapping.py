@@ -125,13 +125,13 @@ ESTIMATED_MARKERS = {
     "RHeel": {
         "method": "offset_from_joint",
         "base_joint": "RightFoot",
-        "offset": [0.0, 0.0, -0.05],  # Posterior from ankle
+        "offset": [-0.04, -0.03, -0.05],  # Posterior (X), Inferior (Y), Backward (Z)
         "description": "Right heel"
     },
     "LHeel": {
         "method": "offset_from_joint",
         "base_joint": "LeftFoot",
-        "offset": [0.0, 0.0, -0.05],
+        "offset": [0.04, -0.03, -0.05],  # Mirror for left side
         "description": "Left heel"
     },
 
@@ -309,13 +309,13 @@ ESTIMATED_MARKERS = {
     "r_5meta_study": {
         "method": "offset_from_joint",
         "base_joint": "RightToeBase",
-        "offset": [-0.03, 0.0, 0.0],  # Lateral from big toe
+        "offset": [-0.02, -0.01, 0.04],  # Lateral (X), Inferior (Y), Forward (Z)
         "description": "Right 5th metatarsal"
     },
     "L_5meta_study": {
         "method": "offset_from_joint",
         "base_joint": "LeftToeBase",
-        "offset": [0.03, 0.0, 0.0],
+        "offset": [0.02, -0.01, -0.04],  # Mirror for left side
         "description": "Left 5th metatarsal"
     },
 
