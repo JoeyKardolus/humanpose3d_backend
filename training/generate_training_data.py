@@ -100,6 +100,60 @@ def apply_cmu_mapping(
     return opencap_markers
 
 
+def compute_torso_viewpoint(
+    opencap_markers: Dict[str, np.ndarray],
+    simulation_camera_angle: float
+) -> float:
+    """Compute actual camera viewing angle from torso orientation.
+
+    Uses shoulder-hip plane to determine torso orientation,
+    then computes angle relative to camera direction.
+
+    This provides an "explicit feature" - the model receives camera angle
+    as an input feature channel, computed from actual marker positions
+    rather than just the simulation parameter.
+
+    Args:
+        opencap_markers: Dict of marker_name → 3D position
+        simulation_camera_angle: Ground truth angle from simulation (fallback)
+
+    Returns:
+        Computed camera angle in degrees (0° frontal, 90° side)
+    """
+    # Extract torso markers
+    required_markers = ['RShoulder', 'LShoulder', 'RHip', 'LHip']
+    if not all(m in opencap_markers for m in required_markers):
+        return simulation_camera_angle  # Fallback to simulation
+
+    rshoulder = opencap_markers['RShoulder']
+    lshoulder = opencap_markers['LShoulder']
+    rhip = opencap_markers['RHip']
+    lhip = opencap_markers['LHip']
+
+    # Compute torso plane vectors
+    shoulder_vec = lshoulder - rshoulder  # Left-right across shoulders
+    hip_vec = lhip - rhip                 # Left-right across hips
+    spine_vec = (rshoulder + lshoulder) / 2 - (rhip + lhip) / 2  # Vertical
+
+    # Torso plane normal (cross product)
+    torso_normal = np.cross(shoulder_vec, spine_vec)
+    torso_normal = torso_normal / (np.linalg.norm(torso_normal) + 1e-6)
+
+    # Project to XZ plane (ignore Y vertical component)
+    torso_xz = np.array([torso_normal[0], 0, torso_normal[2]])
+    torso_xz = torso_xz / (np.linalg.norm(torso_xz) + 1e-6)
+
+    # Camera direction in XZ plane
+    angle_rad = np.deg2rad(simulation_camera_angle)
+    camera_dir = np.array([np.sin(angle_rad), 0, np.cos(angle_rad)])
+
+    # Compute angle between torso and camera
+    cos_angle = np.dot(torso_xz, camera_dir)
+    computed_angle = np.rad2deg(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
+
+    return computed_angle
+
+
 def simulate_mediapipe_depth_error(
     ground_truth: np.ndarray,
     marker_names: list,
@@ -235,20 +289,25 @@ def convert_bvh_to_training_data(
 
         # Simulate multiple camera angles and noise levels
         for angle_idx in range(num_camera_angles):
-            camera_angle = angle_idx * 15.0  # 0°, 15°, 30°, 45°, 60°, 75°
+            simulation_angle = angle_idx * 15.0  # 0°, 15°, 30°, 45°, 60°, 75°
+
+            # Compute viewpoint from actual torso marker positions
+            # This provides an "explicit feature" - camera angle computed from markers
+            computed_angle = compute_torso_viewpoint(opencap_markers, simulation_angle)
 
             for noise_std in noise_levels:
                 # Add depth corruption with viewpoint-dependent noise
+                # Use simulation_angle for noise generation (ground truth corruption)
                 corrupted_frame = simulate_mediapipe_depth_error(
                     ground_truth_frame[np.newaxis, :, :],  # Add batch dim
                     marker_names=marker_names,
-                    camera_angle_deg=camera_angle,
+                    camera_angle_deg=simulation_angle,
                     noise_std_mm=noise_std
                 )[0]  # Remove batch dim
 
                 # Save training pair
                 # Format: {bvh_name}_frame{idx}_angle{angle}_noise{noise}.npz
-                example_name = f"{bvh_path.stem}_f{frame_idx:04d}_a{int(camera_angle):02d}_n{int(noise_std):03d}"
+                example_name = f"{bvh_path.stem}_f{frame_idx:04d}_a{int(simulation_angle):02d}_n{int(noise_std):03d}"
                 output_path = output_dir / f"{example_name}.npz"
 
                 np.savez_compressed(
@@ -256,7 +315,7 @@ def convert_bvh_to_training_data(
                     corrupted=corrupted_frame,
                     ground_truth=ground_truth_frame,
                     marker_names=marker_names,
-                    camera_angle=camera_angle,
+                    camera_angle=computed_angle,  # Use computed angle from torso markers
                     noise_std=noise_std,
                 )
 
