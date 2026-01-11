@@ -289,25 +289,20 @@ def convert_bvh_to_training_data(
 
         # Simulate multiple camera angles and noise levels
         for angle_idx in range(num_camera_angles):
-            simulation_angle = angle_idx * 15.0  # 0°, 15°, 30°, 45°, 60°, 75°
-
-            # Compute viewpoint from actual torso marker positions
-            # This provides an "explicit feature" - camera angle computed from markers
-            computed_angle = compute_torso_viewpoint(opencap_markers, simulation_angle)
+            camera_angle = angle_idx * 15.0  # 0°, 15°, 30°, 45°, 60°, 75°
 
             for noise_std in noise_levels:
                 # Add depth corruption with viewpoint-dependent noise
-                # Use simulation_angle for noise generation (ground truth corruption)
                 corrupted_frame = simulate_mediapipe_depth_error(
                     ground_truth_frame[np.newaxis, :, :],  # Add batch dim
                     marker_names=marker_names,
-                    camera_angle_deg=simulation_angle,
+                    camera_angle_deg=camera_angle,
                     noise_std_mm=noise_std
                 )[0]  # Remove batch dim
 
                 # Save training pair
                 # Format: {bvh_name}_frame{idx}_angle{angle}_noise{noise}.npz
-                example_name = f"{bvh_path.stem}_f{frame_idx:04d}_a{int(simulation_angle):02d}_n{int(noise_std):03d}"
+                example_name = f"{bvh_path.stem}_f{frame_idx:04d}_a{int(camera_angle):02d}_n{int(noise_std):03d}"
                 output_path = output_dir / f"{example_name}.npz"
 
                 np.savez_compressed(
@@ -315,9 +310,13 @@ def convert_bvh_to_training_data(
                     corrupted=corrupted_frame,
                     ground_truth=ground_truth_frame,
                     marker_names=marker_names,
-                    camera_angle=computed_angle,  # Use computed angle from torso markers
+                    camera_angle=camera_angle,  # Use simulation angle (explicit feature)
                     noise_std=noise_std,
                 )
+
+                # Note: compute_torso_viewpoint() is available for real inference
+                # where actual camera parameters can be derived from marker positions.
+                # For training, we use simulation angle as explicit feature.
 
                 examples_generated += 1
 

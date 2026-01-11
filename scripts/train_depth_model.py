@@ -28,7 +28,7 @@ import argparse
 from typing import Dict, List, Tuple
 
 from anatomical.depth_model import PoseFormerDepthRefiner
-from anatomical.biomechanical_losses import BiomechanicalLoss
+from anatomical.biomechanical_losses import BiomechanicalLoss, EnhancedBiomechanicalLoss
 
 
 class DepthRefinementDataset(Dataset):
@@ -184,12 +184,17 @@ def train_epoch(
             mse_loss = nn.functional.mse_loss(refined, ground_truth)
 
             # Combined loss: supervised (primary) + biomechanical constraints
-            loss = 10.0 * mse_loss + biomech_total
+            loss = args.mse_weight * mse_loss + biomech_total
 
-            # Update loss dict
-            loss_dict = biomech_dict.copy()
-            loss_dict['mse'] = mse_loss.item()
-            loss_dict['total'] = loss.item()
+            # Update loss dict (extract scalar values, ignore diagnostics for now)
+            loss_dict = {
+                'mse': mse_loss.item(),
+                'total': loss.item(),
+            }
+            # Add biomechanical losses (skip diagnostics in training loop)
+            for key, value in biomech_dict.items():
+                if not isinstance(value, dict):  # Skip nested diagnostics
+                    loss_dict[key] = value
 
         # Backward pass with gradient scaling
         scaler.scale(loss).backward()
@@ -293,6 +298,20 @@ def main():
     parser.add_argument("--val-split", type=float, default=0.1,
                         help="Validation split")
 
+    # Loss weight tuning arguments
+    parser.add_argument("--mse-weight", type=float, default=10.0,
+                        help="Weight for supervised MSE loss (default: 10.0)")
+    parser.add_argument("--bone-weight", type=float, default=1.0,
+                        help="Weight for bone length CV loss (default: 1.0)")
+    parser.add_argument("--rom-weight", type=float, default=0.5,
+                        help="Weight for joint angle ROM loss (default: 0.5)")
+    parser.add_argument("--ground-weight", type=float, default=0.3,
+                        help="Weight for ground plane loss (default: 0.3)")
+    parser.add_argument("--symmetry-weight", type=float, default=0.2,
+                        help="Weight for symmetry loss (default: 0.2)")
+    parser.add_argument("--smoothness-weight", type=float, default=0.1,
+                        help="Weight for temporal smoothness loss (default: 0.1)")
+
     args = parser.parse_args()
 
     # Setup device
@@ -322,14 +341,23 @@ def main():
     print(f"Model parameters: {num_params:,}")
     print()
 
-    # Create loss function
-    biomech_loss = BiomechanicalLoss(
-        bone_weight=1.0,
-        ground_weight=0.8,
-        symmetry_weight=0.4,
-        smoothness_weight=0.2,
-        angle_weight=0.5,
+    # Create enhanced loss function with CLI-tunable weights
+    biomech_loss = EnhancedBiomechanicalLoss(
+        bone_cv_weight=args.bone_weight,
+        rom_weight=args.rom_weight,
+        ground_weight=args.ground_weight,
+        symmetry_weight=args.symmetry_weight,
+        smoothness_weight=args.smoothness_weight,
     ).to(device)
+
+    print("Loss weights:")
+    print(f"  MSE (supervised):     {args.mse_weight}")
+    print(f"  Bone CV (primary):    {args.bone_weight}")
+    print(f"  ROM (secondary):      {args.rom_weight}")
+    print(f"  Ground plane:         {args.ground_weight}")
+    print(f"  Symmetry:             {args.symmetry_weight}")
+    print(f"  Smoothness:           {args.smoothness_weight}")
+    print()
 
     # Load dataset
     print(f"Loading dataset from {args.data}...")
