@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick setup for Human3.6M pre-processed dataset (no approval needed)
+# Quick setup for Human3.6M pre-processed dataset
 
 set -e
 
@@ -12,35 +12,37 @@ echo ""
 mkdir -p data/human36m
 cd data/human36m
 
-echo "Downloading pre-processed Human3.6M poses..."
-echo "(This version has 3D poses but no videos)"
+echo "Downloading Human3.6M pre-processed data..."
 echo ""
 
-# Option 1: Download from Stanford (Ashesh Jain's preprocessed version)
-wget -c http://www.cs.stanford.edu/people/ashesh/h3.6m.zip
+# Try alternative sources
+echo "Attempting download from GitHub mirror..."
 
-echo ""
-echo "Extracting..."
-unzip -q h3.6m.zip
+# Option 1: Try VideoPose3D preprocessed data
+wget -c https://dl.fbaipublicfiles.com/video-pose-3d/data_2d_h36m_gt.npz -O h36m_2d_gt.npz 2>&1 || true
 
-echo ""
-echo "Cleaning up..."
-rm h3.6m.zip
+if [ -f "h36m_2d_gt.npz" ]; then
+    echo "✓ Downloaded 2D ground truth data"
+else
+    echo "❌ Download failed"
+fi
+
+# Option 2: Try downloading 3D positions
+wget -c https://dl.fbaipublicfiles.com/video-pose-3d/data_3d_h36m.npz -O h36m_3d.npz 2>&1 || true
+
+if [ -f "h36m_3d.npz" ]; then
+    echo "✓ Downloaded 3D pose data"
+else
+    echo "❌ Download failed"
+fi
 
 echo ""
 echo "========================================"
-echo "✓ Human3.6M poses downloaded!"
+echo "Downloaded files:"
+ls -lh *.npz 2>/dev/null || echo "No files downloaded"
 echo "========================================"
 echo ""
-echo "Data structure:"
-ls -lh
-
-echo ""
-echo "Next steps:"
-echo "1. This gives you 3D ground truth poses"
-echo "2. To get videos, you need to register at: http://vision.imar.ro/human3.6m/"
-echo "3. Or use AMASS dataset for immediate synthetic data"
-echo ""
-echo "Alternative (with videos):"
-echo "  pip install human36m-dataset"
-echo "  # Then download will happen automatically in Python"
+echo "If downloads failed, try manual download:"
+echo "1. Go to: https://github.com/facebookresearch/VideoPose3D"
+echo "2. Download data_3d_h36m.npz from their releases"
+echo "3. Place in data/human36m/"
