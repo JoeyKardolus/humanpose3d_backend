@@ -524,6 +524,29 @@ wheels = [
 ]
 
 [[package]]
+name = "ezc3d"
+version = "1.6.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/24/f9/317da5fe5f2fe0b53ed42be6dfea963b9dbb2401e4e17f3e2a2e812030ca/ezc3d-1.6.3.tar.gz", hash = "sha256:086705dcf8877d29d59a9b19de774ce7af841a1c3863d4505287ee1fc8d1ec37", size = 49669, upload-time = "2025-11-27T13:27:28.68Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/c5/6612fb8c84888bb2183d6375fb2bc07ca5fe1c09429baf1e672c5d3d7ce4/ezc3d-1.6.3-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:05e7597a0d66efa0ab41445ac3a708144c09ac76e3bbfa12ec5d8d4e633e4b7c", size = 1046964, upload-time = "2025-11-27T13:27:03.026Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/a9/4b649b3af0031f4729a5b7c42d239eb5c0120596ec3107dcdc1a35f798e7/ezc3d-1.6.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:c5c49870a7dfd446d4b1cdbb5976ef668339643df7d72bd5db874e877b8fbbdf", size = 908991, upload-time = "2025-11-27T13:27:04.551Z" },
+    { url = "https://files.pythonhosted.org/packages/43/18/5e80c9dee289f10047eb40b00a6a3c013a0c84f810695c8f5d7b3a65af1c/ezc3d-1.6.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:68cd0fa4e85afabf8096057528439da1abd0c4f3ffbdf5846beeae1c893c58e9", size = 1221680, upload-time = "2025-11-27T13:27:05.988Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/59/d2234190e9cbb561f4b6e9d37ee8ab557dc551fffa6a6a770f46d7c1008e/ezc3d-1.6.3-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:f4c014ffbbf8c2f45dfa16b40d9beacb940b382b0e5abb5140422dd550f90264", size = 2184414, upload-time = "2025-11-27T13:27:07.509Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/5e/eb16773e1e342f41490b9bb31ae96c165c96bb68a41c2926cb6fa1b827b0/ezc3d-1.6.3-cp312-cp312-win32.whl", hash = "sha256:c152b15c184291ad288b48e568f55831fd7aeef56b9d3a51e8ccc2fe7fd29bbd", size = 678671, upload-time = "2025-11-27T13:27:08.791Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/85/ff094e98106a9004623b91eef4f12ac6d6f263972dc948ff23d62feb5c3c/ezc3d-1.6.3-cp312-cp312-win_amd64.whl", hash = "sha256:807cd301bd73368f4f448fc2005baf3e96ee116c6b0a61beaacac15a9c44bc45", size = 715835, upload-time = "2025-11-27T13:27:10.15Z" },
+    { url = "https://files.pythonhosted.org/packages/65/3f/da42945599eb9212856f12f292f847df7495df9cdb9083df226fa9526638/ezc3d-1.6.3-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:5980a882a22e92fad238576feed0c2c98711d6538a137aaecf38cadbb84c0325", size = 1044513, upload-time = "2025-11-27T13:27:11.468Z" },
+    { url = "https://files.pythonhosted.org/packages/98/04/b2ab2ad953c92dd0841aa6e9873db7d66df8990d77c584debb9e3246c62c/ezc3d-1.6.3-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:c7209224a479abddf5c45b2e505515ff2c9cd7d34a97d27ffc21e0a71aa92395", size = 908818, upload-time = "2025-11-27T13:27:13.159Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/39/d94b45740d9ba713771155f819fa96e1749eab62c85670d297307ae3b13f/ezc3d-1.6.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4b242f2460a69f09a0fd8ce5fa2bd13d43701051b6477cc373dfc7fb5a16000d", size = 1221481, upload-time = "2025-11-27T13:27:14.404Z" },
+    { url = "https://files.pythonhosted.org/packages/68/57/5f87eb2e14fbe38c4aeed7b2f2348d0cb9be62f147d0b91794d74fb693c3/ezc3d-1.6.3-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:2539e87da583190049571c8d119836ce71af89b3344143ce8f78183022941173", size = 2183987, upload-time = "2025-11-27T13:27:16.174Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/a9/043aee2bfa462f02e9121e70dec26c64a01a514813ace8e9dd2eb042396d/ezc3d-1.6.3-cp313-cp313-win32.whl", hash = "sha256:c6a2d4b69fd85078f5fc15ddf5de2e987ced85320a1315fe015241094e81ef5a", size = 678208, upload-time = "2025-11-27T13:27:17.785Z" },
+    { url = "https://files.pythonhosted.org/packages/12/c0/0f261c3ca104a2a21869f55c3bcf18296b7d3e8d3c42760c670cca5e6f33/ezc3d-1.6.3-cp313-cp313-win_amd64.whl", hash = "sha256:e8d4f378acc0979e8834e0b202f58767028e28b51566036e2d669d03a7c59f3b", size = 715859, upload-time = "2025-11-27T13:27:19.008Z" },
+]
+
+[[package]]
 name = "fastjsonschema"
 version = "2.21.2"
 source = { registry = "https://pypi.org/simple" }
@@ -781,11 +804,13 @@ dependencies = [
     { name = "pandas" },
     { name = "pose2sim" },
     { name = "tensorflow" },
+    { name = "torch" },
 ]
 
 [package.dev-dependencies]
 neural = [
     { name = "einops" },
+    { name = "ezc3d" },
     { name = "tensorboard" },
     { name = "torch" },
     { name = "torchvision" },
@@ -804,11 +829,13 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pose2sim", specifier = ">=0.10.0" },
     { name = "tensorflow", specifier = ">=2.13.0" },
+    { name = "torch", specifier = ">=2.9.1" },
 ]
 
 [package.metadata.requires-dev]
 neural = [
     { name = "einops", specifier = ">=0.8.1" },
+    { name = "ezc3d", specifier = ">=1.5.0" },
     { name = "tensorboard", specifier = ">=2.18.0" },
     { name = "torch", specifier = ">=2.9.1" },
     { name = "torchvision", specifier = ">=0.24.1" },
