@@ -1,3 +1,5 @@
+"""ASGI entrypoint for the webapp application."""
+
 import os
 import sys
 from pathlib import Path

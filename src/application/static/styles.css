@@ -1,3 +1,4 @@
+/* Global styles for the webapp UI. */
 :root {
   --bs-body-font-family: "Segoe UI", "Helvetica Neue", sans-serif;
 }
@@ -18,6 +19,10 @@ body {
 
 .page-content {
   padding-bottom: 160px;
+}
+
+#processingOverlay {
+  z-index: 2000;
 }
 
 .container-wide {

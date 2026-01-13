@@ -1,45 +1,175 @@
-# Repository Guidelines
+## Application Guidelines
+
+### General Principles
+- Keep it simple and readable.
+- KISS and Single Responsibility Principle apply everywhere.
+- Prefer explicit code over clever code.
+- Structure always beats speed.
+- Many small files are better than a few large ones.
+- If something feels convenient, double-check it.
+
+---
+
+## Front-end Guidelines
+
+### Markup
+- Use **plain HTML**
+- HTML must stay **clean and declarative**
+- ❌ No inline JavaScript
+- ❌ No inline CSS
+- ❌ No `<script>` tags inside HTML files
+
+HTML is for structure only. Nothing else.
+
+---
+
+### Styling
+- **Primary framework:** Bootstrap
+- **Custom styling:** Plain CSS
+- ❌ No Tailwind
+- ❌ No inline styles
+- ❌ No `<style>` blocks in HTML
+
+CSS rules:
+- CSS lives in dedicated `.css` files
+- Prefer Bootstrap utilities before adding custom CSS
+- Custom CSS must stay minimal and scoped
+
+If CSS grows large, split it into multiple files.
+
+---
+
+### Front-end Logic
+- Use **JavaScript (ES6+)**
+- ❌ No inline JavaScript
+- All front-end logic lives in **`.js` files**
+- HTML may only reference bundled or compiled assets
+
+Business logic never belongs in the front-end.
+
+---
+
+## Back-end Guidelines
+
+### Architecture
+- Backend code must follow **strict Object-Oriented Programming**
+- Use **Django MVT with app-based domain structure**
+- Think in **apps as domains**, not layers
+
+Django principles:
+- **Models** → data & domain rules (per app)
+- **Views** → thin entry points (request in, response out)
+- **Templates** → presentation only
+- **Services / use_cases** → business logic
+
+Views orchestrate.  
+Services decide.  
+Apps communicate explicitly.
+
+---
+
+### Django / Python Rules
+- Do **not** overload framework files:
+  - `views.py`
+  - `models.py`
+  - `signals.py`
+
+Split logic into dedicated modules, for example:
+- `services/`
+- `repositories/`
+- `use_cases/`
+- `validators/`
+- `dto/`
+
+If a file grows, it must be split. No exceptions.
+
+---
+
+### Application Boundary (Strict)
+- All application logic lives in:
+  **`src/application/`**
+- When referring to “the application”, this folder is meant
+- ❌ No business logic outside `src/application`
+- ❌ No side effects leaking into framework or infrastructure layers
+
+Framework = shell  
+Application = core
+
+---
 
 ## Project Structure & Module Organization
-- `src/` holds production code split by responsibility: `mediastream` (I/O), `posedetector` (MediaPipe inference), `datastream` (CSV export), `visualizedata` (3D plotting), plus helper packages for augmentation and streaming utilities.
-- `main.py` wires these modules together; update the `name` variable or extend it with CLI args when pointing to a new clip.
-- `data/input/` and `data/output/` store raw videos and generated CSVs respectively, while `models/` ships with `pose_landmarker_heavy.task`.
-- Keep exploratory analyses inside `notebooks/` and guard large intermediate files within `data/` so they are not added to Git.
-- Tests belong under `tests/` and should mirror the structure of `src/` for easy discovery.
-- The project does use UV as its main running and packaging.
+- `src/` holds production code split by responsibility:
+  - `mediastream` (I/O)
+  - `posedetector` (MediaPipe inference)
+  - `datastream` (CSV export)
+  - `visualizedata` (3D plotting)
+  - helper packages for augmentation and streaming utilities
+- `main.py` wires modules together; keep it thin and orchestration-only
+- `data/input/` and `data/output/` store raw videos and generated artifacts
+- `models/` ships with `pose_landmarker_heavy.task`
+- Exploratory work belongs in `notebooks/`
+- Tests live under `tests/` and mirror the structure of `src/`
+- The project uses **UV** for running and packaging
+
+---
 
 ## Build, Test, and Development Commands
-- `uv sync` installs the Python 3.12 toolchain defined in `pyproject.toml`/`uv.lock`.
-- `uv run python main.py --video data/input/<name>.mp4 --height <m> --mass <kg> --age <years> --sex <male|female>` runs the full pipeline, producing CSV/TRC artifacts under `data/output/pose-3d/<name>/`.
-- `uv run pytest` executes the unit test suite (add `-k module_name` when targeting a single component).
-- `uv run jupyter lab notebooks/` launches the notebook workspace with repository packages on the path for quick prototyping.
+- `uv sync` installs the Python 3.12 toolchain
+- `uv run python main.py --video data/input/<name>.mp4 --height <m> --mass <kg> --age <years> --sex <male|female>`
+- `uv run pytest`
+- `uv run jupyter lab notebooks/`
+
+---
 
 ## Pipeline Flags & Visualization
-- `--show-video` renders a MediaPipe preview window *and* writes `<name>_preview.mp4` when GUI support is missing (requires Qt/XCB libs and optionally ffmpeg for MP4 export).
-- `--plot-landmarks` replays the extracted CSV landmarks via Matplotlib; omit or add `--no-plot` to skip GUI work during batch runs.
-- `--plot-augmented` visualizes the Pose2Sim augmented TRC and exports `<name>_LSTM_preview.mp4` (falls back to GIF if ffmpeg is unavailable).
-- `--fix-header` rewrites TRC metadata for downstream OpenSim tools.
+- `--show-video` renders MediaPipe preview and exports preview video
+- `--plot-landmarks` replays extracted CSV landmarks
+- `--plot-augmented` visualizes Pose2Sim augmented TRC
+- `--fix-header` rewrites TRC metadata for downstream tools
+
+---
 
 ## Coding Style & Naming Conventions
-- Follow PEP 8 with 4-space indentation, descriptive snake_case names, and type-hinted function signatures as seen across `src/`.
-- Keep modules cohesive: each package should expose a single public class (e.g., `MediaStream`, `PoseDetector`) and raise clear exceptions on invalid input.
-- Provide concise docstrings for public methods and add inline comments only when the intent is non-obvious (e.g., FPS assumptions).
-- Format code before committing; `uv run python -m black src tests` is the recommended baseline.
-- Follow strict and advanced OOP (Object Oriented Programming) standards.
-- Don't put to much code inside one file. Structure it trough multiple files and keep functions for what they are. KISS (Keep It Simple Stupid)
+- Follow PEP 8
+- Use descriptive `snake_case`
+- Type-hint all public interfaces
+- One responsibility per file
+- Add docstrings to modules, classes, and public methods.
+- Use inline comments only where logic is non-obvious; keep them short and factual.
+- ❌ No wildcard imports
+- ❌ No circular dependencies
+- Format code before committing:
+  `uv run python -m black src tests`
+
+Strict OOP applies.  
+Functions do one thing. Files stay small.
+
+---
 
 ## Testing Guidelines
-- Use `pytest` with files named `test_<module>.py` that mirror the corresponding package (e.g., `tests/test_media_stream.py`).
-- Prefer deterministic fixtures built from short sample videos stored under `data/input/tests/` to keep runs fast.
-- Aim for coverage on parsing, error handling, and visualization helpers; mock OpenCV/MediaPipe calls when integration tests would be too heavy.
-- Document new test datasets or golden CSVs in the PR description so reviewers can reproduce results.
+- Use `pytest`
+- Test files mirror `src/` structure
+- Prefer deterministic fixtures
+- Mock heavy OpenCV / MediaPipe dependencies
+- Document new test data in PRs
+
+---
 
 ## Commit & Pull Request Guidelines
-- Write imperative, scoped commit messages (e.g., `mediastream: validate fps metadata`) and keep unrelated changes in separate commits.
-- Every PR needs a brief summary, validation notes (commands executed), references to any tracked issues, and screenshots/GIFs for visualization changes.
-- Request review from another contributor before merging and ensure CI (pytest + lint) has a green run attached to the PR.
+- Use imperative, scoped commit messages
+- Keep unrelated changes separate
+- PRs require:
+  - short summary
+  - validation notes
+  - visuals for visualization changes
+- CI must be green before merge
 
-## Known Follow-ups / Notes
-- Pose2Sim expects the full OpenCap marker layout; `ORDER_22` now matches its feature set but we still need to derive the additional `response_markers` so the augmented skeleton draws cleanly (requires consulting Pose2Sim docs with network access).
-- The autogenerated Pose2Sim `Config.toml` is minimal; drop in a project-specific config if you need filtering, c3d exports, or adjusted anthropometrics.
-- Visualization/export code uses ffmpeg when present; otherwise it falls back to Pillow GIFs. Install `ffmpeg` system-wide for MP4 output.
+---
+
+## Final Notes
+- Avoid framework shortcuts
+- Make unclear things explicit
+- Readability beats cleverness
+
+Explicit > Implicit  
+Structure > Speed

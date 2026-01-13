@@ -1,3 +1,5 @@
+"""URL routing for the webapp domain."""
+
 from django.urls import path
 
 from .views import (

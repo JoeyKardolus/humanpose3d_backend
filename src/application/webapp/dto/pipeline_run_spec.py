@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+"""DTO that defines a prepared pipeline run."""
+
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class PipelineRunSpec:
+    """Immutable specification for a pipeline run."""
+
+    sex_raw: str
+    run_key: str
+    safe_run_id: str
+    upload_path: Path
+    pipeline_run_dir: Path
+    output_dir: Path

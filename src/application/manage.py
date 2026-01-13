@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+"""Command-line utility for managing the Django project."""
+
 import os
 import sys
 from pathlib import Path

@@ -177,22 +177,22 @@
               <div class="col">
                 <label for="sex" class="form-label">Sex</label>
                 <select class="form-select" id="sex" name="sex">
-                  <option disabled value="">Choose...</option>
-                  <option value="male" selected>Male (recommended)</option>
+                  <option disabled selected value="">Choose...</option>
+                  <option value="male">Male</option>
                   <option value="female">Female</option>
                 </select>
               </div>
               <div class="col">
                 <label for="age" class="form-label">Age (years)</label>
-                <input type="number" class="form-control" id="age" name="age" min="0" step="1" value="30">
+                <input type="number" class="form-control" id="age" name="age" min="0" step="1" placeholder="e.g. 30" required>
               </div>
               <div class="col">
                 <label for="height" class="form-label">Height (m)</label>
-                <input type="number" class="form-control" id="height" name="height" min="0" step="0.01" value="1.78">
+                <input type="number" class="form-control" id="height" name="height" min="0" step="0.01" placeholder="e.g. 1.78" required>
               </div>
               <div class="col">
                 <label for="weight" class="form-label">Weight (kg)</label>
-                <input type="number" class="form-control" id="weight" name="weight" min="0" step="0.1" value="75">
+                <input type="number" class="form-control" id="weight" name="weight" min="0" step="0.1" placeholder="e.g. 75" required>
               </div>
             </div>
           </div>
@@ -206,7 +206,7 @@
               <i class="bi bi-stars mt-1"></i>
               <div>
                 <strong>Recommended setup</strong>
-                <p class="mb-0 small">These defaults match the best-quality pipeline settings from CLAUDE.md.</p>
+                <p class="mb-0 small">These defaults are the recommended pipeline settings.</p>
               </div>
             </div>
             <div class="row row-cols-1 row-cols-md-3 g-3">
@@ -305,7 +305,7 @@
             <div class="row row-cols-1 row-cols-md-2 g-3 mt-2">
               <div class="col">
                 <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="flkFilter" name="flk_filter">
+                  <input class="form-check-input" type="checkbox" id="flkFilter" name="flk_filter" checked>
                   <label class="form-check-label" for="flkFilter">Enable FLK filter</label>
                 </div>
               </div>

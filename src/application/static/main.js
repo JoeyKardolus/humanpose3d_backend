@@ -1,3 +1,4 @@
+// Front-end behavior for modals, form submission, and progress polling.
 document.addEventListener("DOMContentLoaded", () => {
     const instructionsModalEl = document.getElementById("instructionsModal");
     const noticeModalEl = document.getElementById("noticeModal");
