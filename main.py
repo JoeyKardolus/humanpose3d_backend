@@ -23,10 +23,15 @@ from src.datastream.data_stream import (
     write_landmark_csv,
 )
 from src.datastream.marker_estimation import estimate_missing_markers
-from src.datastream.post_augmentation_estimation import estimate_shoulder_clusters_and_hjc
+from src.datastream.post_augmentation_estimation import (
+    estimate_shoulder_clusters_and_hjc,
+)
 from src.kinematics.joint_angles_euler import compute_lower_limb_angles
 from src.kinematics.joint_angles_upper_body import compute_upper_body_angles
-from src.kinematics.visualize_angles import plot_joint_angles_time_series, plot_upper_body_angles
+from src.kinematics.visualize_angles import (
+    plot_joint_angles_time_series,
+    plot_upper_body_angles,
+)
 from src.kinematics.comprehensive_joint_angles import compute_all_joint_angles
 from src.kinematics.visualize_comprehensive_angles import (
     plot_comprehensive_joint_angles,
@@ -80,9 +85,11 @@ def cleanup_output_directory(run_dir: Path, video_stem: str) -> None:
 
     # Organize joint angle files
     angle_dir = run_dir / "joint_angles"
-    angle_files = list(run_dir.glob(f"{video_stem}_angles_*.csv")) + \
-                  list(run_dir.glob(f"{video_stem}_all_joint_angles.png")) + \
-                  list(run_dir.glob(f"{video_stem}_joint_angles_comparison.png"))
+    angle_files = (
+        list(run_dir.glob(f"{video_stem}_angles_*.csv"))
+        + list(run_dir.glob(f"{video_stem}_all_joint_angles.png"))
+        + list(run_dir.glob(f"{video_stem}_joint_angles_comparison.png"))
+    )
 
     if angle_files:
         angle_dir.mkdir(exist_ok=True)
@@ -104,8 +111,10 @@ def cleanup_output_directory(run_dir: Path, video_stem: str) -> None:
         trc_file.rename(run_dir / f"{video_stem}_initial.trc")
 
     # Rename final output (multi_refined)
-    for pattern in [f"{video_stem}_LSTM_cycle*_complete_multi_refined.trc",
-                    f"{video_stem}_LSTM_complete_multi_refined.trc"]:
+    for pattern in [
+        f"{video_stem}_LSTM_cycle*_complete_multi_refined.trc",
+        f"{video_stem}_LSTM_complete_multi_refined.trc",
+    ]:
         for f in run_dir.glob(pattern):
             if f.exists():
                 final_file = run_dir / f"{video_stem}_final.trc"
@@ -310,11 +319,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Visualize upper body angles (3-panel: trunk/shoulder/elbow)",
     )
-    parser.add_argument(
-        "--test-popup",
-        action="store_true",
-        help="Creates a test popup",
-    )
     return parser.parse_args()
 
 
@@ -368,7 +372,9 @@ def main() -> None:
                 ground_percentile=args.ground_percentile,
                 ground_margin=args.ground_margin,
             )
-            print(f"[main] applied anatomical constraints to {len(records)} landmark records")
+            print(
+                f"[main] applied anatomical constraints to {len(records)} landmark records"
+            )
 
         # Apply bone length constraints if requested
         if args.bone_length_constraints:
@@ -379,7 +385,9 @@ def main() -> None:
                 depth_weight=args.bone_depth_weight,
                 iterations=args.bone_length_iterations,
             )
-            print(f"[main] applied bone length constraints to {len(records)} landmark records")
+            print(
+                f"[main] applied bone length constraints to {len(records)} landmark records"
+            )
 
             if args.bone_length_report and original_records:
                 report_bone_length_statistics(original_records, records)
@@ -393,7 +401,9 @@ def main() -> None:
                 min_contact_frames=args.min_contact_frames,
                 propagation_weight=args.depth_propagation_weight,
             )
-            print(f"[main] applied enhanced ground plane refinement to {len(records)} landmark records")
+            print(
+                f"[main] applied enhanced ground plane refinement to {len(records)} landmark records"
+            )
 
         csv_path = run_dir / f"{video_path.stem}.csv"
         row_count = write_landmark_csv(csv_path, records)
@@ -455,20 +465,23 @@ def main() -> None:
             )
 
             # Write refined TRC back
-            refined_path = final_output.parent / f"{final_output.stem}_multi_refined.trc"
+            refined_path = (
+                final_output.parent / f"{final_output.stem}_multi_refined.trc"
+            )
 
             import shutil
+
             shutil.copy(final_output, refined_path)
 
             # Update data section
-            with open(refined_path, 'r') as f:
+            with open(refined_path, "r") as f:
                 lines = f.readlines()
 
             # Find where data starts
             data_start_idx = None
             for i, line in enumerate(lines):
-                if line.strip() and not line.startswith('#') and '\t' in line:
-                    parts = line.strip().split('\t')
+                if line.strip() and not line.startswith("#") and "\t" in line:
+                    parts = line.strip().split("\t")
                     try:
                         float(parts[0])
                         data_start_idx = i
@@ -484,15 +497,17 @@ def main() -> None:
                     for mi in range(coords_refined.shape[1]):
                         x, y, z = coords_refined[fi, mi]
                         row_parts.extend([f"{x:.6f}", f"{y:.6f}", f"{z:.6f}"])
-                    new_data_lines.append('\t'.join(row_parts) + '\n')
+                    new_data_lines.append("\t".join(row_parts) + "\n")
 
                 lines = lines[:data_start_idx] + new_data_lines
 
-                with open(refined_path, 'w') as f:
+                with open(refined_path, "w") as f:
                     f.writelines(lines)
 
                 final_output = refined_path
-                append_build_log(f"main step3.6 multi-constraint optimization {final_output}")
+                append_build_log(
+                    f"main step3.6 multi-constraint optimization {final_output}"
+                )
                 print(f"[main] step3.6 multi-constraint-optimization -> {final_output}")
 
         # Step 5: Compute joint angles if requested
@@ -504,7 +519,9 @@ def main() -> None:
                     smooth_window=args.joint_angle_smooth_window,
                 )
 
-                angles_csv = run_dir / f"{video_path.stem}_angles_{args.joint_angle_side}.csv"
+                angles_csv = (
+                    run_dir / f"{video_path.stem}_angles_{args.joint_angle_side}.csv"
+                )
                 angles_df.to_csv(angles_csv, index=False)
                 append_build_log(f"main step5 joint angles {angles_csv}")
                 print(f"[main] step5 joint angles -> {angles_csv}")
@@ -512,16 +529,25 @@ def main() -> None:
                 # Check for constraint violations if requested
                 if args.check_joint_constraints:
                     angles_dict = {
-                        "hip": angles_df[["hip_flex_deg", "hip_abd_deg", "hip_rot_deg"]].to_numpy(),
-                        "knee": angles_df[["knee_flex_deg", "knee_abd_deg", "knee_rot_deg"]].to_numpy(),
-                        "ankle": angles_df[["ankle_flex_deg", "ankle_abd_deg", "ankle_rot_deg"]].to_numpy(),
+                        "hip": angles_df[
+                            ["hip_flex_deg", "hip_abd_deg", "hip_rot_deg"]
+                        ].to_numpy(),
+                        "knee": angles_df[
+                            ["knee_flex_deg", "knee_abd_deg", "knee_rot_deg"]
+                        ].to_numpy(),
+                        "ankle": angles_df[
+                            ["ankle_flex_deg", "ankle_abd_deg", "ankle_rot_deg"]
+                        ].to_numpy(),
                     }
                     violations = check_angle_violations(angles_dict)
                     print_violation_summary(violations)
 
                 # Visualize angles if requested
                 if args.plot_joint_angles:
-                    angles_plot = run_dir / f"{video_path.stem}_angles_{args.joint_angle_side}.png"
+                    angles_plot = (
+                        run_dir
+                        / f"{video_path.stem}_angles_{args.joint_angle_side}.png"
+                    )
                     plot_joint_angles_time_series(
                         angles_df,
                         side=args.joint_angle_side,
@@ -531,8 +557,12 @@ def main() -> None:
                     print(f"[main] joint angle plot -> {angles_plot}")
 
             except Exception as e:
-                print(f"[main] WARNING: Joint angle computation failed - {e}", file=sys.stderr)
+                print(
+                    f"[main] WARNING: Joint angle computation failed - {e}",
+                    file=sys.stderr,
+                )
                 import traceback
+
                 traceback.print_exc()
 
         # Step 6: Compute upper body angles if requested
@@ -544,14 +574,20 @@ def main() -> None:
                     smooth_window=args.joint_angle_smooth_window,
                 )
 
-                upper_angles_csv = run_dir / f"{video_path.stem}_upper_angles_{args.upper_body_side}.csv"
+                upper_angles_csv = (
+                    run_dir
+                    / f"{video_path.stem}_upper_angles_{args.upper_body_side}.csv"
+                )
                 upper_angles_df.to_csv(upper_angles_csv, index=False)
                 append_build_log(f"main step6 upper body angles {upper_angles_csv}")
                 print(f"[main] step6 upper body angles -> {upper_angles_csv}")
 
                 # Visualize upper body angles if requested
                 if args.plot_upper_body_angles:
-                    upper_angles_plot = run_dir / f"{video_path.stem}_upper_angles_{args.upper_body_side}.png"
+                    upper_angles_plot = (
+                        run_dir
+                        / f"{video_path.stem}_upper_angles_{args.upper_body_side}.png"
+                    )
                     plot_upper_body_angles(
                         upper_angles_df,
                         side=args.upper_body_side,
@@ -561,16 +597,20 @@ def main() -> None:
                     print(f"[main] upper body angle plot -> {upper_angles_plot}")
 
             except Exception as e:
-                print(f"[main] WARNING: Upper body angle computation failed - {e}", file=sys.stderr)
+                print(
+                    f"[main] WARNING: Upper body angle computation failed - {e}",
+                    file=sys.stderr,
+                )
                 import traceback
+
                 traceback.print_exc()
 
         # Step 7: Compute ALL joint angles (comprehensive ISB-compliant)
         if args.compute_all_joint_angles:
             try:
-                print("\n" + "="*60)
+                print("\n" + "=" * 60)
                 print("Computing Comprehensive Joint Angles (ISB Standards)")
-                print("="*60)
+                print("=" * 60)
 
                 angle_results = compute_all_joint_angles(
                     final_output,
@@ -590,7 +630,9 @@ def main() -> None:
 
                 # Create comprehensive visualization
                 if args.plot_all_joint_angles:
-                    comprehensive_plot = run_dir / f"{video_path.stem}_all_joint_angles.png"
+                    comprehensive_plot = (
+                        run_dir / f"{video_path.stem}_all_joint_angles.png"
+                    )
                     plot_comprehensive_joint_angles(
                         angle_results,
                         output_path=comprehensive_plot,
@@ -600,7 +642,9 @@ def main() -> None:
 
                 # Create side-by-side comparison
                 if args.save_angle_comparison:
-                    comparison_plot = run_dir / f"{video_path.stem}_joint_angles_comparison.png"
+                    comparison_plot = (
+                        run_dir / f"{video_path.stem}_joint_angles_comparison.png"
+                    )
                     plot_side_by_side_comparison(
                         angle_results,
                         output_path=comparison_plot,
@@ -608,13 +652,17 @@ def main() -> None:
                         dpi=150,
                     )
 
-                print("="*60)
+                print("=" * 60)
                 print("Comprehensive Joint Angle Computation Complete")
-                print("="*60)
+                print("=" * 60)
 
             except Exception as e:
-                print(f"[main] WARNING: Comprehensive joint angle computation failed - {e}", file=sys.stderr)
+                print(
+                    f"[main] WARNING: Comprehensive joint angle computation failed - {e}",
+                    file=sys.stderr,
+                )
                 import traceback
+
                 traceback.print_exc()
 
         if args.plot_augmented:
@@ -622,15 +670,6 @@ def main() -> None:
             (visualizer or VisualizeData()).plot_trc_file(
                 final_output, export_path=aug_preview, block=True
             )
-
-        if args.test_popup:
-            import subprocess
-
-            subprocess.run([
-                "notify-send",
-                "Alert",
-                "Dit is een KDE popup vanuit Python"
-            ])
 
         # Cleanup and organize output directory
         cleanup_output_directory(run_dir, video_path.stem)

@@ -11,7 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 </head>
-<body>
+<body class="stats-page page-body">
   <div class="page-content">
     <main class="py-5">
       <div class="container container-wide">
@@ -21,7 +21,7 @@
             <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
               <div>
                 <h1 class="h3 fw-semibold mb-2">Kinematics overview</h1>
-                <p class="text-muted mb-0">Select up to three joints or markers to compare angles or XYZ coordinates over time.</p>
+                <p class="text-muted mb-0">Select up to three markers or joints to compare angles or XYZ coordinates over time.</p>
               </div>
               <div class="d-flex flex-wrap gap-2">
                 <a class="btn btn-outline-primary" href="{% url 'results' run_key=run_key %}">Back to results</a>
@@ -37,17 +37,15 @@
                 {{ error }}
               </div>
             {% else %}
+              <p class="text-muted small mb-2">Choose up to three markers or joints to plot.</p>
               <div class="row g-3">
                 <div class="col-md-4">
-                  <label class="form-label" for="markerSelectA">Joint A</label>
                   <select class="form-select" id="markerSelectA"></select>
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label" for="markerSelectB">Joint B</label>
                   <select class="form-select" id="markerSelectB"></select>
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label" for="markerSelectC">Joint C</label>
                   <select class="form-select" id="markerSelectC"></select>
                 </div>
               </div>
@@ -75,14 +73,15 @@
             </div>
           </div>
 
-          <div class="row g-4 align-items-stretch">
+          <!-- Here Begins the code -->
+          <div class="row g-3 align-items-stretch">
             <div class="col-lg-4 d-flex">
-              <div class="card panel-card border-0 rounded-4 shadow flex-fill">
-                <div class="card-body d-flex flex-column gap-3">
+              <div class="card panel-card border-0 rounded-4 shadow flex-fill h-100 stats-video-card">
+                <div class="card-body d-flex flex-column gap-2 stats-card-body">
                   <h2 class="h5 fw-semibold mb-0">Video frame</h2>
                   {% if video_path %}
-                    <div class="ratio ratio-4x3 frame-preview">
-                      <video id="previewVideo" class="frame-video" preload="metadata" muted playsinline>
+                    <div class="stats-video-frame d-flex align-items-center justify-content-center bg-light rounded-3 overflow-hidden flex-grow-1">
+                      <video id="previewVideo" class="stats-video" preload="metadata" muted playsinline>
                         <source src="{% url video_route run_key=run_key file_path=video_path %}"{% if video_type %} type="{{ video_type }}"{% endif %}>
                       </video>
                     </div>
@@ -96,32 +95,29 @@
               </div>
             </div>
             <div class="col-lg-8">
-              <div class="row g-4">
+              <div class="row g-3 h-100">
                 <div class="col-12">
-                  <div class="card panel-card border-0 rounded-4 shadow">
-                    <div class="card-body">
-                      <h2 class="h5 fw-semibold mb-3">Joint A angles</h2>
-                      <div class="ratio ratio-21x9 chart-ratio-compact">
+                  <div class="card panel-card border-0 rounded-4 shadow stats-chart-card">
+                    <div class="card-body stats-card-body">
+                      <div class="stats-chart">
                         <canvas id="chartA"></canvas>
                       </div>
                     </div>
                   </div>
                 </div>
                 <div class="col-12">
-                  <div class="card panel-card border-0 rounded-4 shadow">
-                    <div class="card-body">
-                      <h2 class="h5 fw-semibold mb-3">Joint B angles</h2>
-                      <div class="ratio ratio-21x9 chart-ratio-compact">
+                  <div class="card panel-card border-0 rounded-4 shadow stats-chart-card">
+                    <div class="card-body stats-card-body">
+                      <div class="stats-chart">
                         <canvas id="chartB"></canvas>
                       </div>
                     </div>
                   </div>
                 </div>
                 <div class="col-12">
-                  <div class="card panel-card border-0 rounded-4 shadow">
-                    <div class="card-body">
-                      <h2 class="h5 fw-semibold mb-3">Joint C angles</h2>
-                      <div class="ratio ratio-21x9 chart-ratio-compact">
+                  <div class="card panel-card border-0 rounded-4 shadow stats-chart-card">
+                    <div class="card-body stats-card-body">
+                      <div class="stats-chart">
                         <canvas id="chartC"></canvas>
                       </div>
                     </div>
@@ -130,6 +126,7 @@
               </div>
             </div>
           </div>
+          <!-- Here Ends the code -->
         {% endif %}
       </div>
     </main>
@@ -195,7 +192,38 @@
         document.getElementById("markerSelectC"),
       ];
 
-      const defaultMarkers = [null, null, null];
+      const selectionStorageKey = `kinetiq:stats:selection:${"{{ run_key|escapejs }}"}`;
+
+      const persistSelection = () => {
+        const values = selects.map((select) => select.value || "");
+        try {
+          localStorage.setItem(selectionStorageKey, JSON.stringify({ values }));
+        } catch (error) {
+          // Ignore storage failures (private mode or quota).
+        }
+      };
+
+      const loadPersistedSelection = () => {
+        try {
+          const stored = localStorage.getItem(selectionStorageKey);
+          if (!stored) {
+            return null;
+          }
+          const parsed = JSON.parse(stored);
+          if (!parsed || !Array.isArray(parsed.values)) {
+            return null;
+          }
+          return parsed.values.slice(0, selects.length);
+        } catch (error) {
+          return null;
+        }
+      };
+
+      const resolveMarker = (value) => markers.find((item) => item.value === value) || null;
+      const persistedSelection = loadPersistedSelection();
+      const defaultMarkers = persistedSelection
+        ? persistedSelection.map(resolveMarker)
+        : [null, null, null];
 
       const createOptions = (select, selectedValue) => {
         select.innerHTML = "";
@@ -213,7 +241,10 @@
         });
       };
 
-      selects.forEach((select, index) => createOptions(select, defaultMarkers[index]));
+      selects.forEach((select, index) => {
+        createOptions(select, defaultMarkers[index]);
+        select.value = defaultMarkers[index]?.value || "";
+      });
 
       const buildDataset = (marker) => {
         if (!marker) {
@@ -260,11 +291,45 @@
         },
       };
 
-      Chart.register(playheadPlugin);
+      const legendBackgroundPlugin = {
+        id: "legendBackground",
+        beforeDraw: (chart, _args, options) => {
+          const legend = chart.legend;
+          if (!legend || chart.options?.plugins?.legend?.display === false) {
+            return;
+          }
+          const padding = options?.padding ?? 6;
+          const radius = options?.radius ?? 8;
+          const left = legend.left - padding;
+          const top = legend.top - padding;
+          const width = legend.width + padding * 2;
+          const height = legend.height + padding * 2;
+          const right = left + width;
+          const bottom = top + height;
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.fillStyle = options?.color || "rgba(255, 255, 255, 0.85)";
+          ctx.beginPath();
+          ctx.moveTo(left + radius, top);
+          ctx.lineTo(right - radius, top);
+          ctx.quadraticCurveTo(right, top, right, top + radius);
+          ctx.lineTo(right, bottom - radius);
+          ctx.quadraticCurveTo(right, bottom, right - radius, bottom);
+          ctx.lineTo(left + radius, bottom);
+          ctx.quadraticCurveTo(left, bottom, left, bottom - radius);
+          ctx.lineTo(left, top + radius);
+          ctx.quadraticCurveTo(left, top, left + radius, top);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        },
+      };
+
+      Chart.register(playheadPlugin, legendBackgroundPlugin);
 
       const buildChart = (canvasId, marker) => {
         const ctx = document.getElementById(canvasId);
-        return new Chart(ctx, {
+        const chart = new Chart(ctx, {
           type: "line",
           data: buildDataset(marker),
           options: {
@@ -287,7 +352,20 @@
               y: { title: { display: true, text: "Angle (deg)" } },
             },
             plugins: {
-              legend: { position: "bottom" },
+              legend: {
+                position: "chartArea",
+                align: "end",
+                labels: {
+                  boxWidth: 10,
+                  boxHeight: 10,
+                  padding: 8,
+                },
+              },
+              legendBackground: {
+                color: "rgba(248, 250, 252, 0.88)",
+                padding: 6,
+                radius: 8,
+              },
               playheadLine: {
                 time: timeline.length ? timeline[0] : 0,
                 color: "rgba(15, 23, 42, 0.55)",
@@ -296,6 +374,32 @@
             },
           },
         });
+        ctx.addEventListener("mousemove", (event) => {
+          const legend = chart.legend;
+          if (!legend) {
+            return;
+          }
+          const rect = ctx.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const y = event.clientY - rect.top;
+          const inside =
+            x >= legend.left &&
+            x <= legend.right &&
+            y >= legend.top &&
+            y <= legend.bottom;
+          const shouldShow = !inside;
+          if (chart.options.plugins.legend.display !== shouldShow) {
+            chart.options.plugins.legend.display = shouldShow;
+            chart.update("none");
+          }
+        });
+        ctx.addEventListener("mouseleave", () => {
+          if (chart.options.plugins.legend.display !== true) {
+            chart.options.plugins.legend.display = true;
+            chart.update("none");
+          }
+        });
+        return chart;
       };
 
       const charts = [
@@ -410,6 +514,7 @@
           const marker = markers.find((item) => item.value === select.value);
           charts[index].data = buildDataset(marker);
           charts[index].update();
+          persistSelection();
         });
       });
 
