@@ -51,52 +51,53 @@ def plot_comprehensive_joint_angles(
     }
 
     # Joint configurations: (result_key, panel_title, DOF_labels)
+    # Universal naming: Flex/Ext, Abd/Add, Rotation for all joints
     joint_configs = [
         # Row 0: Pelvis (span 2 columns)
-        ("pelvis", "Pelvis", [("pelvis_tilt_deg", "Tilt", "flex"),
-                               ("pelvis_obliquity_deg", "Obliquity", "abd"),
-                               ("pelvis_rotation_deg", "Rotation", "rot")]),
+        ("pelvis", "Pelvis", [("pelvis_flex_deg", "Flex/Ext", "flex"),
+                               ("pelvis_abd_deg", "Abd/Add", "abd"),
+                               ("pelvis_rot_deg", "Rotation", "rot")]),
 
         # Row 1: Trunk (span 2 columns)
         ("trunk", "Trunk", [("trunk_flex_deg", "Flex/Ext", "flex"),
-                            ("trunk_lateral_deg", "Lateral", "lateral"),
+                            ("trunk_abd_deg", "Abd/Add", "abd"),
                             ("trunk_rot_deg", "Rotation", "rot")]),
 
         # Row 2: Hips (R | L)
         ("hip_R", "Hip (Right)", [("hip_flex_deg", "Flex/Ext", "flex"),
                                    ("hip_abd_deg", "Abd/Add", "abd"),
-                                   ("hip_rot_deg", "Int/Ext Rot", "rot")]),
+                                   ("hip_rot_deg", "Rotation", "rot")]),
         ("hip_L", "Hip (Left)", [("hip_flex_deg", "Flex/Ext", "flex"),
                                   ("hip_abd_deg", "Abd/Add", "abd"),
-                                  ("hip_rot_deg", "Int/Ext Rot", "rot")]),
+                                  ("hip_rot_deg", "Rotation", "rot")]),
 
         # Row 3: Knees (R | L)
         ("knee_R", "Knee (Right)", [("knee_flex_deg", "Flex/Ext", "flex"),
-                                     ("knee_abd_deg", "Varus/Valgus", "abd"),
-                                     ("knee_rot_deg", "Tibial Rot", "rot")]),
+                                     ("knee_abd_deg", "Abd/Add", "abd"),
+                                     ("knee_rot_deg", "Rotation", "rot")]),
         ("knee_L", "Knee (Left)", [("knee_flex_deg", "Flex/Ext", "flex"),
-                                    ("knee_abd_deg", "Varus/Valgus", "abd"),
-                                    ("knee_rot_deg", "Tibial Rot", "rot")]),
+                                    ("knee_abd_deg", "Abd/Add", "abd"),
+                                    ("knee_rot_deg", "Rotation", "rot")]),
 
         # Row 4: Ankles (R | L)
-        ("ankle_R", "Ankle (Right)", [("ankle_flex_deg", "Dorsi/Plantar", "flex"),
-                                       ("ankle_abd_deg", "Inv/Eversion", "abd"),
+        ("ankle_R", "Ankle (Right)", [("ankle_flex_deg", "Flex/Ext", "flex"),
+                                       ("ankle_abd_deg", "Abd/Add", "abd"),
                                        ("ankle_rot_deg", "Rotation", "rot")]),
-        ("ankle_L", "Ankle (Left)", [("ankle_flex_deg", "Dorsi/Plantar", "flex"),
-                                      ("ankle_abd_deg", "Inv/Eversion", "abd"),
+        ("ankle_L", "Ankle (Left)", [("ankle_flex_deg", "Flex/Ext", "flex"),
+                                      ("ankle_abd_deg", "Abd/Add", "abd"),
                                       ("ankle_rot_deg", "Rotation", "rot")]),
 
         # Row 5: Shoulders (R | L)
-        ("shoulder_R", "Shoulder (Right)", [("shoulder_exo_deg", "Exo/Endo", "exo"),
-                                             ("shoulder_flex_deg", "Flex/Ext", "flex"),
-                                             ("shoulder_abd_deg", "Abd/Add", "abd")]),
-        ("shoulder_L", "Shoulder (Left)", [("shoulder_exo_deg", "Exo/Endo", "exo"),
-                                            ("shoulder_flex_deg", "Flex/Ext", "flex"),
-                                            ("shoulder_abd_deg", "Abd/Add", "abd")]),
+        ("shoulder_R", "Shoulder (Right)", [("shoulder_flex_deg", "Flex/Ext", "flex"),
+                                             ("shoulder_abd_deg", "Abd/Add", "abd"),
+                                             ("shoulder_rot_deg", "Rotation", "rot")]),
+        ("shoulder_L", "Shoulder (Left)", [("shoulder_flex_deg", "Flex/Ext", "flex"),
+                                            ("shoulder_abd_deg", "Abd/Add", "abd"),
+                                            ("shoulder_rot_deg", "Rotation", "rot")]),
 
         # Row 6: Elbows (R | L)
-        ("elbow_R", "Elbow (Right)", [("elbow_flex_deg", "Flexion", "flex")]),
-        ("elbow_L", "Elbow (Left)", [("elbow_flex_deg", "Flexion", "flex")]),
+        ("elbow_R", "Elbow (Right)", [("elbow_flex_deg", "Flex/Ext", "flex")]),
+        ("elbow_L", "Elbow (Left)", [("elbow_flex_deg", "Flex/Ext", "flex")]),
     ]
 
     # Map joints to subplot positions

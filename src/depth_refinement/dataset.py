@@ -5,7 +5,15 @@ Each sample contains:
 - corrupted: (17, 3) MediaPipe 3D pose with REAL depth errors
 - ground_truth: (17, 3) AIST++ mocap ground truth
 - visibility: (17,) per-joint visibility scores
-- view_angle: scalar view angle in degrees (0-90)
+- pose_2d: (17, 2) MediaPipe 2D pose (normalized image coordinates) - key for camera prediction!
+- camera_pos: (3,) camera position relative to pelvis (for training camera predictor)
+- azimuth: scalar azimuth angle in degrees (0-360)
+- elevation: scalar elevation angle in degrees (-90 to +90)
+
+The 2D pose is crucial for camera viewpoint estimation (ElePose CVPR 2022 insight):
+- Foreshortening patterns directly encode camera angle
+- Left/right asymmetry encodes azimuth
+- Relative joint positions encode elevation
 """
 
 import numpy as np
@@ -85,39 +93,79 @@ class AISTPPDepthDataset(Dataset):
                 'corrupted': (17, 3) tensor
                 'ground_truth': (17, 3) tensor
                 'visibility': (17,) tensor
-                'view_angle': scalar tensor
+                'pose_2d': (17, 2) tensor - 2D pose (normalized image coords)
+                'camera_pos': (3,) tensor - camera position relative to pelvis
+                'azimuth': scalar tensor (0-360 degrees)
+                'elevation': scalar tensor (-90 to +90 degrees)
         """
         data = np.load(self.files[idx])
 
         corrupted = torch.from_numpy(data['corrupted'].astype(np.float32))
         ground_truth = torch.from_numpy(data['ground_truth'].astype(np.float32))
         visibility = torch.from_numpy(data['visibility'].astype(np.float32))
-        view_angle = torch.tensor(float(data['view_angle']), dtype=torch.float32)
+
+        # Load 2D pose (key for camera prediction - foreshortening encodes viewpoint!)
+        if 'pose_2d' in data:
+            pose_2d = torch.from_numpy(data['pose_2d'].astype(np.float32))
+        else:
+            # Backward compatibility: generate synthetic 2D from 3D if not available
+            # This is less accurate but allows training on old data
+            # Project 3D to 2D using perspective (assume f=1, center at origin)
+            pose_2d = corrupted[:, :2] / (corrupted[:, 2:3] + 1e-6)  # x/z, y/z
+            # Normalize to [0, 1] range (rough approximation)
+            pose_2d = (pose_2d + 1) / 2
+
+        # Load camera position (new format) or create dummy
+        if 'camera_relative' in data:
+            camera_pos = torch.from_numpy(data['camera_relative'].astype(np.float32))
+        else:
+            # Backward compatibility: no camera position in old format
+            # Create dummy position (will use azimuth/elevation instead)
+            camera_pos = torch.zeros(3, dtype=torch.float32)
+
+        # Load azimuth/elevation (new format) or fall back to view_angle (old format)
+        if 'azimuth' in data:
+            azimuth = torch.tensor(float(data['azimuth']), dtype=torch.float32)
+            elevation = torch.tensor(float(data['elevation']), dtype=torch.float32)
+        else:
+            # Backward compatibility: old format had single view_angle (0-90)
+            # Convert to azimuth (assume frontal view) and elevation (0)
+            view_angle = float(data['view_angle'])
+            azimuth = torch.tensor(view_angle, dtype=torch.float32)
+            elevation = torch.tensor(0.0, dtype=torch.float32)
 
         # Optional augmentation
         if self.augment:
-            corrupted, ground_truth = self._augment(corrupted, ground_truth)
+            corrupted, ground_truth, azimuth, camera_pos, pose_2d = self._augment(
+                corrupted, ground_truth, azimuth, camera_pos, pose_2d
+            )
 
         return {
             'corrupted': corrupted,
             'ground_truth': ground_truth,
             'visibility': visibility,
-            'view_angle': view_angle,
+            'pose_2d': pose_2d,
+            'camera_pos': camera_pos,
+            'azimuth': azimuth,
+            'elevation': elevation,
         }
 
     def _augment(
         self,
         corrupted: torch.Tensor,
         ground_truth: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        azimuth: torch.Tensor,
+        camera_pos: torch.Tensor,
+        pose_2d: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Apply data augmentation.
 
         Augmentations that preserve depth error patterns:
-        - Random rotation around Y axis (vertical)
-        - Random X/Z flip (mirror left/right)
+        - Random rotation around Y axis (vertical) - adjusts azimuth, camera_pos, and 2D pose
+        - Random X flip (mirror left/right) - mirrors azimuth, camera_pos, and 2D pose
         - Small random scale
         """
-        # Random Y rotation (doesn't affect depth errors much)
+        # Random Y rotation (rotates the pose, adjusts azimuth and camera position)
         if random.random() > 0.5:
             angle = random.uniform(-0.3, 0.3)  # ±17 degrees
             cos_a, sin_a = np.cos(angle), np.sin(angle)
@@ -130,12 +178,30 @@ class AISTPPDepthDataset(Dataset):
             corrupted = torch.matmul(corrupted, rot)
             ground_truth = torch.matmul(ground_truth, rot)
 
-        # Random X flip (left/right swap)
+            # Rotate camera position (inverse rotation - if we rotate pose CW, camera appears CCW)
+            rot_inv = rot.T
+            camera_pos = torch.matmul(camera_pos, rot_inv)
+
+            # Adjust azimuth: rotating pose clockwise = camera appears to move counter-clockwise
+            angle_deg = np.degrees(angle)
+            azimuth = (azimuth - angle_deg) % 360.0
+
+            # 2D pose: small rotations in world don't significantly change 2D appearance
+            # (it's a projection), but we could apply a slight rotation in image space
+            # For simplicity, we keep 2D unchanged for Y rotation (rotation around vertical)
+
+        # Random X flip (left/right swap) - mirrors the view
         if random.random() > 0.5:
             corrupted[:, 0] = -corrupted[:, 0]
             ground_truth[:, 0] = -ground_truth[:, 0]
 
-            # Swap left/right joints
+            # Mirror camera position X coordinate
+            camera_pos[0] = -camera_pos[0]
+
+            # Mirror 2D pose X coordinate (flip horizontally in image)
+            pose_2d[:, 0] = 1.0 - pose_2d[:, 0]  # Assuming normalized [0, 1] coordinates
+
+            # Swap left/right joints in 3D
             # COCO order: 0=nose, 1=Leye, 2=Reye, 3=Lear, 4=Rear, 5=Lshoulder, 6=Rshoulder,
             # 7=Lelbow, 8=Relbow, 9=Lwrist, 10=Rwrist, 11=Lhip, 12=Rhip,
             # 13=Lknee, 14=Rknee, 15=Lankle, 16=Rankle
@@ -143,14 +209,23 @@ class AISTPPDepthDataset(Dataset):
             for i, j in swap_pairs:
                 corrupted[[i, j]] = corrupted[[j, i]]
                 ground_truth[[i, j]] = ground_truth[[j, i]]
+                pose_2d[[i, j]] = pose_2d[[j, i]]  # Swap 2D joints too!
 
-        # Small random scale
+            # Mirror azimuth: 90° (right) becomes 270° (left), etc.
+            # Formula: new_az = (360 - az) % 360
+            azimuth = (360.0 - azimuth) % 360.0
+
+        # Small random scale (only affects pose, not camera position direction)
         if random.random() > 0.5:
             scale = random.uniform(0.9, 1.1)
             corrupted = corrupted * scale
             ground_truth = ground_truth * scale
+            # Camera position distance scales too
+            camera_pos = camera_pos * scale
+            # 2D pose: scale around center (0.5, 0.5)
+            pose_2d = 0.5 + (pose_2d - 0.5) * scale
 
-        return corrupted, ground_truth
+        return corrupted, ground_truth, azimuth, camera_pos, pose_2d
 
 
 def create_dataloaders(
@@ -231,7 +306,14 @@ if __name__ == '__main__':
     for key, value in batch.items():
         print(f"  {key}: {value.shape}")
 
-    print(f"\nView angles: {batch['view_angle']}")
+    print(f"\n2D Pose (for camera prediction):")
+    print(f"  Shape: {batch['pose_2d'].shape}")
+    print(f"  X range: {batch['pose_2d'][:, :, 0].min():.3f} - {batch['pose_2d'][:, :, 0].max():.3f}")
+    print(f"  Y range: {batch['pose_2d'][:, :, 1].min():.3f} - {batch['pose_2d'][:, :, 1].max():.3f}")
+
+    print(f"\nCamera position (relative to pelvis): {batch['camera_pos']}")
+    print(f"Azimuth (0-360°): {batch['azimuth']}")
+    print(f"Elevation (-90 to +90°): {batch['elevation']}")
     print(f"Visibility range: {batch['visibility'].min():.2f} - {batch['visibility'].max():.2f}")
 
     # Check depth errors

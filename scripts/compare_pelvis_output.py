@@ -18,11 +18,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 def load_use_pelvis_csv(csv_path: Path) -> pd.DataFrame:
     """Load pelvis angles from 'use' directory output."""
     df = pd.read_csv(csv_path)
-    # Rename columns to match main codebase output
+    # Rename columns to match main codebase output (universal naming)
     df = df.rename(columns={
-        "pelvis_flex_deg(Z)": "pelvis_tilt_deg",
-        "pelvis_abd_deg(X)": "pelvis_obliquity_deg",
-        "pelvis_rot_deg(Y)": "pelvis_rotation_deg",
+        "pelvis_flex_deg(Z)": "pelvis_flex_deg",
+        "pelvis_abd_deg(X)": "pelvis_abd_deg",
+        "pelvis_rot_deg(Y)": "pelvis_rot_deg",
     })
     return df
 
@@ -62,7 +62,7 @@ def compare_angles(ref_df: pd.DataFrame, test_df: pd.DataFrame, tolerance: float
         ref_df = ref_df.iloc[:min_len].copy()
         test_df = test_df.iloc[:min_len].copy()
 
-    columns = ["pelvis_tilt_deg", "pelvis_obliquity_deg", "pelvis_rotation_deg"]
+    columns = ["pelvis_flex_deg", "pelvis_abd_deg", "pelvis_rot_deg"]
 
     all_passed = True
 

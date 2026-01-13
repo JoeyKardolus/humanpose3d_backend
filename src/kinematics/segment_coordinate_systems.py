@@ -111,12 +111,13 @@ def ensure_continuity(
         np.dot(current_axes[:, 2], previous_axes[:, 2])
     )
 
-    # If alignment is significantly negative, check if we should flip
-    # But flipping all axes creates left-handed system, so skip this for now
-    # The coordinate system should be stable enough without this
-    # if score < -1.5:
-    #     # Consider flipping, but preserve handedness
-    #     pass
+    # If all axes point opposite direction (score < 0), flip ALL axes
+    # This prevents 180° discontinuities in Euler angles.
+    # Note: Flipping all 3 axes changes det(R) from +1 to -1, but the
+    # euler_xyz() function handles this by orthonormalizing the matrix
+    # before extracting angles. This matches the professor's approach.
+    if score < 0:
+        return -current_axes
 
     return current_axes
 
@@ -357,26 +358,34 @@ def foot_axes(
     ):
         return None
 
-    # X axis: heel -> toe (anterior)
-    x_hint = toe - calcaneus
+    # Match professor's foot coordinate system construction:
+    # X = toe - calc (anterior/voorvoet)
+    # Z = M5 - toe (lateral), aligned with pelvis
+    # Y = cross(Z, X) (dorsal/superior)
+    # Z = cross(X, Y) (re-orthogonalized)
 
-    # Z axis: forefoot width (lateral)
+    # X axis: heel -> toe (anterior)
+    x = normalize(toe - calcaneus)
+
+    # Z axis hint: forefoot width (lateral)
     z_hint = fifth_meta - toe
 
-    # Align with pelvis
+    # Align Z with pelvis lateral direction
     if np.dot(z_hint, pelvis_z) < 0:
         z_hint = -z_hint
+    z_temp = normalize(z_hint)
 
-    axes = build_orthonormal_frame(x_hint, z_hint)
+    # Y axis: dorsal (up), from cross(Z, X)
+    y = normalize(np.cross(z_temp, x))
 
-    if np.isnan(axes).any():
+    # Re-orthogonalize Z = cross(X, Y)
+    z = normalize(np.cross(x, y))
+
+    # Check for NaN
+    if np.isnan(x).any() or np.isnan(y).any() or np.isnan(z).any():
         return None
 
-    # X=anterior, Y=superior, Z=lateral
-    x = axes[:, 0]
-    y = axes[:, 1]
-    z = axes[:, 2]
-
+    # X=anterior, Y=superior/dorsal, Z=lateral
     result = np.column_stack([x, y, z])
     return ensure_continuity(result, previous)
 

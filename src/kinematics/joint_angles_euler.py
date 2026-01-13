@@ -343,18 +343,19 @@ def compute_lower_limb_angles(
         ankle_angles[fi] = euler_xyz(R_ankle)
 
     # Remap Euler components to anatomical terms
-    # For XYZ sequence: X=flex/ext, Y=abd/add, Z=rotation
-    # (This matches the toevoegen script's JOINT_REMAP with flex=Z, abd=X, rot=Y for XYZ input)
-    # We use the default XYZ convention where:
-    # - Index 0 (X) = Flexion/Extension
-    # - Index 1 (Y) = Abduction/Adduction
-    # - Index 2 (Z) = Rotation
+    # For XYZ Euler sequence with our coordinate system (X=anterior, Y=superior, Z=lateral):
+    # - Index 0 (X rotation) = Abduction/Adduction (rotation around anterior axis)
+    # - Index 1 (Y rotation) = Internal/External Rotation (rotation around longitudinal axis)
+    # - Index 2 (Z rotation) = Flexion/Extension (rotation around lateral axis)
+    #
+    # This is the anatomically correct mapping based on ISB conventions.
 
-    # For left side, negate abduction to maintain R+ convention
+    # For left side, negate abduction (index 0) to maintain consistent sign convention
+    # (positive = leg moving away from midline for both sides)
     if side == "L":
-        hip_angles[:, 1] = -hip_angles[:, 1]
-        knee_angles[:, 1] = -knee_angles[:, 1]
-        ankle_angles[:, 1] = -ankle_angles[:, 1]
+        hip_angles[:, 0] = -hip_angles[:, 0]
+        knee_angles[:, 0] = -knee_angles[:, 0]
+        ankle_angles[:, 0] = -ankle_angles[:, 0]
 
     # Apply median filter to remove outliers from gimbal lock/bad data
     # This prevents unwrapping from amplifying isolated spikes
@@ -376,28 +377,30 @@ def compute_lower_limb_angles(
 
     # THEN clamp to biomechanically reasonable ranges
     # This ensures final output respects joint limits
-    hip_angles[:, 0] = clamp_biomechanical_angles(hip_angles[:, 0], "hip", "flex")
-    hip_angles[:, 1] = clamp_biomechanical_angles(hip_angles[:, 1], "hip", "abd")
-    hip_angles[:, 2] = clamp_biomechanical_angles(hip_angles[:, 2], "hip", "rot")
+    # Index 0 = ABD, Index 1 = ROT, Index 2 = FLEX
+    hip_angles[:, 0] = clamp_biomechanical_angles(hip_angles[:, 0], "hip", "abd")
+    hip_angles[:, 1] = clamp_biomechanical_angles(hip_angles[:, 1], "hip", "rot")
+    hip_angles[:, 2] = clamp_biomechanical_angles(hip_angles[:, 2], "hip", "flex")
 
-    knee_angles[:, 0] = clamp_biomechanical_angles(knee_angles[:, 0], "knee", "flex")
-    knee_angles[:, 1] = clamp_biomechanical_angles(knee_angles[:, 1], "knee", "abd")
-    knee_angles[:, 2] = clamp_biomechanical_angles(knee_angles[:, 2], "knee", "rot")
+    knee_angles[:, 0] = clamp_biomechanical_angles(knee_angles[:, 0], "knee", "abd")
+    knee_angles[:, 1] = clamp_biomechanical_angles(knee_angles[:, 1], "knee", "rot")
+    knee_angles[:, 2] = clamp_biomechanical_angles(knee_angles[:, 2], "knee", "flex")
 
-    ankle_angles[:, 0] = clamp_biomechanical_angles(ankle_angles[:, 0], "ankle", "flex")
-    ankle_angles[:, 1] = clamp_biomechanical_angles(ankle_angles[:, 1], "ankle", "abd")
-    ankle_angles[:, 2] = clamp_biomechanical_angles(ankle_angles[:, 2], "ankle", "rot")
+    ankle_angles[:, 0] = clamp_biomechanical_angles(ankle_angles[:, 0], "ankle", "abd")
+    ankle_angles[:, 1] = clamp_biomechanical_angles(ankle_angles[:, 1], "ankle", "rot")
+    ankle_angles[:, 2] = clamp_biomechanical_angles(ankle_angles[:, 2], "ankle", "flex")
 
     # Build output DataFrame
+    # Correct mapping: Index 0 = ABD, Index 1 = ROT, Index 2 = FLEX
     return pd.DataFrame({
         "time_s": times,
-        "hip_flex_deg": hip_angles[:, 0],
-        "hip_abd_deg": hip_angles[:, 1],
-        "hip_rot_deg": hip_angles[:, 2],
-        "knee_flex_deg": knee_angles[:, 0],
-        "knee_abd_deg": knee_angles[:, 1],
-        "knee_rot_deg": knee_angles[:, 2],
-        "ankle_flex_deg": ankle_angles[:, 0],
-        "ankle_abd_deg": ankle_angles[:, 1],
-        "ankle_rot_deg": ankle_angles[:, 2],
+        "hip_flex_deg": hip_angles[:, 2],      # Z rotation = Flexion
+        "hip_abd_deg": hip_angles[:, 0],       # X rotation = Abduction
+        "hip_rot_deg": hip_angles[:, 1],       # Y rotation = Rotation
+        "knee_flex_deg": knee_angles[:, 2],    # Z rotation = Flexion
+        "knee_abd_deg": knee_angles[:, 0],     # X rotation = Abduction
+        "knee_rot_deg": knee_angles[:, 1],     # Y rotation = Rotation
+        "ankle_flex_deg": ankle_angles[:, 2],  # Z rotation = Flexion
+        "ankle_abd_deg": ankle_angles[:, 0],   # X rotation = Abduction
+        "ankle_rot_deg": ankle_angles[:, 1],   # Y rotation = Rotation
     })

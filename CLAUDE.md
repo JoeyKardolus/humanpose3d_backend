@@ -52,15 +52,17 @@ uv run python main.py \
 ```
 
 **Outputs** (automatically organized in `joint_angles/` subdirectory):
-- `joint_angles/<video>_angles_pelvis.csv` - Pelvis global orientation (tilt, obliquity, rotation)
-- `joint_angles/<video>_angles_hip_{R|L}.csv` - Hip 3-DOF angles (flexion, abduction, rotation)
-- `joint_angles/<video>_angles_knee_{R|L}.csv` - Knee 3-DOF angles (flexion, varus/valgus, tibial rotation)
-- `joint_angles/<video>_angles_ankle_{R|L}.csv` - Ankle 3-DOF angles (dorsi/plantar, inversion/eversion, rotation)
-- `joint_angles/<video>_angles_trunk.csv` - Trunk 3-DOF angles (flexion, lateral flexion, rotation)
-- `joint_angles/<video>_angles_shoulder_{R|L}.csv` - Shoulder 3-DOF angles (exo/endo, flexion, abduction)
+- `joint_angles/<video>_angles_pelvis.csv` - Pelvis angles (flex, abd, rot)
+- `joint_angles/<video>_angles_hip_{R|L}.csv` - Hip angles (flex, abd, rot)
+- `joint_angles/<video>_angles_knee_{R|L}.csv` - Knee angles (flex, abd, rot)
+- `joint_angles/<video>_angles_ankle_{R|L}.csv` - Ankle angles (flex, abd, rot)
+- `joint_angles/<video>_angles_trunk.csv` - Trunk angles (flex, abd, rot)
+- `joint_angles/<video>_angles_shoulder_{R|L}.csv` - Shoulder angles (flex, abd, rot)
 - `joint_angles/<video>_angles_elbow_{R|L}.csv` - Elbow flexion angle
 - `joint_angles/<video>_all_joint_angles.png` - Comprehensive multi-panel visualization (ALL joints)
 - `joint_angles/<video>_joint_angles_comparison.png` - Side-by-side comparison (right vs left, if --save-angle-comparison used)
+
+**Universal Column Naming**: All joints use consistent naming: `{joint}_flex_deg`, `{joint}_abd_deg`, `{joint}_rot_deg`
 
 **Joint Coverage**: 12 joint groups computed using ISB standards
 - **Pelvis**: Global orientation relative to world frame
@@ -86,68 +88,114 @@ uv run python main.py --video data/input/joey.mp4 --force-complete --compute-upp
 - `<video>_angles_{R|L}.csv` - Lower limb angles (9 DOF: 3 per joint)
 - `<video>_upper_angles_{R|L}.csv` - Upper body angles (7 DOF: trunk + shoulder + elbow)
 
-## Neural Depth Refinement (Advanced/Optional)
+## Neural Depth Refinement (Advanced/Work in Progress)
 
-For research applications requiring maximum depth accuracy, the pipeline includes a **PoseFormer-based neural depth refinement** model trained on CMU Motion Capture data.
+For research applications requiring maximum depth accuracy, the pipeline includes tools to generate training data from AIST++ dataset with REAL MediaPipe errors.
 
-### Training the Model
+### AIST++ Dataset Setup
 
-```bash
-# 1. Install neural dependencies (PyTorch, CUDA, etc.)
-uv sync --group neural
-
-# 2. Generate training data from CMU mocap (208K sequences)
-uv run --group neural python training/generate_training_data.py
-
-# 3. Train PoseFormer model (~9-10 hours on RTX 5080)
-uv run --group neural python scripts/train_depth_model.py \
-  --batch-size 64 \
-  --epochs 50 \
-  --workers 8 \
-  --fp16
-```
-
-**Training details:**
-- **Dataset**: 208,440 temporal sequences from CMU Motion Capture
-- **Ground truth**: Professional mocap data (converted from BVH with forward kinematics)
-- **Simulation**: Depth noise added to Z-axis (30mm, 50mm, 80mm) at 6 camera angles (0-75°)
-- **Architecture**: PoseFormer (25.5M parameters)
-  - Transformer-based with 6 layers, 8 attention heads
-  - Temporal context: 11-frame sliding windows
-  - Input features: x, y, z, visibility, variance, is_augmented, marker_type, camera_angle
-  - Output: Per-marker depth corrections (delta_z) + confidence scores
-- **Loss function**: Biomechanical constraints (bone length, ground plane, symmetry, smoothness, joint angles)
-- **Training time**: ~9-10 hours (50 epochs, RTX 5080)
-- **Output**: `models/checkpoints/best_model.pth`
-
-### Applying Depth Refinement
+AIST++ is a large-scale dance motion dataset with synchronized video and 3D keypoints (10.1M annotated frames).
 
 ```bash
-# Apply trained model to refine TRC depth
-uv run --group neural python scripts/apply_depth_refinement.py \
-  --input data/output/pose-3d/joey/joey_final.trc \
-  --model models/checkpoints/best_model.pth \
-  --output data/output/pose-3d/joey/joey_refined.trc
+# 1. Download annotations (2.3GB total, or 834MB for 3D keypoints only):
+#    https://google.github.io/aistplusplus_dataset/download.html
+#    Extract to data/AIST++/annotations/
+
+# 2. Download videos from AIST Dance Database:
+#    https://aistdancedb.ongaaccel.jp/database_download/
+#    Place in data/AIST++/videos/
 ```
 
-**How it works:**
-1. **Camera angle estimation**: Automatically calculates viewing angle from torso plane orientation
-   - Uses shoulder-hip cross product to compute torso normal vector
-   - Angle = deviation from camera direction (+Z axis)
-   - Example: 0° frontal, 45° angled, 90° profile
-2. **Temporal windowing**: Processes each frame with 11-frame context (±5 frames)
-3. **Neural inference**: PoseFormer predicts depth corrections using biomechanical knowledge
-4. **Output**: Refined TRC with corrected Z-coordinates
+**Dataset structure:**
+```
+data/AIST++/
+├── annotations/
+│   ├── keypoints3d/     # 3D keypoints (.pkl files)
+│   ├── keypoints2d/     # 2D keypoints
+│   ├── cameras/         # Camera calibration
+│   └── splits/          # Train/val/test splits
+└── videos/              # Dance videos (.mp4, 60fps)
+```
 
-**When to use:**
-- Research requiring high depth accuracy (inverse dynamics, force estimation)
-- Motion capture validation and quality assessment
-- Comparative biomechanics studies
-- **NOT needed** for standard joint angle computation (multi-constraint optimization is sufficient)
+### Generating Training Data
 
-**Data requirements:**
-- CMU Motion Capture dataset (~2GB): `git clone https://github.com/una-dinosauria/cmu-mocap.git data/training/cmu_mocap/`
-- Training generates ~500MB of NPZ files in `data/training/cmu_converted/`
+```bash
+# Convert AIST++ to training pairs (REAL MediaPipe errors!)
+uv run python scripts/convert_aistpp_to_training.py
+```
+
+**Output:** `data/training/aistpp_converted/` containing NPZ files with:
+- `corrupted`: MediaPipe 3D pose (17, 3) - noisy depth from video
+- `ground_truth`: AIST++ 3D keypoints (17, 3) - accurate depth
+- `visibility`: Per-joint visibility (17,) from MediaPipe
+- `azimuth`: Horizontal view angle 0-90° (from camera calibration)
+- `elevation`: Vertical view angle -90 to +90° (from camera calibration)
+
+### View Angle Computation
+
+View angles are computed from **actual camera positions** in AIST++ calibration data, not from torso orientation (which fails when subject bends).
+
+```python
+# Camera position from extrinsics: C = -R^T @ t
+# Azimuth: horizontal angle (0° = frontal, 90° = profile)
+# Elevation: vertical angle (+ve = camera above, -ve = below)
+azimuth, elevation = compute_view_angles(gt_pose, camera_pos)
+```
+
+### Model Architecture (Joint End-to-End Training)
+
+```
+┌────────────────────────────────────────────────────────────┐
+│              JOINT DEPTH REFINEMENT MODEL                  │
+│                                                            │
+│  pose (17,3) ──┬──→ View Angle Head ──→ (azimuth, elev)   │
+│  visibility ───┘          │                    │          │
+│                           ▼                    ▼          │
+│                    ┌─────────────────────────────────┐    │
+│                    │     Depth Refinement Head       │    │
+│                    │  Transformer + View-Conditioned │    │
+│                    └──────────────┬──────────────────┘    │
+│                                   ▼                       │
+│                            Δz (17,) per joint             │
+└────────────────────────────────────────────────────────────┘
+
+Loss = L_depth + λ * L_viewangle  (both heads train together)
+```
+
+At inference: single forward pass, no camera calibration needed.
+
+### Why AIST++ ?
+
+| Feature | AIST++ | HumanEva | CMU Mocap |
+|---------|--------|----------|-----------|
+| Annotated frames | **10.1M** | ~2K | 0 (no video) |
+| Subjects | **30** | 3 | 144 |
+| Joint format | **COCO 17** | Custom 15 | Custom 31 |
+| Video | 60fps multi-view | 30fps | None |
+| MediaPipe errors | **REAL** | REAL | Simulated |
+| Download | Python API | Manual | Git clone |
+
+### Technical Details
+
+**Joint format (17 COCO keypoints):**
+```
+nose, left_eye, right_eye, left_ear, right_ear,
+left_shoulder, right_shoulder, left_elbow, right_elbow,
+left_wrist, right_wrist, left_hip, right_hip,
+left_knee, right_knee, left_ankle, right_ankle
+```
+
+All 17 joints map directly to MediaPipe landmarks - no interpolation needed.
+
+**Coordinate system:**
+- Both MediaPipe and AIST++ centered on pelvis (hip midpoint)
+- Y-up coordinate system after MediaPipe Y-flip
+
+**Resources:**
+- [AIST++ Dataset](https://google.github.io/aistplusplus_dataset/)
+- [AIST++ API](https://github.com/google/aistplusplus_api)
+- Converter: `scripts/convert_aistpp_to_training.py`
+- Visualizer: `scripts/visualize_aistpp_training.py`
 
 ## Project Overview
 
@@ -160,7 +208,9 @@ HumanPose is a 3D human pose estimation pipeline that uses MediaPipe for landmar
 
 ### GPU Acceleration (Optional)
 
-The pipeline automatically uses GPU acceleration for Pose2Sim LSTM inference when available, providing **3-10x speedup** on multi-cycle augmentation.
+The pipeline uses GPU acceleration **only for Pose2Sim LSTM inference** (marker augmentation), providing **3-10x speedup** on multi-cycle augmentation.
+
+**Important:** MediaPipe always uses CPU - this is intentional. MediaPipe's CPU path uses XNNPACK which is highly optimized and faster than GPU for desktop systems (GPU has initialization overhead and CPU↔GPU data transfer costs).
 
 **Requirements:**
 - NVIDIA GPU with CUDA support
@@ -196,8 +246,9 @@ You should see `CUDAExecutionProvider` in the output.
 
 **Implementation:**
 - `src/markeraugmentation/gpu_config.py` - GPU configuration module
-- `main.py` calls `patch_pose2sim_gpu()` at startup to enable CUDA acceleration
+- `main.py` calls `patch_pose2sim_gpu()` **after MediaPipe extraction** (step 1) but before Pose2Sim augmentation (step 3)
 - ONNX Runtime provider order: `CUDA → CPU` (automatic fallback)
+- MediaPipe is unaffected - uses CPU with XNNPACK optimization
 
 ### Running the Pipeline
 ```bash
@@ -304,11 +355,11 @@ The pipeline follows a 7-step orchestration model in `main.py`:
   - `joint_angle_depth_correction.py` - Joint angle constraint enforcement with depth adjustments
   - `multi_constraint_optimization.py` - Iterative multi-constraint optimization preventing cascading violations
 - **`kinematics/`** - Joint angle computation and analysis using ISB standards:
-  - `segment_coordinate_systems.py` - ISB-compliant anatomical coordinate systems (pelvis, femur, tibia, foot, trunk, humerus)
+  - `segment_coordinate_systems.py` - ISB-compliant anatomical coordinate systems (pelvis, femur, tibia, foot, trunk, humerus). Includes `ensure_continuity()` for axis flip prevention.
   - `angle_processing.py` - Unwrapping, smoothing, zeroing, clamping utilities for angle time series
   - `joint_angles_euler.py` - Lower limb angles (hip/knee/ankle) using Euler XYZ decomposition
   - `joint_angles_upper_body.py` - Upper body angles (trunk, shoulder, elbow) with XYZ and ZXY Euler
-  - `comprehensive_joint_angles.py` - ALL joints (pelvis + lower + trunk + upper) in single unified call
+  - `comprehensive_joint_angles.py` - ALL joints (pelvis + lower + trunk + upper) in single unified call. Tracks frame-to-frame continuity for all segments.
   - `visualize_angles.py` - 3-panel time-series plots for individual joint groups
   - `visualize_comprehensive_angles.py` - Multi-panel grid plots for all 12 joint groups + side-by-side comparison
 - **`markeraugmentation/`** - Pose2Sim integration with GPU acceleration:
@@ -579,12 +630,14 @@ print(f'Augmented: {augmented}/43')
 - **Head marker very far**: Nose-Neck extrapolation unreliable when head tilted; Head marker often empty in MediaPipe output
 
 ### GPU Acceleration
+- **GPU is for Pose2Sim only**: MediaPipe always uses CPU (XNNPACK optimized, faster than GPU for desktop)
 - **Check GPU availability**: Run `uv run python -c "import onnxruntime as ort; print(ort.get_available_providers())"` - should see `CUDAExecutionProvider`
 - **Missing CUDA libraries**: If GPU detected but not working, install CUDA Toolkit 12.x and cuDNN 9 (see GPU Acceleration section)
 - **CPU fallback works automatically**: Pipeline prints `[GPU] Warning: CUDA provider not available, using CPU` and continues normally
-- **Performance**: GPU provides 3-10x speedup on multi-cycle augmentation; CPU-only still works fine, just slower
-- **Verify GPU usage**: Pipeline prints `[GPU] Pose2Sim GPU acceleration enabled (CUDA)` at startup when GPU is active
+- **Performance**: GPU provides 3-10x speedup on Pose2Sim multi-cycle augmentation; CPU-only still works fine, just slower
+- **Verify GPU usage**: Pipeline prints `[GPU] Pose2Sim GPU acceleration enabled (CUDA)` before augmentation step
 - **WSL2 GPU support**: Requires Windows 11 with WSL2 GPU passthrough enabled and NVIDIA drivers installed on Windows host
+- **Do NOT add GPU delegate to MediaPipe**: MediaPipe's CPU path is faster than GPU for desktop systems
 
 ## Pelvis Angle Calculation (Validated)
 
@@ -602,10 +655,10 @@ Y = normalize(Z × X)               # Orthogonalized up
 
 ### Euler Angle Sequence
 - **ZXY sequence** (clinical convention) via `scipy.spatial.transform.Rotation.as_euler('ZXY')`
-- Returns: `[flex_Z, abd_X, rot_Y]` in degrees
-- **Flex/Ext**: Rotation around Z (right) axis - sagittal plane tilt
-- **Abd/Add**: Rotation around X (anterior) axis - frontal plane tilt
-- **Rotation**: Rotation around Y (superior) axis - axial rotation
+- Returns: `[flex, abd, rot]` in degrees (universal naming)
+- **pelvis_flex_deg**: Rotation around Z (right) axis - sagittal plane tilt
+- **pelvis_abd_deg**: Rotation around X (anterior) axis - frontal plane tilt
+- **pelvis_rot_deg**: Rotation around Y (superior) axis - axial rotation
 
 ### Key Implementation Details
 - **Smoothing**: Window size = 9 (applied to marker coordinates, not angles)
@@ -635,9 +688,9 @@ uv run python scripts/compare_pelvis_output.py
 
 **Expected output:**
 ```
-pelvis_tilt_deg:      Max diff: 0.0005 deg  [PASS]
-pelvis_obliquity_deg: Max diff: 0.0005 deg  [PASS]
-pelvis_rotation_deg:  Max diff: 0.0005 deg  [PASS]
+pelvis_flex_deg: Max diff: 0.0005 deg  [PASS]
+pelvis_abd_deg:  Max diff: 0.0005 deg  [PASS]
+pelvis_rot_deg:  Max diff: 0.0005 deg  [PASS]
 RESULT: ALL TESTS PASSED
 ```
 
@@ -645,6 +698,31 @@ RESULT: ALL TESTS PASSED
 1. **ASIS/PSIS markers required** - No fallback to Hip markers (anatomically different points)
 2. **Marker names**: `r.ASIS_study`, `L.ASIS_study`, `r.PSIS_study`, `L.PSIS_study` from Pose2Sim augmentation
 3. **TRC header fix**: Pose2Sim outputs TRC with header mismatch (22 in header, 65 in data) - handled automatically by `read_trc()`
+
+## Coordinate System Implementation
+
+### Axis Continuity (Flip Prevention)
+All segment coordinate systems use `ensure_continuity()` to prevent 180° axis flips between frames:
+- Computes score = sum of dot products between current and previous frame axes
+- If score < 0, flips all 3 axes simultaneously (preserves right-handedness)
+- Prevents massive discontinuities in Euler angle output
+
+### Foot Coordinate System (Validated)
+The foot coordinate system matches the reference implementation:
+```python
+X = normalize(toe - calcaneus)      # Anterior (heel -> toe)
+Z_hint = fifth_meta - toe           # Lateral hint
+Z_temp = normalize(Z_hint)          # Aligned with pelvis
+Y = normalize(cross(Z_temp, X))     # Dorsal/Superior
+Z = normalize(cross(X, Y))          # Re-orthogonalized lateral
+```
+
+**Key**: Y is computed from `cross(Z, X)`, then Z is re-orthogonalized. This matches the professor's implementation and produces correct ankle angles where flexion shows the largest ROM during running.
+
+### Frame-to-Frame Continuity Tracking
+`comprehensive_joint_angles.py` tracks previous coordinate systems for all segments:
+- `prev_pelvis`, `prev_trunk`, `prev_femur_r/l`, `prev_tibia_r/l`, `prev_foot_r/l`, `prev_humerus_r/l`
+- Each segment's axes are passed to `ensure_continuity()` to prevent discontinuities
 
 ## Code Style
 - Follow PEP 8 with 4-space indentation, snake_case names

@@ -22,11 +22,13 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+import json
 import pickle
 import numpy as np
 from tqdm import tqdm
 import cv2
 import mediapipe as mp
+from scipy.spatial.transform import Rotation
 
 
 # COCO 17 keypoints (AIST++ format)
@@ -59,69 +61,163 @@ MEDIAPIPE_TO_COCO = {
 }
 
 
-def compute_view_angle_from_torso(pose_3d: np.ndarray) -> float:
+def load_camera_params(cameras_dir: Path, setting_name: str, camera_name: str = 'c01') -> dict:
     """
-    Compute camera viewing angle from torso plane orientation.
-
-    The torso plane is defined by shoulders and hips.
-    View angle = angle between torso normal and camera Z-axis.
+    Load camera extrinsics from AIST++ calibration.
 
     Args:
-        pose_3d: (17, 3) COCO keypoints
+        cameras_dir: Path to annotations/cameras/
+        setting_name: Camera setting (e.g., 'setting1')
+        camera_name: Camera identifier (e.g., 'c01')
 
     Returns:
-        View angle in degrees (0=frontal, 90=profile)
+        Dict with 'position' (camera position in world coords, meters)
     """
-    # COCO indices: left_shoulder=5, right_shoulder=6, left_hip=11, right_hip=12
+    setting_file = cameras_dir / f"{setting_name}.json"
+    with open(setting_file, 'r') as f:
+        cameras = json.load(f)
+
+    for cam in cameras:
+        if cam['name'] == camera_name:
+            # Rodrigues to rotation matrix
+            rvec = np.array(cam['rotation'])
+            R = Rotation.from_rotvec(rvec).as_matrix()
+
+            # Translation (in cm -> meters)
+            t = np.array(cam['translation']) / 100.0
+
+            # Camera position in world coords: C = -R^T @ t
+            cam_pos = -R.T @ t
+
+            return {'position': cam_pos, 'name': camera_name}
+
+    raise ValueError(f"Camera {camera_name} not found in {setting_file}")
+
+
+def get_camera_setting(seq_name: str, mapping_file: Path) -> str:
+    """Get camera setting name for sequence from mapping file."""
+    with open(mapping_file, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) == 2 and parts[0] == seq_name:
+                return parts[1]
+    return 'setting1'  # Default
+
+
+def compute_view_angles(pose_3d: np.ndarray, camera_pos: np.ndarray) -> tuple:
+    """
+    Compute camera viewing angles in subject's local coordinate frame.
+
+    Returns full 0-360° azimuth range:
+      0° = camera directly in front of subject
+     90° = camera to subject's right side (profile)
+    180° = camera directly behind subject
+    270° = camera to subject's left side (profile)
+
+    Args:
+        pose_3d: (17, 3) COCO keypoints (in meters)
+        camera_pos: (3,) Camera position in world coords (meters)
+
+    Returns:
+        (azimuth, elevation) in degrees
+        - azimuth: 0-360° around subject (0°=front, 90°=right, 180°=back, 270°=left)
+        - elevation: angle above/below horizontal (+ve = camera above)
+    """
+    # COCO indices
     left_shoulder = pose_3d[5]
     right_shoulder = pose_3d[6]
     left_hip = pose_3d[11]
     right_hip = pose_3d[12]
 
-    # Vectors defining torso plane
-    shoulder_vec = right_shoulder - left_shoulder
-    hip_vec = right_hip - left_hip
+    # Torso center
+    torso_center = (left_shoulder + right_shoulder + left_hip + right_hip) / 4
 
-    # Normal to torso plane (points forward from body)
-    torso_normal = np.cross(shoulder_vec, hip_vec)
-    norm = np.linalg.norm(torso_normal)
-    if norm < 1e-6:
-        return 45.0  # Default if degenerate
+    # === BUILD SUBJECT'S LOCAL COORDINATE FRAME ===
+    # Right axis: left shoulder -> right shoulder
+    right_axis = right_shoulder - left_shoulder
+    right_norm = np.linalg.norm(right_axis)
+    if right_norm < 1e-6:
+        return 0.0, 0.0
+    right_axis = right_axis / right_norm
 
-    torso_normal = torso_normal / norm
+    # Up axis: world Y (stable, not affected by bending)
+    up_axis = np.array([0.0, 1.0, 0.0])
 
-    # Camera looks down +Z axis (in our coordinate system)
-    camera_dir = np.array([0, 0, 1])
-    cos_angle = np.dot(torso_normal, camera_dir)
+    # Forward axis: perpendicular to right and up (where chest faces)
+    # Using up × right to get forward (right-hand rule)
+    forward_axis = np.cross(up_axis, right_axis)
+    forward_norm = np.linalg.norm(forward_axis)
+    if forward_norm < 1e-6:
+        forward_axis = np.array([0.0, 0.0, 1.0])
+    else:
+        forward_axis = forward_axis / forward_norm
 
-    # Return absolute angle (0° = frontal, 90° = profile)
-    angle = np.degrees(np.arccos(np.clip(np.abs(cos_angle), -1, 1)))
-    return angle
+    # Re-orthogonalize right axis
+    right_axis = np.cross(forward_axis, up_axis)
+    right_axis = right_axis / np.linalg.norm(right_axis)
+
+    # === CAMERA DIRECTION IN SUBJECT'S FRAME ===
+    # Vector from subject TO camera (so 0° = camera in front)
+    subj_to_cam = camera_pos - torso_center
+    cam_dist = np.linalg.norm(subj_to_cam)
+    if cam_dist < 1e-6:
+        return 0.0, 0.0
+
+    # Project onto subject's coordinate frame
+    forward_component = np.dot(subj_to_cam, forward_axis)
+    right_component = np.dot(subj_to_cam, right_axis)
+    up_component = np.dot(subj_to_cam, up_axis)
+
+    # === AZIMUTH: full 0-360° ===
+    # atan2 gives -180 to +180, convert to 0-360
+    azimuth = np.degrees(np.arctan2(right_component, forward_component))
+    if azimuth < 0:
+        azimuth += 360.0
+
+    # === ELEVATION ===
+    horiz_dist = np.sqrt(forward_component**2 + right_component**2)
+    if horiz_dist < 1e-6:
+        elevation = 90.0 if up_component > 0 else -90.0
+    else:
+        elevation = np.degrees(np.arctan2(up_component, horiz_dist))
+
+    return float(azimuth), float(elevation)
 
 
 def extract_mediapipe_coco(results) -> tuple:
     """
-    Extract 17 COCO joints and visibility from MediaPipe results.
+    Extract 17 COCO joints, visibility, and 2D pose from MediaPipe results.
 
     Args:
         results: MediaPipe pose results
 
     Returns:
-        (joints, visibility) where:
-        - joints: (17, 3) array of joint positions
+        (joints_3d, visibility, joints_2d) where:
+        - joints_3d: (17, 3) array of 3D joint positions (world coords)
         - visibility: (17,) array of visibility scores
+        - joints_2d: (17, 2) array of 2D joint positions (normalized image coords)
     """
-    joints = np.zeros((17, 3))
+    joints_3d = np.zeros((17, 3))
+    joints_2d = np.zeros((17, 2))
     visibility = np.zeros(17)
 
-    landmarks = results.pose_world_landmarks.landmark
+    # 3D world landmarks (in meters)
+    world_landmarks = results.pose_world_landmarks.landmark
+
+    # 2D image landmarks (normalized 0-1)
+    image_landmarks = results.pose_landmarks.landmark
 
     for coco_idx, mp_idx in MEDIAPIPE_TO_COCO.items():
-        lm = landmarks[mp_idx]
-        joints[coco_idx] = [lm.x, lm.y, lm.z]
-        visibility[coco_idx] = lm.visibility
+        # 3D pose (world coordinates)
+        lm_3d = world_landmarks[mp_idx]
+        joints_3d[coco_idx] = [lm_3d.x, lm_3d.y, lm_3d.z]
+        visibility[coco_idx] = lm_3d.visibility
 
-    return joints, visibility
+        # 2D pose (normalized image coordinates)
+        lm_2d = image_landmarks[mp_idx]
+        joints_2d[coco_idx] = [lm_2d.x, lm_2d.y]  # x, y in [0, 1]
+
+    return joints_3d, visibility, joints_2d
 
 
 def center_on_pelvis(joints: np.ndarray) -> np.ndarray:
@@ -159,6 +255,7 @@ def process_sequence(
     output_dir: Path,
     sequence_name: str,
     pose,
+    camera_pos: np.ndarray,
     max_frames: int = 500,
     frame_skip: int = 2,
 ) -> int:
@@ -167,10 +264,11 @@ def process_sequence(
 
     Args:
         video_path: Path to video file
-        keypoints3d: (n_frames, 17, 3) ground truth keypoints
+        keypoints3d: (n_frames, 17, 3) ground truth keypoints (in meters)
         output_dir: Output directory
         sequence_name: Name for output files
         pose: MediaPipe Pose object
+        camera_pos: Camera position in world coords (meters)
         max_frames: Max frames to process
         frame_skip: Process every N frames (60fps -> 30fps effective)
 
@@ -202,7 +300,7 @@ def process_sequence(
             frame_idx += 1
             continue
 
-        # Get ground truth for this frame
+        # Get ground truth for this frame (already in meters)
         gt_pose = keypoints3d[frame_idx]  # (17, 3)
 
         # Check for invalid GT
@@ -214,14 +312,24 @@ def process_sequence(
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = pose.process(rgb_frame)
 
-        if not results.pose_world_landmarks:
+        # Need both 2D and 3D landmarks
+        if not results.pose_world_landmarks or not results.pose_landmarks:
             frame_idx += 1
             continue
 
-        # Extract MediaPipe pose and visibility
-        mp_pose, visibility = extract_mediapipe_coco(results)
+        # Extract MediaPipe 3D pose, visibility, and 2D pose
+        mp_pose, visibility, pose_2d = extract_mediapipe_coco(results)
 
-        # Center both on pelvis
+        # Compute view angles from GT pose and actual camera position
+        # BEFORE centering - we need world coordinates
+        azimuth, elevation = compute_view_angles(gt_pose, camera_pos)
+
+        # Compute camera position relative to subject's pelvis
+        # This is what the model will learn to predict at inference time
+        gt_pelvis = (gt_pose[11] + gt_pose[12]) / 2  # COCO: left_hip=11, right_hip=12
+        camera_relative = camera_pos - gt_pelvis  # Camera pos in subject-centered coords
+
+        # Center both on pelvis (for training, we want pelvis-centered)
         mp_centered = center_on_pelvis(mp_pose)
         gt_centered = center_on_pelvis(gt_pose)
 
@@ -230,9 +338,6 @@ def process_sequence(
         # AIST++: Y up, Z away from camera (standard)
         mp_centered[:, 1] = -mp_centered[:, 1]  # Y: down -> up
         mp_centered[:, 2] = -mp_centered[:, 2]  # Z: toward camera -> away
-
-        # Compute view angle from GT torso
-        view_angle = compute_view_angle_from_torso(gt_centered)
 
         # Basic validation: nose should be above pelvis
         if mp_centered[0, 1] < 0.1 or gt_centered[0, 1] < 0.1:
@@ -247,7 +352,10 @@ def process_sequence(
             corrupted=mp_centered.astype(np.float32),      # (17, 3) MediaPipe (REAL errors!)
             ground_truth=gt_centered.astype(np.float32),   # (17, 3) AIST++ GT
             visibility=visibility.astype(np.float32),      # (17,) MediaPipe visibility
-            view_angle=np.float32(view_angle),             # Scalar: 0-90 degrees
+            pose_2d=pose_2d.astype(np.float32),            # (17, 2) MediaPipe 2D pose (key for camera!)
+            azimuth=np.float32(azimuth),                   # Horizontal angle: 0-360° (from camera pos!)
+            elevation=np.float32(elevation),               # Vertical angle: -90 to +90° (from camera pos!)
+            camera_relative=camera_relative.astype(np.float32),  # (3,) Camera pos relative to pelvis
             sequence=sequence_name,
             frame_idx=frame_idx,
         )
@@ -270,12 +378,15 @@ def main():
     print("=" * 80)
     print()
     print("Key: Using REAL MediaPipe errors from video frames!")
+    print("     View angle computed from ACTUAL camera position (not torso normal)")
     print()
 
     # Paths
     aistpp_dir = Path("data/AIST++")
     annotations_dir = aistpp_dir / "annotations"
     videos_dir = aistpp_dir / "videos"
+    cameras_dir = annotations_dir / "cameras"
+    mapping_file = cameras_dir / "mapping.txt"
     output_dir = Path("data/training/aistpp_converted")
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -288,6 +399,10 @@ def main():
     if not videos_dir.exists():
         print(f"ERROR: videos not found at {videos_dir}")
         print("Run: python data/AIST++/api/downloader.py --download_folder data/AIST++/videos --accept_terms")
+        return
+
+    if not cameras_dir.exists():
+        print(f"ERROR: cameras not found at {cameras_dir}")
         return
 
     # Find sequences
@@ -318,10 +433,14 @@ def main():
     print("Ready")
     print()
 
+    # Cache camera params per setting
+    camera_cache = {}
+
     # Process sequences
     total_examples = 0
     processed = 0
-    max_sequences = 100  # Start with subset
+    skipped_no_camera = 0
+    max_sequences = 5000  # Process all available videos
 
     for kp_file in kp_files[:max_sequences]:
         seq_name = kp_file.stem  # e.g., gBR_sBM_cAll_d04_mBR0_ch01
@@ -333,6 +452,19 @@ def main():
         if video_path is None:
             continue
 
+        # Get camera setting and load params
+        setting = get_camera_setting(seq_name, mapping_file)
+
+        if setting not in camera_cache:
+            try:
+                camera_cache[setting] = load_camera_params(cameras_dir, setting, 'c01')
+            except Exception as e:
+                print(f"  Failed to load camera {setting}: {e}")
+                skipped_no_camera += 1
+                continue
+
+        camera_pos = camera_cache[setting]['position']
+
         # Load ground truth
         try:
             gt_keypoints = load_keypoints3d(kp_file)
@@ -340,7 +472,7 @@ def main():
             print(f"  Failed to load {kp_file.name}: {e}")
             continue
 
-        print(f"Processing: {seq_name} ({len(gt_keypoints)} frames)")
+        print(f"Processing: {seq_name} ({len(gt_keypoints)} frames, cam={setting})")
 
         num_examples = process_sequence(
             video_path,
@@ -348,7 +480,8 @@ def main():
             output_dir,
             seq_name,
             pose,
-            max_frames=200,
+            camera_pos,
+            max_frames=1000,  # Increased for maximum data (500 samples/video after skip)
             frame_skip=2,
         )
 
@@ -359,14 +492,22 @@ def main():
     print()
     print("=" * 80)
     print(f"Processed {processed} sequences")
+    if skipped_no_camera > 0:
+        print(f"Skipped {skipped_no_camera} sequences (no camera params)")
     print(f"Generated {total_examples} training examples")
     print(f"Saved to: {output_dir}")
     print()
     print("Training data includes:")
-    print("  - corrupted: MediaPipe 3D pose (REAL depth errors)")
-    print("  - ground_truth: AIST++ mocap (clean depth)")
-    print("  - view_angle: Camera angle from torso (0-90 deg)")
-    print("  - visibility: Per-joint visibility from MediaPipe")
+    print("  - corrupted: MediaPipe 3D pose (17, 3) - REAL depth errors!")
+    print("  - ground_truth: AIST++ mocap (17, 3) - clean depth")
+    print("  - visibility: Per-joint visibility (17,) from MediaPipe")
+    print("  - pose_2d: MediaPipe 2D pose (17, 2) - KEY FOR CAMERA PREDICTION!")
+    print("  - azimuth: Horizontal view angle (0-360°) from camera position")
+    print("  - elevation: Vertical view angle (-90 to +90°) from camera position")
+    print("  - camera_relative: Camera position (3,) relative to pelvis")
+    print()
+    print("2D pose encodes camera viewpoint through foreshortening patterns!")
+    print("(ElePose CVPR 2022 insight - 2D appearance directly encodes viewpoint)")
     print("=" * 80)
 
 

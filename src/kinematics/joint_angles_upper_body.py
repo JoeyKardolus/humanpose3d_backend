@@ -236,12 +236,15 @@ def compute_upper_body_angles(
         # Trunk: pelvis -> trunk
         R_trunk = pelvis.T @ trunk
 
-        # Trunk: XYZ (flexion/extension, lateral flexion, rotation)
+        # Trunk: XYZ Euler sequence with our coordinate system (X=anterior, Y=superior, Z=lateral):
+        # - Index 0 (X rotation) = Lateral flexion (around anterior axis)
+        # - Index 1 (Y rotation) = Axial rotation (around longitudinal axis)
+        # - Index 2 (Z rotation) = Flexion/Extension (around lateral axis)
         trunk_angles[fi] = euler_xyz(R_trunk)
 
-    # For left side, negate abduction/lateral angles to maintain R+ convention
+    # For left side, negate lateral flexion (index 0) and shoulder abduction to maintain R+ convention
     if side == "L":
-        trunk_angles[:, 1] = -trunk_angles[:, 1]  # Lateral flexion
+        trunk_angles[:, 0] = -trunk_angles[:, 0]  # Lateral flexion (index 0, not 1)
         shoulder_angles[:, 2] = -shoulder_angles[:, 2]  # Abduction
 
     # Apply median filter to remove outliers from gimbal lock/bad data
@@ -262,9 +265,10 @@ def compute_upper_body_angles(
 
     # THEN clamp to biomechanically reasonable ranges
     # This ensures final output respects joint limits
-    trunk_angles[:, 0] = clamp_biomechanical_angles(trunk_angles[:, 0], "trunk", "flex")
-    trunk_angles[:, 1] = clamp_biomechanical_angles(trunk_angles[:, 1], "trunk", "abd")
-    trunk_angles[:, 2] = clamp_biomechanical_angles(trunk_angles[:, 2], "trunk", "rot")
+    # Trunk: Index 0=lateral, Index 1=rot, Index 2=flex
+    trunk_angles[:, 0] = clamp_biomechanical_angles(trunk_angles[:, 0], "trunk", "abd")  # lateral flex
+    trunk_angles[:, 1] = clamp_biomechanical_angles(trunk_angles[:, 1], "trunk", "rot")
+    trunk_angles[:, 2] = clamp_biomechanical_angles(trunk_angles[:, 2], "trunk", "flex")
 
     shoulder_angles[:, 0] = clamp_biomechanical_angles(shoulder_angles[:, 0], "shoulder", "exo")
     shoulder_angles[:, 1] = clamp_biomechanical_angles(shoulder_angles[:, 1], "shoulder", "flex")
@@ -278,11 +282,12 @@ def compute_upper_body_angles(
     ) if zero_mode == "first_n_seconds" else elbow_flexion - elbow_flexion[0]
 
     # Build output DataFrame
+    # Trunk: Index 0=lateral, Index 1=rot, Index 2=flex
     return pd.DataFrame({
         "time_s": times,
-        "trunk_flex_deg": trunk_angles[:, 0],
-        "trunk_lateral_deg": trunk_angles[:, 1],
-        "trunk_rot_deg": trunk_angles[:, 2],
+        "trunk_flex_deg": trunk_angles[:, 2],       # Index 2 = Flexion (Z rotation)
+        "trunk_lateral_deg": trunk_angles[:, 0],    # Index 0 = Lateral flex (X rotation)
+        "trunk_rot_deg": trunk_angles[:, 1],        # Index 1 = Rotation (Y rotation)
         "shoulder_exo_deg": shoulder_angles[:, 0],
         "shoulder_flex_deg": shoulder_angles[:, 1],
         "shoulder_abd_deg": shoulder_angles[:, 2],

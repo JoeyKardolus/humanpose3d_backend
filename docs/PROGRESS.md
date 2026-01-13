@@ -1,71 +1,94 @@
 # Neural Depth Refinement - Progress Tracker
 
-## Session: 2026-01-12 (Part 3) - AIST++ Implementation Complete
+## Session: 2026-01-13 - 2D Pose Camera Prediction + Full Data Generation
 
 ### Overview
 
 Implemented neural depth refinement using AIST++ dataset with REAL MediaPipe errors.
 
-**Key Insight**: Depth errors are systematic and correlate with view angle (computed from torso orientation).
+**Key Insights**:
+1. Depth errors are systematic and correlate with camera viewing angle
+2. **2D pose appearance directly encodes camera viewpoint** (ElePose CVPR 2022)
+3. View angles computed from ACTUAL camera positions (not torso - which fails when bending)
 
 The model learns to:
-1. Detect when limbs are poorly visible/occluded (visibility scores)
-2. Infer correct depth from OTHER visible joints (cross-joint attention)
-3. Exploit pose priors via transformer architecture
+1. **Predict camera viewpoint from 2D pose** (no calibration needed at inference!)
+2. Detect when limbs are poorly visible/occluded (visibility scores)
+3. Infer correct depth from OTHER visible joints (cross-joint attention)
+4. Exploit pose priors via transformer architecture
 
 ### Implementation Status
 
 **Data Pipeline** ✅
 - `scripts/convert_aistpp_to_training.py` - Converts AIST++ to training pairs
 - Uses REAL MediaPipe errors from video frames (not synthetic noise)
-- Computes view angle from GT torso plane (cross product of shoulder × hip vectors)
-- Currently: 7K+ training pairs generated, ~750 videos downloaded
+- Extracts BOTH 2D and 3D poses from MediaPipe
+- View angles from ACTUAL camera positions (not torso normal)
+- Currently: **Regenerating ~900K+ training pairs** from 3119 videos
 
 **Model Architecture** ✅ (`src/depth_refinement/`)
 - `model.py` - PoseAwareDepthRefiner (226K parameters)
+  - **Pose2DEncoder**: Hand-crafted viewpoint features (15 features)
+    - Shoulder/hip height differences (foreshortening)
+    - Limb length ratios (L/R asymmetry)
+    - Torso aspect ratio
+    - Nose offset from body center
+  - **CameraPositionPredictor**: Predicts (x,y,z) relative to pelvis
+    - Uses 2D + 3D features for robust prediction
+    - Computes azimuth/elevation geometrically
   - Cross-joint attention (4 layers, 4 heads)
   - View angle conditioning via Fourier features
-  - Per-joint confidence prediction
-- `losses.py` - Depth + bone length + symmetry losses
-- `dataset.py` - PyTorch dataset with augmentation
+- `losses.py` - Depth + bone length + symmetry + camera losses
+- `dataset.py` - PyTorch dataset with augmentation (includes pose_2d)
 
 **Training** ✅
 - `scripts/train_depth_model.py` - Full training script
 - GPU-accelerated (RTX 5080)
-- Quick test: 14.78cm → 9.32cm depth error in 2 epochs
+- Camera prediction verified: **1.4° test error** on held-out data
+- Cross-camera generalization: Model predicts unseen camera angles within 4°
 
 **Inference** ✅
 - `src/depth_refinement/inference.py` - DepthRefiner class
-- Auto-computes view angle from pose
+- **No camera calibration needed** - model predicts viewpoint from 2D pose
 - Batch processing support
 
 ### Data Format (NPZ files)
 
 ```python
 {
-    'corrupted': (17, 3),      # MediaPipe pose (REAL depth errors)
+    'corrupted': (17, 3),      # MediaPipe 3D pose (REAL depth errors)
     'ground_truth': (17, 3),   # AIST++ mocap GT
-    'view_angle': float,       # From torso (0-90°)
-    'visibility': (17,),       # Per-joint visibility
+    'visibility': (17,),       # Per-joint visibility from MediaPipe
+    'pose_2d': (17, 2),        # MediaPipe 2D pose (KEY FOR CAMERA!)
+    'azimuth': float,          # 0-360° from camera position
+    'elevation': float,        # -90 to +90° from camera position
+    'camera_relative': (3,),   # Camera pos relative to pelvis
 }
 ```
 
-### View Angle Computation
+### 2D Pose Encodes Viewpoint (ElePose Insight)
 
-```python
-def compute_view_angle_from_torso(pose_3d):
-    # Torso plane from shoulders and hips
-    shoulder_vec = right_shoulder - left_shoulder
-    hip_vec = right_hip - left_hip
+```
+FRONTAL VIEW (0°)          PROFILE VIEW (90°)
+      O                          O
+     /|\                        /|
+    / | \                      / |
+   /  |  \                    /  |
+      |                      ─┘  │
+     / \                         │
+    /   \                       /│\
 
-    # Normal points forward from body
-    torso_normal = normalize(cross(shoulder_vec, hip_vec))
+• Shoulders appear WIDE        • Shoulders appear NARROW
+• Arms symmetric L/R           • Arms asymmetric
+• Legs similar length          • Near leg appears shorter
 
-    # Angle between torso normal and camera Z-axis
-    camera_dir = [0, 0, 1]
-    cos_angle = abs(dot(torso_normal, camera_dir))
-
-    return degrees(arccos(cos_angle))  # 0°=frontal, 90°=profile
+HAND-CRAFTED FEATURES (15 total):
+├── shoulder_height_diff, hip_height_diff
+├── shoulder_width, hip_width
+├── left/right arm lengths, leg lengths
+├── arm_ratio, leg_ratio
+├── torso_height, torso_width, torso_aspect
+├── nose_offset_x, body_center_x
 ```
 
 ### Usage

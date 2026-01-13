@@ -203,6 +203,8 @@ def compute_all_joint_angles(
     prev_femur_l = None
     prev_tibia_r = None
     prev_tibia_l = None
+    prev_foot_r = None
+    prev_foot_l = None
     prev_humerus_r = None
     prev_humerus_l = None
 
@@ -275,8 +277,9 @@ def compute_all_joint_angles(
                             # Right foot (ankle -> foot)
                             if all(m is not None for m in [heel_r, toe_r]):
                                 meta5_r = get_marker(coords, marker_idx, fi, markers.get("meta5_r"))
-                                foot_r = foot_axes(heel_r, toe_r, meta5_r, pelvis[:, 2])
+                                foot_r = foot_axes(heel_r, toe_r, meta5_r, pelvis[:, 2], prev_foot_r)
                                 if foot_r is not None:
+                                    prev_foot_r = foot_r
                                     # Ankle: tibia -> foot
                                     R_ankle_r = tibia_r.T @ foot_r
                                     ankle_r_angles[fi] = euler_xyz(R_ankle_r)
@@ -315,8 +318,9 @@ def compute_all_joint_angles(
                             # Left foot (ankle -> foot)
                             if all(m is not None for m in [heel_l, toe_l]):
                                 meta5_l = get_marker(coords, marker_idx, fi, markers.get("meta5_l"))
-                                foot_l = foot_axes(heel_l, toe_l, meta5_l, pelvis[:, 2])
+                                foot_l = foot_axes(heel_l, toe_l, meta5_l, pelvis[:, 2], prev_foot_l)
                                 if foot_l is not None:
+                                    prev_foot_l = foot_l
                                     # Ankle: tibia -> foot
                                     R_ankle_l = tibia_l.T @ foot_l
                                     ankle_l_angles[fi] = euler_xyz(R_ankle_l)
@@ -412,81 +416,90 @@ def compute_all_joint_angles(
         return filtered
 
     # Process all angle arrays
+    # For XYZ Euler sequence with our coordinate system (X=anterior, Y=superior, Z=lateral):
+    # - Index 0 (X rotation) = Abduction/Adduction
+    # - Index 1 (Y rotation) = Internal/External Rotation
+    # - Index 2 (Z rotation) = Flexion/Extension
     # Pelvis: skip clamping, skip median filter, use global_mean zeroing (matches reference implementation)
+    # Pelvis uses ZXY Euler which has different mapping - kept as is
     pelvis_angles = process_angle_array(pelvis_angles, "pelvis", ["flex", "abd", "rot"], skip_clamp=True, use_global_mean=True, skip_median_filter=True)
-    hip_r_angles = process_angle_array(hip_r_angles, "hip", ["flex", "abd", "rot"])
-    hip_l_angles = process_angle_array(hip_l_angles, "hip", ["flex", "abd", "rot"])
-    knee_r_angles = process_angle_array(knee_r_angles, "knee", ["flex", "abd", "rot"])
-    knee_l_angles = process_angle_array(knee_l_angles, "knee", ["flex", "abd", "rot"])
-    ankle_r_angles = process_angle_array(ankle_r_angles, "ankle", ["flex", "abd", "rot"])
-    ankle_l_angles = process_angle_array(ankle_l_angles, "ankle", ["flex", "abd", "rot"])
-    trunk_angles = process_angle_array(trunk_angles, "trunk", ["flex", "abd", "rot"])
+    # Lower body: Index 0=ABD, Index 1=ROT, Index 2=FLEX
+    hip_r_angles = process_angle_array(hip_r_angles, "hip", ["abd", "rot", "flex"])
+    hip_l_angles = process_angle_array(hip_l_angles, "hip", ["abd", "rot", "flex"])
+    knee_r_angles = process_angle_array(knee_r_angles, "knee", ["abd", "rot", "flex"])
+    knee_l_angles = process_angle_array(knee_l_angles, "knee", ["abd", "rot", "flex"])
+    ankle_r_angles = process_angle_array(ankle_r_angles, "ankle", ["abd", "rot", "flex"])
+    ankle_l_angles = process_angle_array(ankle_l_angles, "ankle", ["abd", "rot", "flex"])
+    # Trunk uses XYZ Euler: Index 0=ABD (lateral flex), Index 1=ROT, Index 2=FLEX
+    trunk_angles = process_angle_array(trunk_angles, "trunk", ["abd", "rot", "flex"])
     shoulder_r_angles = process_angle_array(shoulder_r_angles, "shoulder", ["exo", "flex", "abd"])
     shoulder_l_angles = process_angle_array(shoulder_l_angles, "shoulder", ["exo", "flex", "abd"])
     elbow_r_flex = process_angle_array(elbow_r_flex, "elbow", ["flex"])
     elbow_l_flex = process_angle_array(elbow_l_flex, "elbow", ["flex"])
 
     # Build output DataFrames
+    # For XYZ Euler: Index 0=ABD, Index 1=ROT, Index 2=FLEX
+    # Universal naming: flex, abd, rot for all joints
     results = {
         "pelvis": pd.DataFrame({
             "time_s": times,
-            "pelvis_tilt_deg": pelvis_angles[:, 0],
-            "pelvis_obliquity_deg": pelvis_angles[:, 1],
-            "pelvis_rotation_deg": pelvis_angles[:, 2],
+            "pelvis_flex_deg": pelvis_angles[:, 0],     # Tilt (sagittal)
+            "pelvis_abd_deg": pelvis_angles[:, 1],      # Obliquity (frontal)
+            "pelvis_rot_deg": pelvis_angles[:, 2],      # Rotation (transverse)
         }),
         "hip_R": pd.DataFrame({
             "time_s": times,
-            "hip_flex_deg": hip_r_angles[:, 0],
-            "hip_abd_deg": hip_r_angles[:, 1],
-            "hip_rot_deg": hip_r_angles[:, 2],
+            "hip_flex_deg": hip_r_angles[:, 2],      # Index 2 = Flexion (Z rotation)
+            "hip_abd_deg": hip_r_angles[:, 0],       # Index 0 = Abduction (X rotation)
+            "hip_rot_deg": hip_r_angles[:, 1],       # Index 1 = Rotation (Y rotation)
         }),
         "hip_L": pd.DataFrame({
             "time_s": times,
-            "hip_flex_deg": hip_l_angles[:, 0],
-            "hip_abd_deg": hip_l_angles[:, 1],
-            "hip_rot_deg": hip_l_angles[:, 2],
+            "hip_flex_deg": hip_l_angles[:, 2],      # Index 2 = Flexion (Z rotation)
+            "hip_abd_deg": hip_l_angles[:, 0],       # Index 0 = Abduction (X rotation)
+            "hip_rot_deg": hip_l_angles[:, 1],       # Index 1 = Rotation (Y rotation)
         }),
         "knee_R": pd.DataFrame({
             "time_s": times,
-            "knee_flex_deg": knee_r_angles[:, 0],
-            "knee_abd_deg": knee_r_angles[:, 1],
-            "knee_rot_deg": knee_r_angles[:, 2],
+            "knee_flex_deg": knee_r_angles[:, 2],    # Index 2 = Flexion (Z rotation)
+            "knee_abd_deg": knee_r_angles[:, 0],     # Index 0 = Abduction (X rotation)
+            "knee_rot_deg": knee_r_angles[:, 1],     # Index 1 = Rotation (Y rotation)
         }),
         "knee_L": pd.DataFrame({
             "time_s": times,
-            "knee_flex_deg": knee_l_angles[:, 0],
-            "knee_abd_deg": knee_l_angles[:, 1],
-            "knee_rot_deg": knee_l_angles[:, 2],
+            "knee_flex_deg": knee_l_angles[:, 2],    # Index 2 = Flexion (Z rotation)
+            "knee_abd_deg": knee_l_angles[:, 0],     # Index 0 = Abduction (X rotation)
+            "knee_rot_deg": knee_l_angles[:, 1],     # Index 1 = Rotation (Y rotation)
         }),
         "ankle_R": pd.DataFrame({
             "time_s": times,
-            "ankle_flex_deg": ankle_r_angles[:, 0],
-            "ankle_abd_deg": ankle_r_angles[:, 1],
-            "ankle_rot_deg": ankle_r_angles[:, 2],
+            "ankle_flex_deg": ankle_r_angles[:, 2],  # Index 2 = Flexion (Z rotation)
+            "ankle_abd_deg": ankle_r_angles[:, 0],   # Index 0 = Abduction (X rotation)
+            "ankle_rot_deg": ankle_r_angles[:, 1],   # Index 1 = Rotation (Y rotation)
         }),
         "ankle_L": pd.DataFrame({
             "time_s": times,
-            "ankle_flex_deg": ankle_l_angles[:, 0],
-            "ankle_abd_deg": ankle_l_angles[:, 1],
-            "ankle_rot_deg": ankle_l_angles[:, 2],
+            "ankle_flex_deg": ankle_l_angles[:, 2],  # Index 2 = Flexion (Z rotation)
+            "ankle_abd_deg": ankle_l_angles[:, 0],   # Index 0 = Abduction (X rotation)
+            "ankle_rot_deg": ankle_l_angles[:, 1],   # Index 1 = Rotation (Y rotation)
         }),
         "trunk": pd.DataFrame({
             "time_s": times,
-            "trunk_flex_deg": trunk_angles[:, 0],
-            "trunk_lateral_deg": trunk_angles[:, 1],
-            "trunk_rot_deg": trunk_angles[:, 2],
+            "trunk_flex_deg": trunk_angles[:, 2],       # Index 2 = Flexion (Z rotation)
+            "trunk_abd_deg": trunk_angles[:, 0],        # Index 0 = Lateral flex (X rotation)
+            "trunk_rot_deg": trunk_angles[:, 1],        # Index 1 = Rotation (Y rotation)
         }),
         "shoulder_R": pd.DataFrame({
             "time_s": times,
-            "shoulder_exo_deg": shoulder_r_angles[:, 0],
-            "shoulder_flex_deg": shoulder_r_angles[:, 1],
-            "shoulder_abd_deg": shoulder_r_angles[:, 2],
+            "shoulder_flex_deg": shoulder_r_angles[:, 1],   # Flex/Ext
+            "shoulder_abd_deg": shoulder_r_angles[:, 2],    # Abd/Add
+            "shoulder_rot_deg": shoulder_r_angles[:, 0],    # Int/Ext rotation (was exo)
         }),
         "shoulder_L": pd.DataFrame({
             "time_s": times,
-            "shoulder_exo_deg": shoulder_l_angles[:, 0],
-            "shoulder_flex_deg": shoulder_l_angles[:, 1],
-            "shoulder_abd_deg": shoulder_l_angles[:, 2],
+            "shoulder_flex_deg": shoulder_l_angles[:, 1],   # Flex/Ext
+            "shoulder_abd_deg": shoulder_l_angles[:, 2],    # Abd/Add
+            "shoulder_rot_deg": shoulder_l_angles[:, 0],    # Int/Ext rotation (was exo)
         }),
         "elbow_R": pd.DataFrame({
             "time_s": times,

@@ -40,6 +40,7 @@ from src.anatomical.joint_constraints import (
 )
 from src.markeraugmentation.markeraugmentation import run_pose2sim_augment
 from src.markeraugmentation.gpu_config import patch_pose2sim_gpu, get_gpu_info
+from src.depth_refinement.inference import DepthRefiner
 from src.mediastream.media_stream import read_video_rgb
 from src.posedetector.pose_detector import extract_world_landmarks
 from src.visualizedata.visualize_data import VisualizeData
@@ -315,9 +316,6 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    # Enable GPU acceleration for Pose2Sim LSTM inference
-    patch_pose2sim_gpu()
-
     video_path = Path(args.video)
     if not video_path.exists():
         print(f"[main] video not found: {video_path}", file=sys.stderr)
@@ -412,6 +410,9 @@ def main() -> None:
             f"main step2 TRC {trc_path} ({frames_written} frames, {markers_written} markers)"
         )
         print(f"[main] step2 TRC -> {trc_path}")
+
+        # Enable GPU acceleration for Pose2Sim LSTM inference (after MediaPipe)
+        patch_pose2sim_gpu()
 
         lstm_path = run_pose2sim_augment(
             trc_path,

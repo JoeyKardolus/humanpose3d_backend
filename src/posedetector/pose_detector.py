@@ -46,10 +46,7 @@ def extract_world_landmarks(
         raise ValueError("Video contains no frames")
 
     fps = fps or 30.0
-    base_options = mp.tasks.BaseOptions(
-        model_asset_path=str(model_path),
-        delegate=mp.tasks.BaseOptions.Delegate.GPU,
-    )
+    base_options = mp.tasks.BaseOptions(model_asset_path=str(model_path))
     options = vision.PoseLandmarkerOptions(
         base_options=base_options,
         running_mode=vision.RunningMode.VIDEO,
