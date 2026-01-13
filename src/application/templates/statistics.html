@@ -1,0 +1,420 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KinetIQ Statistics</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'styles.css' %}">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <div class="page-content">
+    <main class="py-5">
+      <div class="container container-wide">
+        <div class="card panel-card border-0 rounded-4 shadow mb-4">
+          <div class="card-body">
+            <p class="text-uppercase text-success fw-semibold small mb-2">Statistics</p>
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+              <div>
+                <h1 class="h3 fw-semibold mb-2">Kinematics overview</h1>
+                <p class="text-muted mb-0">Select up to three joints or markers to compare angles or XYZ coordinates over time.</p>
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-outline-primary" href="{% url 'results' run_key=run_key %}">Back to results</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel-card border-0 rounded-4 shadow mb-4">
+          <div class="card-body">
+            {% if error %}
+              <div class="alert alert-warning mb-0" role="alert">
+                {{ error }}
+              </div>
+            {% else %}
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label" for="markerSelectA">Joint A</label>
+                  <select class="form-select" id="markerSelectA"></select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label" for="markerSelectB">Joint B</label>
+                  <select class="form-select" id="markerSelectB"></select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label" for="markerSelectC">Joint C</label>
+                  <select class="form-select" id="markerSelectC"></select>
+                </div>
+              </div>
+              <div class="small text-muted mt-3">Source: {{ source_csv }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if not error %}
+          <div class="card panel-card border-0 rounded-4 shadow mb-4 timeline-dock">
+            <div class="card-body">
+              <div class="d-flex flex-column flex-md-row align-items-md-center gap-3">
+                <button class="btn btn-primary d-inline-flex align-items-center gap-2" id="timelinePlay" type="button">
+                  <i class="bi bi-play-fill" id="timelinePlayIcon"></i>
+                  <span id="timelinePlayLabel">Play</span>
+                </button>
+                <div class="flex-grow-1">
+                  <input class="form-range" id="timelineSlider" max="0" min="0" step="1" type="range" value="0">
+                  <div class="d-flex justify-content-between small text-muted">
+                    <span id="timelineTime">0.00s</span>
+                    <span id="timelineDuration">0.00s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-4 align-items-stretch">
+            <div class="col-lg-4 d-flex">
+              <div class="card panel-card border-0 rounded-4 shadow flex-fill">
+                <div class="card-body d-flex flex-column gap-3">
+                  <h2 class="h5 fw-semibold mb-0">Video frame</h2>
+                  {% if video_path %}
+                    <div class="ratio ratio-4x3 frame-preview">
+                      <video id="previewVideo" class="frame-video" preload="metadata" muted playsinline>
+                        <source src="{% url video_route run_key=run_key file_path=video_path %}"{% if video_type %} type="{{ video_type }}"{% endif %}>
+                      </video>
+                    </div>
+                    <p class="small text-muted mb-0">{{ video_label }}</p>
+                  {% else %}
+                    <div class="frame-placeholder text-muted small">
+                      No upload or preview video available. Re-run a pipeline with a video upload or enable the MediaPipe preview export.
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-8">
+              <div class="row g-4">
+                <div class="col-12">
+                  <div class="card panel-card border-0 rounded-4 shadow">
+                    <div class="card-body">
+                      <h2 class="h5 fw-semibold mb-3">Joint A angles</h2>
+                      <div class="ratio ratio-21x9 chart-ratio-compact">
+                        <canvas id="chartA"></canvas>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="card panel-card border-0 rounded-4 shadow">
+                    <div class="card-body">
+                      <h2 class="h5 fw-semibold mb-3">Joint B angles</h2>
+                      <div class="ratio ratio-21x9 chart-ratio-compact">
+                        <canvas id="chartB"></canvas>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="card panel-card border-0 rounded-4 shadow">
+                    <div class="card-body">
+                      <h2 class="h5 fw-semibold mb-3">Joint C angles</h2>
+                      <div class="ratio ratio-21x9 chart-ratio-compact">
+                        <canvas id="chartC"></canvas>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </main>
+  </div>
+
+  {{ markers|json_script:"marker-list" }}
+  {{ series|json_script:"marker-series" }}
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const markers = JSON.parse(document.getElementById("marker-list").textContent);
+      const series = JSON.parse(document.getElementById("marker-series").textContent);
+      if (!markers.length) {
+        return;
+      }
+
+      const previewVideo = document.getElementById("previewVideo");
+      const slider = document.getElementById("timelineSlider");
+      const playButton = document.getElementById("timelinePlay");
+      const playIcon = document.getElementById("timelinePlayIcon");
+      const playLabel = document.getElementById("timelinePlayLabel");
+      const timeLabel = document.getElementById("timelineTime");
+      const durationLabel = document.getElementById("timelineDuration");
+
+      const timeline = Object.values(series).reduce((best, entry) => {
+        if (entry && Array.isArray(entry.t) && entry.t.length > best.length) {
+          return entry.t;
+        }
+        return best;
+      }, []);
+
+      const estimateStep = (values) => {
+        if (!values || values.length < 2) {
+          return 0.033;
+        }
+        const deltas = [];
+        for (let i = 1; i < values.length; i += 1) {
+          const delta = values[i] - values[i - 1];
+          if (Number.isFinite(delta) && delta > 0) {
+            deltas.push(delta);
+          }
+        }
+        if (!deltas.length) {
+          return 0.033;
+        }
+        const sum = deltas.reduce((total, value) => total + value, 0);
+        return sum / deltas.length;
+      };
+
+      const timelineStart = timeline.length ? timeline[0] : 0;
+      const timelineEnd = timeline.length ? timeline[timeline.length - 1] : 0;
+      const timelineDuration = Math.max(timelineEnd - timelineStart, 0);
+      const stepSeconds = estimateStep(timeline);
+      slider.min = "0";
+      slider.max = String(timelineDuration);
+      slider.step = String(stepSeconds);
+      slider.value = "0";
+      durationLabel.textContent = timelineDuration ? `${timelineDuration.toFixed(2)}s` : "0.00s";
+
+      const selects = [
+        document.getElementById("markerSelectA"),
+        document.getElementById("markerSelectB"),
+        document.getElementById("markerSelectC"),
+      ];
+
+      const defaultMarkers = [null, null, null];
+
+      const createOptions = (select, selectedValue) => {
+        select.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "None";
+        placeholder.selected = !selectedValue;
+        select.appendChild(placeholder);
+        markers.forEach((marker) => {
+          const option = document.createElement("option");
+          option.value = marker.value;
+          option.textContent = marker.label;
+          option.selected = selectedValue && marker.value === selectedValue.value;
+          select.appendChild(option);
+        });
+      };
+
+      selects.forEach((select, index) => createOptions(select, defaultMarkers[index]));
+
+      const buildDataset = (marker) => {
+        if (!marker) {
+          return { labels: [], datasets: [] };
+        }
+        const data = series[marker.value];
+        const points = (values) => data.t.map((t, i) => ({ x: t, y: values[i] ?? null }));
+        return {
+          datasets: [
+            { label: data.labels[0] || "X", data: points(data.x) },
+            { label: data.labels[1] || "Y", data: points(data.y) },
+            { label: data.labels[2] || "Z", data: points(data.z) },
+          ],
+        };
+      };
+
+      const playheadPlugin = {
+        id: "playheadLine",
+        afterDatasetsDraw(chart, args, options) {
+          const timeValue = options?.time;
+          if (!Number.isFinite(timeValue)) {
+            return;
+          }
+          const xScale = chart.scales.x;
+          if (!xScale) {
+            return;
+          }
+          const x = xScale.getPixelForValue(timeValue);
+          if (!Number.isFinite(x)) {
+            return;
+          }
+          const { ctx, chartArea } = chart;
+          ctx.save();
+          ctx.strokeStyle = options?.color || "rgba(15, 23, 42, 0.6)";
+          ctx.lineWidth = options?.width || 2;
+          if (options?.dash) {
+            ctx.setLineDash(options.dash);
+          }
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.top);
+          ctx.lineTo(x, chartArea.bottom);
+          ctx.stroke();
+          ctx.restore();
+        },
+      };
+
+      Chart.register(playheadPlugin);
+
+      const buildChart = (canvasId, marker) => {
+        const ctx = document.getElementById(canvasId);
+        return new Chart(ctx, {
+          type: "line",
+          data: buildDataset(marker),
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            elements: {
+              point: {
+                radius: 0,
+                hoverRadius: 0,
+              },
+            },
+            scales: {
+              x: {
+                type: "linear",
+                min: timelineStart,
+                max: timelineEnd,
+                title: { display: true, text: "Time (s)" },
+              },
+              y: { title: { display: true, text: "Angle (deg)" } },
+            },
+            plugins: {
+              legend: { position: "bottom" },
+              playheadLine: {
+                time: timeline.length ? timeline[0] : 0,
+                color: "rgba(15, 23, 42, 0.55)",
+                width: 2,
+              },
+            },
+          },
+        });
+      };
+
+      const charts = [
+        buildChart("chartA", defaultMarkers[0]),
+        buildChart("chartB", defaultMarkers[1]),
+        buildChart("chartC", defaultMarkers[2]),
+      ];
+
+      const updateChartsPlayhead = (timeValue) => {
+        charts.forEach((chart) => {
+          chart.options.plugins.playheadLine.time = timeValue;
+          chart.update("none");
+        });
+      };
+
+      const clampTime = (value) => Math.max(0, Math.min(value, timelineDuration));
+
+      let videoTimeScale = 1;
+
+      const setSliderTime = (value, updateVideo = true) => {
+        const safeTime = clampTime(value);
+        slider.value = String(safeTime);
+        const timeValue = timelineStart + safeTime;
+        timeLabel.textContent = `${timeValue.toFixed(2)}s`;
+        updateChartsPlayhead(timeValue);
+        if (previewVideo && updateVideo) {
+          previewVideo.currentTime = safeTime * videoTimeScale;
+        }
+      };
+
+      let playing = false;
+      let fallbackTimer = null;
+      let rafId = null;
+
+      const stopPlayback = () => {
+        playing = false;
+        playIcon.className = "bi bi-play-fill";
+        playLabel.textContent = "Play";
+        if (previewVideo) {
+          previewVideo.pause();
+        }
+        if (fallbackTimer) {
+          clearInterval(fallbackTimer);
+          fallbackTimer = null;
+        }
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+      };
+
+      const startPlayback = () => {
+        if (timelineDuration <= 0) {
+          return;
+        }
+        playing = true;
+        playIcon.className = "bi bi-pause-fill";
+        playLabel.textContent = "Pause";
+        if (previewVideo) {
+          previewVideo.play().catch(() => {
+            stopPlayback();
+          });
+        } else {
+          fallbackTimer = setInterval(() => {
+            setSliderTime(Number.parseFloat(slider.value) + stepSeconds);
+            if (Number.parseFloat(slider.value) >= timelineDuration) {
+              stopPlayback();
+            }
+          }, stepSeconds * 1000);
+        }
+        const animate = () => {
+          if (!playing) {
+            return;
+          }
+          if (previewVideo) {
+            const timeValue = previewVideo.currentTime / videoTimeScale;
+            setSliderTime(timeValue, false);
+          }
+          rafId = requestAnimationFrame(animate);
+        };
+        rafId = requestAnimationFrame(animate);
+      };
+
+      slider.addEventListener("input", () => {
+        stopPlayback();
+        setSliderTime(Number.parseFloat(slider.value), true);
+      });
+
+      playButton.addEventListener("click", () => {
+        if (playing) {
+          stopPlayback();
+        } else {
+          startPlayback();
+        }
+      });
+
+      if (previewVideo) {
+        previewVideo.addEventListener("loadedmetadata", () => {
+          if (timelineDuration > 0 && previewVideo.duration > 0) {
+            videoTimeScale = previewVideo.duration / timelineDuration;
+          }
+        });
+        previewVideo.addEventListener("pause", () => {
+          if (playing) {
+            stopPlayback();
+          }
+        });
+      }
+
+      selects.forEach((select, index) => {
+        select.addEventListener("change", () => {
+          const marker = markers.find((item) => item.value === select.value);
+          charts[index].data = buildDataset(marker);
+          charts[index].update();
+        });
+      });
+
+      setSliderTime(0, false);
+    });
+  </script>
+</body>
+</html>

@@ -310,6 +310,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Visualize upper body angles (3-panel: trunk/shoulder/elbow)",
     )
+    parser.add_argument(
+        "--test-popup",
+        action="store_true",
+        help="Creates a test popup",
+    )
     return parser.parse_args()
 
 
@@ -617,6 +622,15 @@ def main() -> None:
             (visualizer or VisualizeData()).plot_trc_file(
                 final_output, export_path=aug_preview, block=True
             )
+
+        if args.test_popup:
+            import subprocess
+
+            subprocess.run([
+                "notify-send",
+                "Alert",
+                "Dit is een KDE popup vanuit Python"
+            ])
 
         # Cleanup and organize output directory
         cleanup_output_directory(run_dir, video_path.stem)

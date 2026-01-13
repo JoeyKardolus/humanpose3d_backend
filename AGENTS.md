@@ -6,6 +6,7 @@
 - `data/input/` and `data/output/` store raw videos and generated CSVs respectively, while `models/` ships with `pose_landmarker_heavy.task`.
 - Keep exploratory analyses inside `notebooks/` and guard large intermediate files within `data/` so they are not added to Git.
 - Tests belong under `tests/` and should mirror the structure of `src/` for easy discovery.
+- The project does use UV as its main running and packaging.
 
 ## Build, Test, and Development Commands
 - `uv sync` installs the Python 3.12 toolchain defined in `pyproject.toml`/`uv.lock`.
@@ -24,6 +25,8 @@
 - Keep modules cohesive: each package should expose a single public class (e.g., `MediaStream`, `PoseDetector`) and raise clear exceptions on invalid input.
 - Provide concise docstrings for public methods and add inline comments only when the intent is non-obvious (e.g., FPS assumptions).
 - Format code before committing; `uv run python -m black src tests` is the recommended baseline.
+- Follow strict and advanced OOP (Object Oriented Programming) standards.
+- Don't put to much code inside one file. Structure it trough multiple files and keep functions for what they are. KISS (Keep It Simple Stupid)
 
 ## Testing Guidelines
 - Use `pytest` with files named `test_<module>.py` that mirror the corresponding package (e.g., `tests/test_media_stream.py`).

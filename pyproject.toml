@@ -14,6 +14,7 @@ dependencies = [
     "pose2sim>=0.10.0",
     "tensorflow>=2.13.0",
     "onnxruntime-gpu>=1.23.0",
+    "django>=6.0.1",
 ]
 
 [dependency-groups]
