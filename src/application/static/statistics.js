@@ -30,7 +30,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const plotRotateRollRight = document.getElementById("plotRotateRollRight");
   const plotRotateReset = document.getElementById("plotRotateReset");
   const visualToggleVideo = document.getElementById("visualToggleVideo");
-  const visualTogglePlot = document.getElementById("visualTogglePlot");
+  const visualToggleSkeleton = document.getElementById("visualToggleSkeleton");
+  const visualToggleAugmented = document.getElementById("visualToggleAugmented");
   const statsVideoPane = document.getElementById("statsVideoPane");
   const statsPlotPane = document.getElementById("statsPlotPane");
   const statsVisualTitle = document.getElementById("statsVisualTitle");
@@ -61,6 +62,14 @@ document.addEventListener("DOMContentLoaded", () => {
     y: "#0b5d5b",
     z: "#2effb3",
   };
+
+  const axisColors = {
+    x: "#2563eb",
+    y: "#0b5d5b",
+    z: "#16a34a",
+  };
+
+  const highlightColors = [lineColors.x, lineColors.y, lineColors.z];
 
   const timeline = Object.values(series).reduce((best, entry) => {
     if (entry && Array.isArray(entry.t) && entry.t.length > best.length) {
@@ -106,16 +115,26 @@ document.addEventListener("DOMContentLoaded", () => {
   const runKey = document.body?.dataset?.runKey || "default";
   const selectionStorageKey = `kinetiq:stats:selection:${runKey}`;
   const visualStorageKey = `kinetiq:stats:visual:${runKey}`;
-  const plotDataElement = document.getElementById("plot-data");
-  const plotData = plotDataElement ? JSON.parse(plotDataElement.textContent) : null;
+  const plotSkeletonElement = document.getElementById("plot-data-skeleton");
+  const plotAugmentedElement = document.getElementById("plot-data-augmented");
+  const plotSkeletonData = plotSkeletonElement
+    ? JSON.parse(plotSkeletonElement.textContent)
+    : null;
+  const plotAugmentedData = plotAugmentedElement
+    ? JSON.parse(plotAugmentedElement.textContent)
+    : null;
   const plotContainer = document.getElementById("statsPlot3d");
+  const plotEmpty = document.getElementById("statsPlotEmpty");
 
   const plotState = {
     ready: false,
     loading: false,
-    hasData: !!(plotData && plotData.frames && plotData.frames.length),
-    camera: null,
+    hasData: false,
+    cameraByMode: {},
     relayoutBound: false,
+    mode: "video",
+    data: null,
+    activeChartIndex: 0,
   };
 
   let plotPlaying = false;
@@ -123,8 +142,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let plotIndex = 0;
 
   const defaultPlotCamera = {
-    eye: { x: 0, y: 0, z: 2.4 },
-    up: { x: -1, y: 0, z: 0 },
+    eye: { x: 0, y: 0, z: 3 },
+    up: { x: 0, y: 0, z: 0 },
     center: { x: 0, y: 0, z: 0 },
   };
 
@@ -154,14 +173,15 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const applyCameraRotation = (axis, angle) => {
-    const current = plotState.camera || defaultPlotCamera;
-    plotState.camera = {
+    const current = plotState.cameraByMode[plotState.mode] || defaultPlotCamera;
+    const nextCamera = {
       center: current.center,
       eye: rotateVector(current.eye, axis, angle),
       up: rotateVector(current.up, axis, angle),
     };
+    plotState.cameraByMode[plotState.mode] = nextCamera;
     if (plotState.ready && plotContainer && window.Plotly) {
-      window.Plotly.relayout(plotContainer, { "scene.camera": plotState.camera });
+      window.Plotly.relayout(plotContainer, { "scene.camera": nextCamera });
     }
   };
 
@@ -208,12 +228,48 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const normalizePlotValue = (value) => (Number.isFinite(value) ? value : null);
+  const invertPlotValue = (value) => (Number.isFinite(value) ? -value : value);
+  const transformPlotPoint = (point) => {
+    const x = normalizePlotValue(point?.[0]);
+    const y = normalizePlotValue(point?.[1]);
+    const z = normalizePlotValue(point?.[2]);
+    return {
+      x,
+      y,
+      z,
+    };
+  };
+
+  const normalizeMarkerName = (value) =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const resolveHighlightMarkerIndex = () => {
+    if (!plotState.data || !plotState.data.markers) {
+      return null;
+    }
+    const index = plotState.activeChartIndex;
+    const select = selects[index];
+    if (!select) {
+      return null;
+    }
+    const value = select.value || "";
+    if (!value.startsWith("marker:")) {
+      return null;
+    }
+    const markerName = normalizeMarkerName(value.slice("marker:".length));
+    const markers = plotState.data.markers;
+    const resolvedIndex = markers.findIndex(
+      (marker) => normalizeMarkerName(String(marker)) === markerName
+    );
+    return resolvedIndex >= 0 ? resolvedIndex : null;
+  };
 
   const buildPlotTraces = (frame) => {
     const points = frame || [];
-    const x = points.map((point) => normalizePlotValue(point?.[0]));
-    const y = points.map((point) => normalizePlotValue(point?.[1]));
-    const z = points.map((point) => normalizePlotValue(point?.[2]));
+    const transformed = points.map(transformPlotPoint);
+    const x = transformed.map((point) => point.x);
+    const y = transformed.map((point) => point.y);
+    const z = transformed.map((point) => point.z);
     const traces = [
       {
         type: "scatter3d",
@@ -226,45 +282,44 @@ document.addEventListener("DOMContentLoaded", () => {
       },
     ];
 
-    const connections = plotData?.connections || [];
+    const connections = plotState.data?.connections || [];
     connections.forEach(([start, end]) => {
-      const startPoint = points[start];
-      const endPoint = points[end];
+      const startPoint = transformPlotPoint(points[start]);
+      const endPoint = transformPlotPoint(points[end]);
       traces.push({
         type: "scatter3d",
         mode: "lines",
-        x: [normalizePlotValue(startPoint?.[0]), normalizePlotValue(endPoint?.[0])],
-        y: [normalizePlotValue(startPoint?.[1]), normalizePlotValue(endPoint?.[1])],
-        z: [normalizePlotValue(startPoint?.[2]), normalizePlotValue(endPoint?.[2])],
+        x: [startPoint?.x, endPoint?.x],
+        y: [startPoint?.y, endPoint?.y],
+        z: [startPoint?.z, endPoint?.z],
         line: { color: "#2563eb", width: 4 },
         hoverinfo: "skip",
       });
     });
+
+    const highlightIndex = resolveHighlightMarkerIndex();
+    if (highlightIndex !== null && points[highlightIndex]) {
+      const highlightPoint = transformPlotPoint(points[highlightIndex]);
+      traces.push({
+        type: "scatter3d",
+        mode: "markers",
+        x: [highlightPoint.x],
+        y: [highlightPoint.y],
+        z: [highlightPoint.z],
+        marker: {
+          size: 7,
+          color: highlightColors[plotState.activeChartIndex] || "#2563eb",
+        },
+        hoverinfo: "skip",
+      });
+    }
     return traces;
   };
 
   const resolvePlotIndex = (timeValue) => {
-    const frames = plotData?.frames || [];
+    const frames = plotState.data?.frames || [];
     if (!frames.length) {
       return 0;
-    }
-    const times = plotData?.times || [];
-    const hasTimes =
-      times.length === frames.length && times.some((value) => Number.isFinite(value));
-    if (hasTimes) {
-      let bestIndex = 0;
-      let bestDiff = Infinity;
-      times.forEach((value, index) => {
-        if (!Number.isFinite(value)) {
-          return;
-        }
-        const diff = Math.abs(value - timeValue);
-        if (diff < bestDiff) {
-          bestDiff = diff;
-          bestIndex = index;
-        }
-      });
-      return bestIndex;
     }
     if (timelineDuration <= 0) {
       return 0;
@@ -274,12 +329,12 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const renderPlotFrame = (timeValue) => {
-    if (!plotState.hasData || !plotContainer || !window.Plotly) {
+    if (!plotState.hasData || !plotContainer || !window.Plotly || !plotState.data) {
       return;
     }
     const index = resolvePlotIndex(timeValue);
     plotIndex = index;
-    const frame = plotData.frames[index] || [];
+    const frame = plotState.data.frames[index] || [];
     const width = plotContainer.clientWidth || undefined;
     const height = plotContainer.clientHeight || undefined;
     const layout = {
@@ -290,11 +345,32 @@ document.addEventListener("DOMContentLoaded", () => {
       showlegend: false,
       dragmode: "orbit",
       scene: {
-        xaxis: { title: "X", range: [-1, 1] },
-        yaxis: { title: "Y", range: [1, -1] },
-        zaxis: { title: "Z", range: [-1, 1] },
+        xaxis: {
+          title: { text: "X", font: { color: axisColors.x } },
+          tickfont: { color: axisColors.x },
+          range: [-1, 1],
+          linecolor: axisColors.x,
+          linewidth: 2,
+          gridcolor: "rgba(37, 99, 235, 0.12)",
+        },
+        yaxis: {
+          title: { text: "Y", font: { color: axisColors.y } },
+          tickfont: { color: axisColors.y },
+          range: [-1, 1],
+          linecolor: axisColors.y,
+          linewidth: 2,
+          gridcolor: "rgba(11, 93, 91, 0.12)",
+        },
+        zaxis: {
+          title: { text: "Z", font: { color: axisColors.z } },
+          tickfont: { color: axisColors.z },
+          range: [-1, 1],
+          linecolor: axisColors.z,
+          linewidth: 2,
+          gridcolor: "rgba(22, 163, 74, 0.12)",
+        },
         aspectmode: "cube",
-        camera: plotState.camera || defaultPlotCamera,
+        camera: plotState.cameraByMode[plotState.mode] || defaultPlotCamera,
       },
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: "rgba(0,0,0,0)",
@@ -304,11 +380,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!plotState.relayoutBound) {
         plotContainer.on("plotly_relayout", (event) => {
           if (event?.scene?.camera) {
-            plotState.camera = event.scene.camera;
+            plotState.cameraByMode[plotState.mode] = event.scene.camera;
             return;
           }
           if (event && event["scene.camera"]) {
-            plotState.camera = event["scene.camera"];
+            plotState.cameraByMode[plotState.mode] = event["scene.camera"];
           }
         });
         plotState.relayoutBound = true;
@@ -318,12 +394,12 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const resolvePlotTimeFromIndex = (index) => {
-    const frames = plotData?.frames || [];
+    const frames = plotState.data?.frames || [];
     if (!frames.length) {
       return timelineStart;
     }
     const safeIndex = Math.max(0, Math.min(index, frames.length - 1));
-    const times = plotData?.times || [];
+    const times = plotState.data?.times || [];
     if (times.length === frames.length && Number.isFinite(times[safeIndex])) {
       return times[safeIndex];
     }
@@ -349,7 +425,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const startPlotPlayback = () => {
-    const frames = plotData?.frames || [];
+    const frames = plotState.data?.frames || [];
     if (!frames.length) {
       return;
     }
@@ -360,7 +436,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (plotPlayLabel) {
       plotPlayLabel.textContent = "Pause";
     }
-    const times = plotData?.times || [];
+    const times = plotState.data?.times || [];
     const step = estimateStep(times);
     const intervalMs = step > 0 ? step * 1000 : 33;
     plotTimer = setInterval(() => {
@@ -374,11 +450,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }, intervalMs);
   };
 
+  const resolvePlotData = (mode) => {
+    if (mode === "skeleton") {
+      return plotSkeletonData;
+    }
+    if (mode === "augmented") {
+      return plotAugmentedData;
+    }
+    return null;
+  };
+
   const setActiveVisual = (mode) => {
-    if (!statsVideoPane || !statsPlotPane || !visualToggleVideo || !visualTogglePlot) {
+    if (
+      !statsVideoPane
+      || !statsPlotPane
+      || !visualToggleVideo
+      || !visualToggleSkeleton
+      || !visualToggleAugmented
+    ) {
       return;
     }
     const isVideo = mode === "video";
+    plotState.mode = mode;
+    plotState.data = resolvePlotData(mode);
+    plotState.hasData = !!(plotState.data && plotState.data.frames?.length);
+    plotState.ready = false;
+    plotIndex = 0;
     try {
       localStorage.setItem(visualStorageKey, mode);
     } catch (error) {
@@ -389,12 +486,24 @@ document.addEventListener("DOMContentLoaded", () => {
     if (plotControls) {
       plotControls.classList.toggle("d-none", isVideo || !plotState.hasData);
     }
+    if (plotContainer && plotEmpty) {
+      plotContainer.parentElement?.classList.toggle("d-none", !plotState.hasData);
+      plotEmpty.classList.toggle("d-none", plotState.hasData);
+    }
     visualToggleVideo.classList.toggle("btn-primary", isVideo);
     visualToggleVideo.classList.toggle("btn-outline-primary", !isVideo);
-    visualTogglePlot.classList.toggle("btn-primary", !isVideo);
-    visualTogglePlot.classList.toggle("btn-outline-primary", isVideo);
+    visualToggleSkeleton.classList.toggle("btn-primary", mode === "skeleton");
+    visualToggleSkeleton.classList.toggle("btn-outline-primary", mode !== "skeleton");
+    visualToggleAugmented.classList.toggle("btn-primary", mode === "augmented");
+    visualToggleAugmented.classList.toggle("btn-outline-primary", mode !== "augmented");
     if (statsVisualTitle) {
-      statsVisualTitle.textContent = isVideo ? "Video frame" : "3D plot";
+      if (mode === "skeleton") {
+        statsVisualTitle.textContent = "Skeleton plot";
+      } else if (mode === "augmented") {
+        statsVisualTitle.textContent = "Augmented plot";
+      } else {
+        statsVisualTitle.textContent = "Video frame";
+      }
     }
     if (isVideo) {
       stopPlotPlayback();
@@ -403,6 +512,7 @@ document.addEventListener("DOMContentLoaded", () => {
       loadPlotly()
         .then(() => {
           const currentValue = Number.parseFloat(slider.value || "0");
+          plotState.relayoutBound = false;
           renderPlotFrame(timelineStart + currentValue);
         })
         .catch(() => {
@@ -622,6 +732,20 @@ document.addEventListener("DOMContentLoaded", () => {
     buildChart("chartC", defaultMarkers[2]),
   ];
 
+  const chartCards = Array.from(document.querySelectorAll(".stats-chart-card"));
+
+  const setActiveChart = (index) => {
+    plotState.activeChartIndex = index;
+    chartCards.forEach((card) => {
+      const cardIndex = Number.parseInt(card.dataset.chartIndex || "-1", 10);
+      card.classList.toggle("is-active", cardIndex === index);
+    });
+    if (plotState.ready) {
+      const timeValue = timelineStart + Number.parseFloat(slider.value || "0");
+      renderPlotFrame(timeValue);
+    }
+  };
+
   const updateChartsPlayhead = (timeValue) => {
     charts.forEach((chart, index) => {
       chart.options.plugins.playheadLine.time = timeValue;
@@ -727,12 +851,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  if (visualToggleVideo && visualTogglePlot) {
+  if (visualToggleVideo && visualToggleSkeleton && visualToggleAugmented) {
     visualToggleVideo.addEventListener("click", () => {
       setActiveVisual("video");
     });
-    visualTogglePlot.addEventListener("click", () => {
-      setActiveVisual("plot");
+    visualToggleSkeleton.addEventListener("click", () => {
+      setActiveVisual("skeleton");
+    });
+    visualToggleAugmented.addEventListener("click", () => {
+      setActiveVisual("augmented");
     });
   }
 
@@ -779,7 +906,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (plotRotateReset) {
     plotRotateReset.addEventListener("click", () => {
-      plotState.camera = null;
+      plotState.cameraByMode[plotState.mode] = null;
       if (plotState.ready && plotContainer && window.Plotly) {
         window.Plotly.relayout(plotContainer, { "scene.camera": defaultPlotCamera });
       }
@@ -794,13 +921,33 @@ document.addEventListener("DOMContentLoaded", () => {
       charts[index].update();
       updateValueSet(index, timelineStart + Number.parseFloat(slider.value));
       persistSelection();
+      if (plotState.ready) {
+        const timeValue = timelineStart + Number.parseFloat(slider.value || "0");
+        renderPlotFrame(timeValue);
+      }
+    });
+  });
+
+  chartCards.forEach((card) => {
+    const cardIndex = Number.parseInt(card.dataset.chartIndex || "-1", 10);
+    if (cardIndex < 0) {
+      return;
+    }
+    card.addEventListener("click", () => {
+      setActiveChart(cardIndex);
     });
   });
 
   let initialVisual = "video";
   try {
     const storedVisual = localStorage.getItem(visualStorageKey);
-    if (storedVisual === "plot" || storedVisual === "video") {
+    if (storedVisual === "plot") {
+      initialVisual = "augmented";
+    } else if (
+      storedVisual === "skeleton"
+      || storedVisual === "augmented"
+      || storedVisual === "video"
+    ) {
       initialVisual = storedVisual;
     }
   } catch (error) {
@@ -808,5 +955,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   setActiveVisual(initialVisual);
+  setActiveChart(plotState.activeChartIndex);
+  // No select styling; highlight follows active chart.
   setSliderTime(0, false);
 });

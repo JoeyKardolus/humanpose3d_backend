@@ -131,6 +131,53 @@ body {
   transform: scaleX(-1);
 }
 
+.plot-axis-badge {
+  letter-spacing: 0.02em;
+}
+
+.plot-axis-group .btn {
+  border-width: 1px;
+}
+
+.plot-axis-btn {
+  border: none;
+}
+
+.plot-axis-x-btn {
+  background-color: var(--chart-color-x);
+  color: #0f172a;
+}
+
+.plot-axis-y-btn {
+  background-color: var(--chart-color-y);
+  color: #f8fafc;
+}
+
+.plot-axis-z-btn {
+  background-color: var(--chart-color-z);
+  color: #0f172a;
+}
+
+.plot-axis-btn:hover,
+.plot-axis-btn:focus {
+  filter: brightness(0.95);
+}
+
+.plot-axis-x {
+  background-color: var(--chart-color-x);
+  color: #0f172a;
+}
+
+.plot-axis-y {
+  background-color: var(--chart-color-y);
+  color: #f8fafc;
+}
+
+.plot-axis-z {
+  background-color: var(--chart-color-z);
+  color: #0f172a;
+}
+
 .stats-chart {
   min-height: 300px;
 }
@@ -163,6 +210,22 @@ body {
 
 .stats-chart canvas {
   height: 100% !important;
+}
+
+.stats-chart-card.is-active {
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.15);
+}
+
+.stats-chart-card.is-active.stats-chart-card-a {
+  box-shadow: 0 0 0 3px var(--chart-color-x);
+}
+
+.stats-chart-card.is-active.stats-chart-card-b {
+  box-shadow: 0 0 0 3px var(--chart-color-y);
+}
+
+.stats-chart-card.is-active.stats-chart-card-c {
+  box-shadow: 0 0 0 3px var(--chart-color-z);
 }
 
 .stats-video-frame {

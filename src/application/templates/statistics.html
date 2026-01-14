@@ -38,12 +38,12 @@
                 {{ error }}
               </div>
             {% else %}
-              <p class="text-muted small mb-2">Choose up to three markers or joints to plot.</p>
               <div class="row g-3 align-items-center">
                 <div class="col-md-3">
                   <div class="btn-group btn-group-sm w-100" role="group" aria-label="Visualization selection">
                     <button class="btn btn-primary btn-sm" type="button" id="visualToggleVideo">Video</button>
-                    <button class="btn btn-outline-primary btn-sm" type="button" id="visualTogglePlot">3D Plot</button>
+                    <button class="btn btn-outline-primary btn-sm" type="button" id="visualToggleSkeleton">Skeleton</button>
+                    <button class="btn btn-outline-primary btn-sm" type="button" id="visualToggleAugmented">Augmented</button>
                   </div>
                 </div>
                 <div class="col-md-9">
@@ -82,28 +82,48 @@
                 </div>
               </div>
               <div class="mt-3 d-none" id="plotControls">
-                <div class="d-flex align-items-center justify-content-center gap-1 mt-2">
-                  <button class="btn btn-primary btn-sm" type="button" id="plotRotateLeft">
-                    <i class="bi bi-arrow-counterclockwise"></i>
-                  </button>
-                  <button class="btn btn-primary btn-sm" type="button" id="plotRotateRight">
-                    <i class="bi bi-arrow-clockwise"></i>
-                  </button>
-                  <button class="btn btn-primary btn-sm" type="button" id="plotRotateUp">
-                    <i class="bi bi-arrow-up"></i>
-                  </button>
-                  <button class="btn btn-primary btn-sm" type="button" id="plotRotateDown">
-                    <i class="bi bi-arrow-down"></i>
-                  </button>
-                  <button class="btn btn-primary btn-sm" type="button" id="plotRotateRollLeft">
-                    <i class="bi bi-arrow-repeat plot-roll-left"></i>
-                  </button>
-                  <button class="btn btn-primary btn-sm" type="button" id="plotRotateRollRight">
-                    <i class="bi bi-arrow-repeat"></i>
-                  </button>
-                  <button class="btn btn-outline-primary btn-sm" type="button" id="plotRotateReset">
-                    <i class="bi bi-arrow-counterclockwise"></i>
-                  </button>
+                <div class="d-flex align-items-center justify-content-center gap-3 flex-wrap">
+                  <div class="d-flex flex-column align-items-center gap-1 plot-axis-group plot-axis-x-group">
+                    <span class="badge plot-axis-badge plot-axis-x">Pitch (X)</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Yaw rotation">
+                    <button class="btn plot-axis-btn plot-axis-x-btn" type="button" id="plotRotateLeft">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button class="btn plot-axis-btn plot-axis-x-btn" type="button" id="plotRotateRight">
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-column align-items-center gap-1 plot-axis-group plot-axis-y-group">
+                    <span class="badge plot-axis-badge plot-axis-y">Roll (Y)</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Pitch rotation">
+                    <button class="btn plot-axis-btn plot-axis-y-btn" type="button" id="plotRotateUp">
+                      <i class="bi bi-arrow-up"></i>
+                    </button>
+                    <button class="btn plot-axis-btn plot-axis-y-btn" type="button" id="plotRotateDown">
+                      <i class="bi bi-arrow-down"></i>
+                    </button>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-column align-items-center gap-1 plot-axis-group plot-axis-z-group">
+                    <span class="badge plot-axis-badge plot-axis-z">Yaw (Z)</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Roll rotation">
+                    <button class="btn plot-axis-btn plot-axis-z-btn" type="button" id="plotRotateRollLeft">
+                      <i class="bi bi-arrow-repeat plot-roll-left"></i>
+                    </button>
+                    <button class="btn plot-axis-btn plot-axis-z-btn" type="button" id="plotRotateRollRight">
+                      <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-column align-items-center gap-1">
+                    <span class="badge text-bg-dark">Reset</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Reset view">
+                    <button class="btn btn-outline-primary" type="button" id="plotRotateReset">
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -128,9 +148,12 @@
                     {% endif %}
                   </div>
                   <div class="stats-visual-pane d-none" id="statsPlotPane">
-                    {% if plot_data %}
+                    {% if plot_skeleton_data or plot_augmented_data %}
                       <div class="stats-video-frame d-flex align-items-center justify-content-center bg-light rounded-3 overflow-hidden flex-grow-1">
                         <div class="stats-plot" id="statsPlot3d"></div>
+                      </div>
+                      <div class="frame-placeholder text-muted small d-none" id="statsPlotEmpty">
+                        No plot data available for this view.
                       </div>
                     {% else %}
                       <div class="frame-placeholder text-muted small">
@@ -144,7 +167,7 @@
             <div class="col-lg-8">
               <div class="row g-3 h-100">
                 <div class="col-12">
-                  <div class="card panel-card border-0 rounded-4 shadow stats-chart-card">
+                  <div class="card panel-card border-0 rounded-4 shadow stats-chart-card stats-chart-card-a" data-chart-index="0">
                     <div class="card-body stats-card-body">
                       <div class="stats-chart-values mb-2" id="chartAValues">
                         <span class="stats-chart-value-x" id="chartAValueX">X: --</span>
@@ -158,7 +181,7 @@
                   </div>
                 </div>
                 <div class="col-12">
-                  <div class="card panel-card border-0 rounded-4 shadow stats-chart-card">
+                  <div class="card panel-card border-0 rounded-4 shadow stats-chart-card stats-chart-card-b" data-chart-index="1">
                     <div class="card-body stats-card-body">
                       <div class="stats-chart-values mb-2" id="chartBValues">
                         <span class="stats-chart-value-x" id="chartBValueX">X: --</span>
@@ -172,7 +195,7 @@
                   </div>
                 </div>
                 <div class="col-12">
-                  <div class="card panel-card border-0 rounded-4 shadow stats-chart-card">
+                  <div class="card panel-card border-0 rounded-4 shadow stats-chart-card stats-chart-card-c" data-chart-index="2">
                     <div class="card-body stats-card-body">
                       <div class="stats-chart-values mb-2" id="chartCValues">
                         <span class="stats-chart-value-x" id="chartCValueX">X: --</span>
@@ -195,8 +218,11 @@
 
   {{ markers|json_script:"marker-list" }}
   {{ series|json_script:"marker-series" }}
-  {% if plot_data %}
-    {{ plot_data|json_script:"plot-data" }}
+  {% if plot_skeleton_data %}
+    {{ plot_skeleton_data|json_script:"plot-data-skeleton" }}
+  {% endif %}
+  {% if plot_augmented_data %}
+    {{ plot_augmented_data|json_script:"plot-data-augmented" }}
   {% endif %}
 </body>
 </html>

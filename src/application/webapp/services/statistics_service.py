@@ -6,6 +6,7 @@ import csv
 import mimetypes
 from pathlib import Path
 
+from src.application.webapp.services.landmark_plot_service import LandmarkPlotService
 from src.application.webapp.services.trc_plot_service import TrcPlotService
 
 
@@ -15,6 +16,7 @@ class StatisticsService:
     def __init__(self, upload_root: Path) -> None:
         self._upload_root = upload_root
         self._trc_plot_service = TrcPlotService()
+        self._landmark_plot_service = LandmarkPlotService()
 
     def build_context(self, run_dir: Path, run_key: str) -> dict[str, object]:
         """Build the template context for statistics rendering."""
@@ -174,16 +176,18 @@ class StatisticsService:
             video_type = upload_video_type
             video_route = "upload_media"
 
-        plot_payload = self._trc_plot_service.build_plot_payload(run_dir)
-        plot_data = plot_payload.__dict__ if plot_payload else None
+        skeleton_payload = self._landmark_plot_service.build_plot_payload(run_dir)
+        augmented_payload = self._trc_plot_service.build_plot_payload(run_dir)
+        plot_skeleton_data = skeleton_payload.__dict__ if skeleton_payload else None
+        plot_augmented_data = augmented_payload.__dict__ if augmented_payload else None
 
         return {
             "run_key": run_key,
             "markers": markers,
             "series": series,
-            "source_csv": "joint angle CSVs + raw landmarks",
             "video_path": video_path,
             "video_type": video_type,
             "video_route": video_route,
-            "plot_data": plot_data,
+            "plot_skeleton_data": plot_skeleton_data,
+            "plot_augmented_data": plot_augmented_data,
         }
