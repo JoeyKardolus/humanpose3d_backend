@@ -1,6 +1,9 @@
 /* Global styles for the webapp UI. */
 :root {
   --bs-body-font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  --chart-color-x: #9ad9ff;
+  --chart-color-y: #0b5d5b;
+  --chart-color-z: #2effb3;
 }
 
 body {
@@ -126,6 +129,32 @@ body {
 
 .stats-chart {
   min-height: 300px;
+}
+
+.stats-chart-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  justify-content: center;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-chart-value-x {
+  color: var(--chart-color-x);
+  min-width: 110px;
+}
+
+.stats-chart-value-y {
+  color: var(--chart-color-y);
+  min-width: 110px;
+}
+
+.stats-chart-value-z {
+  color: var(--chart-color-z);
+  min-width: 110px;
 }
 
 .stats-chart canvas {

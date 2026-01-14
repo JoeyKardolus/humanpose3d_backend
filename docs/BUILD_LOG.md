@@ -1049,3 +1049,18 @@ compute_all_joint_angles(trc_path, smooth_window=31)  # More smoothing
 - main step3 augment data/output/pose-3d/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc (2026-01-12 17:14:27Z)
 - main step3.5 complete data/output/pose-3d/MicrosoftTeams-video/MicrosoftTeams-video_LSTM_complete.trc (2026-01-12 17:14:27Z)
 - main step3.6 multi-constraint optimization data/output/pose-3d/MicrosoftTeams-video/MicrosoftTeams-video_LSTM_complete_multi_refined.trc (2026-01-12 17:14:27Z)
+- 2026-01-14 07:24:41 UTC | main step1 CSV data/output/pose-3d/Jaap-eeed87fa/Jaap-eeed87fa.csv (710 frames, 12820 rows)
+- 2026-01-14 07:24:41 UTC | main step2 TRC data/output/pose-3d/Jaap-eeed87fa/Jaap-eeed87fa.trc (710 frames, 22 markers)
+- 2026-01-14 07:25:01 UTC | main step3 augment data/output/pose-3d/Jaap-eeed87fa/Jaap-eeed87fa_LSTM.trc
+- 2026-01-14 07:25:01 UTC | main step3.5 complete data/output/pose-3d/Jaap-eeed87fa/Jaap-eeed87fa_LSTM_complete.trc
+- 2026-01-14 07:25:01 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/Jaap-eeed87fa/Jaap-eeed87fa_LSTM_complete_multi_refined.trc
+- 2026-01-14 07:48:13 UTC | main step1 CSV data/output/pose-3d/PushUp-42aadbbe/PushUp-42aadbbe.csv (589 frames, 9238 rows)
+- 2026-01-14 07:48:13 UTC | main step2 TRC data/output/pose-3d/PushUp-42aadbbe/PushUp-42aadbbe.trc (589 frames, 22 markers)
+- 2026-01-14 07:48:32 UTC | main step3 augment data/output/pose-3d/PushUp-42aadbbe/PushUp-42aadbbe_LSTM.trc
+- 2026-01-14 07:48:32 UTC | main step3.5 complete data/output/pose-3d/PushUp-42aadbbe/PushUp-42aadbbe_LSTM_complete.trc
+- 2026-01-14 07:48:32 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/PushUp-42aadbbe/PushUp-42aadbbe_LSTM_complete_multi_refined.trc
+- 2026-01-14 07:51:34 UTC | main step1 CSV data/output/pose-3d/PushUp/PushUp.csv (589 frames, 9238 rows)
+- 2026-01-14 07:51:34 UTC | main step2 TRC data/output/pose-3d/PushUp/PushUp.trc (589 frames, 22 markers)
+- 2026-01-14 07:51:54 UTC | main step3 augment data/output/pose-3d/PushUp/PushUp_LSTM.trc
+- 2026-01-14 07:51:54 UTC | main step3.5 complete data/output/pose-3d/PushUp/PushUp_LSTM_complete.trc
+- 2026-01-14 07:51:54 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/PushUp/PushUp_LSTM_complete_multi_refined.trc

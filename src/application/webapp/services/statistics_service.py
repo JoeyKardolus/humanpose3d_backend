@@ -162,17 +162,14 @@ class StatisticsService:
         video_path = None
         video_type = None
         video_route = None
-        video_label = None
         if preview_video:
             video_path = preview_video.relative_to(run_dir).as_posix()
             video_type = preview_video_type
             video_route = "media"
-            video_label = "Overlay preview synced to the time slider."
         elif upload_video:
             video_path = upload_video.relative_to(upload_dir).as_posix()
             video_type = upload_video_type
             video_route = "upload_media"
-            video_label = "Uploaded video synced to the time slider."
 
         return {
             "run_key": run_key,
@@ -182,5 +179,4 @@ class StatisticsService:
             "video_path": video_path,
             "video_type": video_type,
             "video_route": video_route,
-            "video_label": video_label,
         }

@@ -8,7 +8,7 @@ from pathlib import Path
 
 def append_build_log(message: str) -> None:
     """Append a timestamped entry to docs/BUILD_LOG.md."""
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(__file__).resolve().parents[2]
     log_path = repo_root / "docs" / "BUILD_LOG.md"
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     entry = f"- {timestamp} | {message}\n"
