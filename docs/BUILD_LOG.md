@@ -1084,3 +1084,23 @@ compute_all_joint_angles(trc_path, smooth_window=31)  # More smoothing
 - 2026-01-14 08:14:49 UTC | main step3 augment data/output/pose-3d/Jaap-187734ce/Jaap-187734ce_LSTM.trc
 - 2026-01-14 08:14:49 UTC | main step3.5 complete data/output/pose-3d/Jaap-187734ce/Jaap-187734ce_LSTM_complete.trc
 - 2026-01-14 08:14:49 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/Jaap-187734ce/Jaap-187734ce_LSTM_complete_multi_refined.trc
+- 2026-01-14 09:02:26 UTC | main step1 CSV data/output/pose-3d/Jaap-19cb6d2e/Jaap-19cb6d2e.csv (710 frames, 12820 rows)
+- 2026-01-14 09:02:26 UTC | main step2 TRC data/output/pose-3d/Jaap-19cb6d2e/Jaap-19cb6d2e.trc (710 frames, 22 markers)
+- 2026-01-14 09:02:46 UTC | main step3 augment data/output/pose-3d/Jaap-19cb6d2e/Jaap-19cb6d2e_LSTM.trc
+- 2026-01-14 09:02:47 UTC | main step3.5 complete data/output/pose-3d/Jaap-19cb6d2e/Jaap-19cb6d2e_LSTM_complete.trc
+- 2026-01-14 09:02:47 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/Jaap-19cb6d2e/Jaap-19cb6d2e_LSTM_complete_multi_refined.trc
+- 2026-01-14 09:20:15 UTC | main step1 CSV data/output/pose-3d/Jaap-79cc3855/Jaap-79cc3855.csv (710 frames, 12820 rows)
+- 2026-01-14 09:20:15 UTC | main step2 TRC data/output/pose-3d/Jaap-79cc3855/Jaap-79cc3855.trc (710 frames, 22 markers)
+- 2026-01-14 09:20:35 UTC | main step3 augment data/output/pose-3d/Jaap-79cc3855/Jaap-79cc3855_LSTM.trc
+- 2026-01-14 09:20:35 UTC | main step3.5 complete data/output/pose-3d/Jaap-79cc3855/Jaap-79cc3855_LSTM_complete.trc
+- 2026-01-14 09:20:35 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/Jaap-79cc3855/Jaap-79cc3855_LSTM_complete_multi_refined.trc
+- 2026-01-14 09:24:09 UTC | main step1 CSV data/output/pose-3d/Jaap-fdb9f9fc/Jaap-fdb9f9fc.csv (710 frames, 12820 rows)
+- 2026-01-14 09:24:09 UTC | main step2 TRC data/output/pose-3d/Jaap-fdb9f9fc/Jaap-fdb9f9fc.trc (710 frames, 22 markers)
+- 2026-01-14 09:24:28 UTC | main step3 augment data/output/pose-3d/Jaap-fdb9f9fc/Jaap-fdb9f9fc_LSTM.trc
+- 2026-01-14 09:24:28 UTC | main step3.5 complete data/output/pose-3d/Jaap-fdb9f9fc/Jaap-fdb9f9fc_LSTM_complete.trc
+- 2026-01-14 09:24:29 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/Jaap-fdb9f9fc/Jaap-fdb9f9fc_LSTM_complete_multi_refined.trc
+- 2026-01-14 10:15:42 UTC | main step1 CSV data/output/pose-3d/PushUp-89be7d59/PushUp-89be7d59.csv (358 frames, 6112 rows)
+- 2026-01-14 10:15:42 UTC | main step2 TRC data/output/pose-3d/PushUp-89be7d59/PushUp-89be7d59.trc (358 frames, 22 markers)
+- 2026-01-14 10:15:58 UTC | main step3 augment data/output/pose-3d/PushUp-89be7d59/PushUp-89be7d59_LSTM.trc
+- 2026-01-14 10:15:58 UTC | main step3.5 complete data/output/pose-3d/PushUp-89be7d59/PushUp-89be7d59_LSTM_complete.trc
+- 2026-01-14 10:15:58 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/PushUp-89be7d59/PushUp-89be7d59_LSTM_complete_multi_refined.trc

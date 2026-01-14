@@ -18,6 +18,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const playLabel = document.getElementById("timelinePlayLabel");
   const timeLabel = document.getElementById("timelineTime");
   const durationLabel = document.getElementById("timelineDuration");
+  const plotControls = document.getElementById("plotControls");
+  const plotPlayButton = document.getElementById("plotPlay");
+  const plotPlayIcon = document.getElementById("plotPlayIcon");
+  const plotPlayLabel = document.getElementById("plotPlayLabel");
+  const plotRotateLeft = document.getElementById("plotRotateLeft");
+  const plotRotateRight = document.getElementById("plotRotateRight");
+  const plotRotateUp = document.getElementById("plotRotateUp");
+  const plotRotateDown = document.getElementById("plotRotateDown");
+  const plotRotateRollLeft = document.getElementById("plotRotateRollLeft");
+  const plotRotateRollRight = document.getElementById("plotRotateRollRight");
+  const plotRotateReset = document.getElementById("plotRotateReset");
+  const visualToggleVideo = document.getElementById("visualToggleVideo");
+  const visualTogglePlot = document.getElementById("visualTogglePlot");
+  const statsVideoPane = document.getElementById("statsVideoPane");
+  const statsPlotPane = document.getElementById("statsPlotPane");
+  const statsVisualTitle = document.getElementById("statsVisualTitle");
   if (!slider || !playButton || !playIcon || !playLabel || !timeLabel || !durationLabel) {
     return;
   }
@@ -89,6 +105,311 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const runKey = document.body?.dataset?.runKey || "default";
   const selectionStorageKey = `kinetiq:stats:selection:${runKey}`;
+  const visualStorageKey = `kinetiq:stats:visual:${runKey}`;
+  const plotDataElement = document.getElementById("plot-data");
+  const plotData = plotDataElement ? JSON.parse(plotDataElement.textContent) : null;
+  const plotContainer = document.getElementById("statsPlot3d");
+
+  const plotState = {
+    ready: false,
+    loading: false,
+    hasData: !!(plotData && plotData.frames && plotData.frames.length),
+    camera: null,
+    relayoutBound: false,
+  };
+
+  let plotPlaying = false;
+  let plotTimer = null;
+  let plotIndex = 0;
+
+  const defaultPlotCamera = {
+    eye: { x: 0, y: 0, z: 2.4 },
+    up: { x: -1, y: 0, z: 0 },
+    center: { x: 0, y: 0, z: 0 },
+  };
+
+  const rotateVector = (vector, axis, angle) => {
+    const { x, y, z } = vector;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    if (axis === "x") {
+      return {
+        x,
+        y: y * cosA - z * sinA,
+        z: y * sinA + z * cosA,
+      };
+    }
+    if (axis === "y") {
+      return {
+        x: x * cosA + z * sinA,
+        y,
+        z: -x * sinA + z * cosA,
+      };
+    }
+    return {
+      x: x * cosA - y * sinA,
+      y: x * sinA + y * cosA,
+      z,
+    };
+  };
+
+  const applyCameraRotation = (axis, angle) => {
+    const current = plotState.camera || defaultPlotCamera;
+    plotState.camera = {
+      center: current.center,
+      eye: rotateVector(current.eye, axis, angle),
+      up: rotateVector(current.up, axis, angle),
+    };
+    if (plotState.ready && plotContainer && window.Plotly) {
+      window.Plotly.relayout(plotContainer, { "scene.camera": plotState.camera });
+    }
+  };
+
+  const resolveAxisRange = (range, invert = false) => {
+    if (!range || range.length !== 2) {
+      return undefined;
+    }
+    return invert ? [range[1], range[0]] : range;
+  };
+
+  const loadPlotly = () => {
+    if (window.Plotly) {
+      return Promise.resolve(window.Plotly);
+    }
+    if (plotState.loading) {
+      return new Promise((resolve, reject) => {
+        const waitForPlotly = () => {
+          if (window.Plotly) {
+            resolve(window.Plotly);
+          } else if (plotState.loading) {
+            requestAnimationFrame(waitForPlotly);
+          } else {
+            reject(new Error("Plotly failed to load."));
+          }
+        };
+        waitForPlotly();
+      });
+    }
+    plotState.loading = true;
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.plot.ly/plotly-2.27.0.min.js";
+      script.async = true;
+      script.onload = () => {
+        plotState.loading = false;
+        resolve(window.Plotly);
+      };
+      script.onerror = () => {
+        plotState.loading = false;
+        reject(new Error("Plotly failed to load."));
+      };
+      document.head.appendChild(script);
+    });
+  };
+
+  const normalizePlotValue = (value) => (Number.isFinite(value) ? value : null);
+
+  const buildPlotTraces = (frame) => {
+    const points = frame || [];
+    const x = points.map((point) => normalizePlotValue(point?.[0]));
+    const y = points.map((point) => normalizePlotValue(point?.[1]));
+    const z = points.map((point) => normalizePlotValue(point?.[2]));
+    const traces = [
+      {
+        type: "scatter3d",
+        mode: "markers",
+        x,
+        y,
+        z,
+        marker: { size: 3, color: "#0b5d5b" },
+        hoverinfo: "skip",
+      },
+    ];
+
+    const connections = plotData?.connections || [];
+    connections.forEach(([start, end]) => {
+      const startPoint = points[start];
+      const endPoint = points[end];
+      traces.push({
+        type: "scatter3d",
+        mode: "lines",
+        x: [normalizePlotValue(startPoint?.[0]), normalizePlotValue(endPoint?.[0])],
+        y: [normalizePlotValue(startPoint?.[1]), normalizePlotValue(endPoint?.[1])],
+        z: [normalizePlotValue(startPoint?.[2]), normalizePlotValue(endPoint?.[2])],
+        line: { color: "#2563eb", width: 4 },
+        hoverinfo: "skip",
+      });
+    });
+    return traces;
+  };
+
+  const resolvePlotIndex = (timeValue) => {
+    const frames = plotData?.frames || [];
+    if (!frames.length) {
+      return 0;
+    }
+    const times = plotData?.times || [];
+    const hasTimes =
+      times.length === frames.length && times.some((value) => Number.isFinite(value));
+    if (hasTimes) {
+      let bestIndex = 0;
+      let bestDiff = Infinity;
+      times.forEach((value, index) => {
+        if (!Number.isFinite(value)) {
+          return;
+        }
+        const diff = Math.abs(value - timeValue);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestIndex = index;
+        }
+      });
+      return bestIndex;
+    }
+    if (timelineDuration <= 0) {
+      return 0;
+    }
+    const ratio = clampTime(timeValue - timelineStart) / timelineDuration;
+    return Math.min(Math.round(ratio * (frames.length - 1)), frames.length - 1);
+  };
+
+  const renderPlotFrame = (timeValue) => {
+    if (!plotState.hasData || !plotContainer || !window.Plotly) {
+      return;
+    }
+    const index = resolvePlotIndex(timeValue);
+    plotIndex = index;
+    const frame = plotData.frames[index] || [];
+    const width = plotContainer.clientWidth || undefined;
+    const height = plotContainer.clientHeight || undefined;
+    const layout = {
+      margin: { l: 0, r: 0, t: 0, b: 0 },
+      width,
+      height,
+      autosize: true,
+      showlegend: false,
+      dragmode: "orbit",
+      scene: {
+        xaxis: { title: "X", range: [-1, 1] },
+        yaxis: { title: "Y", range: [1, -1] },
+        zaxis: { title: "Z", range: [-1, 1] },
+        aspectmode: "cube",
+        camera: plotState.camera || defaultPlotCamera,
+      },
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+    };
+    const config = { displayModeBar: false, responsive: true };
+    window.Plotly.react(plotContainer, buildPlotTraces(frame), layout, config).then(() => {
+      if (!plotState.relayoutBound) {
+        plotContainer.on("plotly_relayout", (event) => {
+          if (event?.scene?.camera) {
+            plotState.camera = event.scene.camera;
+            return;
+          }
+          if (event && event["scene.camera"]) {
+            plotState.camera = event["scene.camera"];
+          }
+        });
+        plotState.relayoutBound = true;
+      }
+    });
+    plotState.ready = true;
+  };
+
+  const resolvePlotTimeFromIndex = (index) => {
+    const frames = plotData?.frames || [];
+    if (!frames.length) {
+      return timelineStart;
+    }
+    const safeIndex = Math.max(0, Math.min(index, frames.length - 1));
+    const times = plotData?.times || [];
+    if (times.length === frames.length && Number.isFinite(times[safeIndex])) {
+      return times[safeIndex];
+    }
+    if (timelineDuration <= 0 || frames.length === 1) {
+      return timelineStart;
+    }
+    const ratio = safeIndex / (frames.length - 1);
+    return timelineStart + ratio * timelineDuration;
+  };
+
+  const stopPlotPlayback = () => {
+    plotPlaying = false;
+    if (plotPlayIcon) {
+      plotPlayIcon.className = "bi bi-play-fill";
+    }
+    if (plotPlayLabel) {
+      plotPlayLabel.textContent = "Play";
+    }
+    if (plotTimer) {
+      clearInterval(plotTimer);
+      plotTimer = null;
+    }
+  };
+
+  const startPlotPlayback = () => {
+    const frames = plotData?.frames || [];
+    if (!frames.length) {
+      return;
+    }
+    plotPlaying = true;
+    if (plotPlayIcon) {
+      plotPlayIcon.className = "bi bi-pause-fill";
+    }
+    if (plotPlayLabel) {
+      plotPlayLabel.textContent = "Pause";
+    }
+    const times = plotData?.times || [];
+    const step = estimateStep(times);
+    const intervalMs = step > 0 ? step * 1000 : 33;
+    plotTimer = setInterval(() => {
+      const nextIndex = plotIndex + 1;
+      if (nextIndex >= frames.length) {
+        stopPlotPlayback();
+        return;
+      }
+      plotIndex = nextIndex;
+      renderPlotFrame(resolvePlotTimeFromIndex(plotIndex));
+    }, intervalMs);
+  };
+
+  const setActiveVisual = (mode) => {
+    if (!statsVideoPane || !statsPlotPane || !visualToggleVideo || !visualTogglePlot) {
+      return;
+    }
+    const isVideo = mode === "video";
+    try {
+      localStorage.setItem(visualStorageKey, mode);
+    } catch (error) {
+      // Ignore storage failures (private mode or quota).
+    }
+    statsVideoPane.classList.toggle("d-none", !isVideo);
+    statsPlotPane.classList.toggle("d-none", isVideo);
+    if (plotControls) {
+      plotControls.classList.toggle("d-none", isVideo || !plotState.hasData);
+    }
+    visualToggleVideo.classList.toggle("btn-primary", isVideo);
+    visualToggleVideo.classList.toggle("btn-outline-primary", !isVideo);
+    visualTogglePlot.classList.toggle("btn-primary", !isVideo);
+    visualTogglePlot.classList.toggle("btn-outline-primary", isVideo);
+    if (statsVisualTitle) {
+      statsVisualTitle.textContent = isVideo ? "Video frame" : "3D plot";
+    }
+    if (isVideo) {
+      stopPlotPlayback();
+    }
+    if (!isVideo && plotState.hasData && plotContainer && !plotState.ready) {
+      loadPlotly()
+        .then(() => {
+          const currentValue = Number.parseFloat(slider.value || "0");
+          renderPlotFrame(timelineStart + currentValue);
+        })
+        .catch(() => {
+          // Plot container remains empty if Plotly fails to load.
+        });
+    }
+  };
 
   const persistSelection = () => {
     const values = selects.map((select) => select.value || "");
@@ -319,6 +640,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const timeValue = timelineStart + safeTime;
     timeLabel.textContent = `${timeValue.toFixed(2)}s`;
     updateChartsPlayhead(timeValue);
+    if (plotState.ready) {
+      renderPlotFrame(timeValue);
+    }
     if (previewVideo && updateVideo) {
       previewVideo.currentTime = safeTime * videoTimeScale;
     }
@@ -403,6 +727,65 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  if (visualToggleVideo && visualTogglePlot) {
+    visualToggleVideo.addEventListener("click", () => {
+      setActiveVisual("video");
+    });
+    visualTogglePlot.addEventListener("click", () => {
+      setActiveVisual("plot");
+    });
+  }
+
+  if (plotPlayButton) {
+    plotPlayButton.addEventListener("click", () => {
+      if (plotPlaying) {
+        stopPlotPlayback();
+      } else {
+        startPlotPlayback();
+      }
+    });
+  }
+
+  const rotationStep = Math.PI / 12;
+  if (plotRotateLeft) {
+    plotRotateLeft.addEventListener("click", () => {
+      applyCameraRotation("z", rotationStep);
+    });
+  }
+  if (plotRotateRight) {
+    plotRotateRight.addEventListener("click", () => {
+      applyCameraRotation("z", -rotationStep);
+    });
+  }
+  if (plotRotateUp) {
+    plotRotateUp.addEventListener("click", () => {
+      applyCameraRotation("x", rotationStep);
+    });
+  }
+  if (plotRotateDown) {
+    plotRotateDown.addEventListener("click", () => {
+      applyCameraRotation("x", -rotationStep);
+    });
+  }
+  if (plotRotateRollLeft) {
+    plotRotateRollLeft.addEventListener("click", () => {
+      applyCameraRotation("y", rotationStep);
+    });
+  }
+  if (plotRotateRollRight) {
+    plotRotateRollRight.addEventListener("click", () => {
+      applyCameraRotation("y", -rotationStep);
+    });
+  }
+  if (plotRotateReset) {
+    plotRotateReset.addEventListener("click", () => {
+      plotState.camera = null;
+      if (plotState.ready && plotContainer && window.Plotly) {
+        window.Plotly.relayout(plotContainer, { "scene.camera": defaultPlotCamera });
+      }
+    });
+  }
+
   selects.forEach((select, index) => {
     select.addEventListener("change", () => {
       const marker = markers.find((item) => item.value === select.value);
@@ -414,5 +797,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  let initialVisual = "video";
+  try {
+    const storedVisual = localStorage.getItem(visualStorageKey);
+    if (storedVisual === "plot" || storedVisual === "video") {
+      initialVisual = storedVisual;
+    }
+  } catch (error) {
+    // Ignore storage failures (private mode or quota).
+  }
+
+  setActiveVisual(initialVisual);
   setSliderTime(0, false);
 });
