@@ -22,7 +22,8 @@ uv run python main.py \
   --augmentation-cycles 20 \
   --multi-constraint-optimization \
   --compute-all-joint-angles \
-  --plot-all-joint-angles
+  --plot-all-joint-angles \
+  --visibility-min 0.1
 
 # Visualize results
 uv run python visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
@@ -31,7 +32,7 @@ uv run python visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
 ## Features
 
 - ✅ **MediaPipe Pose Detection** - 33 landmarks → 22 Pose2Sim markers
-- ✅ **GPU-Accelerated LSTM Augmentation** - 22 → 65 markers (full OpenCap set) with 3-10x speedup
+- ✅ **GPU-Accelerated LSTM Augmentation** - 21 → 64 markers (full OpenCap set) with 3-10x speedup
 - ✅ **Multi-Constraint Optimization** - 68% bone length improvement, automatic unreliable marker filtering
 - ✅ **Neural Depth Refinement** - PoseFormer-based depth correction using biomechanical constraints
 - ✅ **Biomechanical Constraints** - Enforce realistic bone lengths, ground contact, and hip width
@@ -46,7 +47,7 @@ uv run python visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
 **Benchmark** (joey.mp4, 535 frames, 20 augmentation cycles, GPU acceleration):
 - **Processing time**: ~45 seconds (3-10x faster with GPU vs CPU)
 - **Bone length consistency**: 68% improvement (0.113 → 0.036 CV)
-- **Marker quality**: 59/65 markers (4 unreliable markers auto-filtered)
+- **Marker quality**: 59/64 markers (unreliable markers auto-filtered)
 - **Joint angles**: 12 joint groups computed (pelvis, hip, knee, ankle, trunk, shoulder, elbow)
 - **Output**: Clean directory structure with automatic organization
 - **GPU**: Automatic CUDA acceleration for LSTM inference, graceful CPU fallback
@@ -82,7 +83,7 @@ Video → MediaPipe → CSV → TRC → GPU-Accelerated LSTM → Multi-Constrain
 ### Output Structure
 ```
 data/output/pose-3d/<video>/
-├── <video>_final.trc               # Final optimized skeleton (59-65 markers)
+├── <video>_final.trc               # Final optimized skeleton (59-64 markers)
 ├── <video>_initial.trc             # Initial MediaPipe output (22 markers)
 ├── <video>_raw_landmarks.csv       # Raw landmark data
 └── joint_angles/                   # Joint angle analysis
@@ -123,7 +124,7 @@ uv run --group neural python scripts/train_depth_model.py \
 - **Architecture**: PoseFormer (25.5M parameters, Transformer-based)
 - **Training**: 6 camera angles (0-75°), 3 noise levels (30-80mm)
 - **Losses**: Bone length, ground plane, symmetry, smoothness, joint angles
-- **Output**: `models/checkpoints/best_model.pth`
+- **Output**: `models/checkpoints/best_depth_model.pth`
 
 ### Applying Depth Refinement
 
@@ -133,7 +134,7 @@ Once trained, apply the model to refine TRC files:
 # Refine depth in final TRC output
 uv run --group neural python scripts/apply_depth_refinement.py \
   --input data/output/pose-3d/joey/joey_final.trc \
-  --model models/checkpoints/best_model.pth \
+  --model models/checkpoints/best_depth_model.pth \
   --output data/output/pose-3d/joey/joey_refined.trc
 ```
 

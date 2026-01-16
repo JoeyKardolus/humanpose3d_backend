@@ -213,6 +213,9 @@ def compute_all_joint_angles(
 
     # Process each frame
     for fi in range(num_frames):
+        # Initialize pelvis to None for this frame (may not be computable)
+        pelvis = None
+
         # =====================================================================
         # PELVIS AND HIP JOINT CENTERS
         # =====================================================================

@@ -106,7 +106,10 @@ def get_camera_setting(seq_name: str, mapping_file: Path) -> str:
 
 def compute_view_angles(pose_3d: np.ndarray, camera_pos: np.ndarray) -> tuple:
     """
-    Compute camera viewing angles in subject's local coordinate frame.
+    Compute camera viewing angles in subject's BODY-RELATIVE coordinate frame.
+
+    Uses body-derived axes (not world axes) to match inference code exactly.
+    This ensures training labels match what the model computes during inference.
 
     Returns full 0-360° azimuth range:
       0° = camera directly in front of subject
@@ -128,33 +131,48 @@ def compute_view_angles(pose_3d: np.ndarray, camera_pos: np.ndarray) -> tuple:
     right_shoulder = pose_3d[6]
     left_hip = pose_3d[11]
     right_hip = pose_3d[12]
+    nose = pose_3d[0]
 
     # Torso center
     torso_center = (left_shoulder + right_shoulder + left_hip + right_hip) / 4
 
-    # === BUILD SUBJECT'S LOCAL COORDINATE FRAME ===
-    # Right axis: left shoulder -> right shoulder
-    right_axis = right_shoulder - left_shoulder
+    # === BUILD BODY-RELATIVE COORDINATE FRAME (matches inference exactly) ===
+
+    # Right axis: averaged sides (more stable than just shoulders)
+    left_side = (left_hip + left_shoulder) / 2
+    right_side = (right_hip + right_shoulder) / 2
+    right_axis = right_side - left_side
     right_norm = np.linalg.norm(right_axis)
     if right_norm < 1e-6:
         return 0.0, 0.0
     right_axis = right_axis / right_norm
 
-    # Up axis: world Y (stable, not affected by bending)
-    up_axis = np.array([0.0, 1.0, 0.0])
+    # Up axis: body spine direction (hip center to shoulder center)
+    hip_center = (left_hip + right_hip) / 2
+    shoulder_center = (left_shoulder + right_shoulder) / 2
+    up_axis = shoulder_center - hip_center
+    up_norm = np.linalg.norm(up_axis)
+    if up_norm < 1e-6:
+        return 0.0, 0.0
+    up_axis = up_axis / up_norm
 
-    # Forward axis: perpendicular to right and up (where chest faces)
-    # Using up × right to get forward (right-hand rule)
-    forward_axis = np.cross(up_axis, right_axis)
+    # Forward axis: right × up (matches inference cross product order!)
+    forward_axis = np.cross(right_axis, up_axis)
     forward_norm = np.linalg.norm(forward_axis)
     if forward_norm < 1e-6:
         forward_axis = np.array([0.0, 0.0, 1.0])
     else:
         forward_axis = forward_axis / forward_norm
 
-    # Re-orthogonalize right axis
-    right_axis = np.cross(forward_axis, up_axis)
-    right_axis = right_axis / np.linalg.norm(right_axis)
+    # Nose verification (matches inference): flip if forward points away from nose
+    nose_dir = nose - torso_center
+    if np.dot(forward_axis, nose_dir) < 0:
+        forward_axis = -forward_axis
+
+    # Re-orthogonalize up axis for numerical stability
+    # Use right × forward (not forward × right) to get correct upward direction
+    up_axis = np.cross(right_axis, forward_axis)
+    up_axis = up_axis / (np.linalg.norm(up_axis) + 1e-8)
 
     # === CAMERA DIRECTION IN SUBJECT'S FRAME ===
     # Vector from subject TO camera (so 0° = camera in front)
@@ -227,6 +245,54 @@ def center_on_pelvis(joints: np.ndarray) -> np.ndarray:
     return joints - pelvis
 
 
+def compute_torso_scale(joints: np.ndarray) -> float:
+    """
+    Compute torso scale for normalization.
+
+    Uses hip-to-shoulder distance (average of left and right).
+    This is robust and consistent across different body positions.
+
+    Args:
+        joints: (17, 3) COCO keypoints
+
+    Returns:
+        Torso scale (distance in meters), or 0 if invalid
+    """
+    # COCO indices: left_shoulder=5, right_shoulder=6, left_hip=11, right_hip=12
+    left_torso = np.linalg.norm(joints[5] - joints[11])   # left shoulder to left hip
+    right_torso = np.linalg.norm(joints[6] - joints[12])  # right shoulder to right hip
+
+    # Average of both sides for robustness
+    torso_scale = (left_torso + right_torso) / 2
+
+    # Sanity check: typical human torso is 0.4-0.7m
+    if torso_scale < 0.1 or torso_scale > 2.0:
+        return 0.0
+
+    return torso_scale
+
+
+def normalize_pose_scale(joints: np.ndarray, target_scale: float = 1.0) -> tuple:
+    """
+    Normalize pose to a consistent scale.
+
+    Args:
+        joints: (17, 3) COCO keypoints (already centered on pelvis)
+        target_scale: Target torso scale (default 1.0 for unit scale)
+
+    Returns:
+        (normalized_joints, original_scale) tuple
+        - normalized_joints: scaled to target_scale
+        - original_scale: original torso scale for potential denormalization
+    """
+    scale = compute_torso_scale(joints)
+    if scale < 0.01:
+        return joints, 0.0  # Invalid scale, return as-is
+
+    scale_factor = target_scale / scale
+    return joints * scale_factor, scale
+
+
 def load_keypoints3d(pkl_path: Path, use_optim: bool = True) -> np.ndarray:
     """Load 3D keypoints from AIST++ pickle file.
 
@@ -275,6 +341,12 @@ def process_sequence(
     Returns:
         Number of training examples generated
     """
+    # Skip if sequence already processed (check if ANY frame exists)
+    existing = list(output_dir.glob(f"{sequence_name}_f*.npz"))
+    if existing:
+        print(f"  Skipping {sequence_name} ({len(existing)} frames already exist)")
+        return len(existing)
+
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         print(f"  Failed to open video: {video_path}")
@@ -339,23 +411,46 @@ def process_sequence(
         mp_centered[:, 1] = -mp_centered[:, 1]  # Y: down -> up
         mp_centered[:, 2] = -mp_centered[:, 2]  # Z: toward camera -> away
 
-        # Basic validation: nose should be above pelvis
-        if mp_centered[0, 1] < 0.1 or gt_centered[0, 1] < 0.1:
+        # === SCALE NORMALIZATION (CRITICAL) ===
+        # MediaPipe and AIST++ may have different body size estimates.
+        # Normalize BOTH to unit torso scale so model learns depth corrections,
+        # not scale corrections.
+        mp_normalized, mp_scale = normalize_pose_scale(mp_centered, target_scale=1.0)
+        gt_normalized, gt_scale = normalize_pose_scale(gt_centered, target_scale=1.0)
+
+        # Skip if either scale is invalid
+        if mp_scale < 0.01 or gt_scale < 0.01:
+            frame_idx += 1
+            continue
+
+        # Basic validation: nose should be above pelvis (use normalized poses)
+        # In normalized space (torso=1.0), nose should be ~1.0-1.5 above pelvis
+        # Use conservative threshold of 0.5 to allow for some variation
+        if mp_normalized[0, 1] < 0.5 or gt_normalized[0, 1] < 0.5:
             frame_idx += 1
             continue
 
         # Save training pair
         output_path = output_dir / f"{sequence_name}_f{frame_idx:06d}.npz"
 
+        # Skip if already exists (resume support)
+        if output_path.exists():
+            examples_generated += 1
+            pbar.update(1)
+            frame_idx += 1
+            continue
+
         np.savez_compressed(
             output_path,
-            corrupted=mp_centered.astype(np.float32),      # (17, 3) MediaPipe (REAL errors!)
-            ground_truth=gt_centered.astype(np.float32),   # (17, 3) AIST++ GT
+            corrupted=mp_normalized.astype(np.float32),    # (17, 3) MediaPipe, scale-normalized
+            ground_truth=gt_normalized.astype(np.float32), # (17, 3) AIST++ GT, scale-normalized
             visibility=visibility.astype(np.float32),      # (17,) MediaPipe visibility
             pose_2d=pose_2d.astype(np.float32),            # (17, 2) MediaPipe 2D pose (key for camera!)
             azimuth=np.float32(azimuth),                   # Horizontal angle: 0-360° (from camera pos!)
             elevation=np.float32(elevation),               # Vertical angle: -90 to +90° (from camera pos!)
             camera_relative=camera_relative.astype(np.float32),  # (3,) Camera pos relative to pelvis
+            mp_scale=np.float32(mp_scale),                 # Original MediaPipe torso scale (for denorm)
+            gt_scale=np.float32(gt_scale),                 # Original AIST++ torso scale (for denorm)
             sequence=sequence_name,
             frame_idx=frame_idx,
         )
@@ -436,58 +531,72 @@ def main():
     # Cache camera params per setting
     camera_cache = {}
 
-    # Process sequences
+    # === TARGET: ~1.5M SAMPLES ===
+    # Configuration for diverse viewpoints with controlled sample count:
+    # - ~1400 sequences (keypoint files)
+    # - 6 primary camera views (good viewpoint diversity: front, sides, back)
+    # - ~180 frames per video (frame_skip=3 from 60fps source)
+    # - 1400 × 6 × 180 ≈ 1.5M samples
     total_examples = 0
     processed = 0
     skipped_no_camera = 0
-    max_sequences = 5000  # Process all available videos
+    max_sequences = None  # Process all available
+
+    # Camera views: 6 views for diverse angles (0°, 60°, 120°, 180°, 240°, 300° roughly)
+    # c01-c09 are arranged in a circle around the performer
+    camera_views = ['c01', 'c02', 'c03', 'c05', 'c07', 'c09']  # Every ~60° for diversity
 
     for kp_file in kp_files[:max_sequences]:
         seq_name = kp_file.stem  # e.g., gBR_sBM_cAll_d04_mBR0_ch01
 
-        # Find video for camera c01 (frontal)
-        video_name = get_video_name(seq_name, 'c01')
-        video_path = video_dict.get(video_name)
-
-        if video_path is None:
-            continue
-
-        # Get camera setting and load params
-        setting = get_camera_setting(seq_name, mapping_file)
-
-        if setting not in camera_cache:
-            try:
-                camera_cache[setting] = load_camera_params(cameras_dir, setting, 'c01')
-            except Exception as e:
-                print(f"  Failed to load camera {setting}: {e}")
-                skipped_no_camera += 1
-                continue
-
-        camera_pos = camera_cache[setting]['position']
-
-        # Load ground truth
+        # Load ground truth once (same for all camera views)
         try:
             gt_keypoints = load_keypoints3d(kp_file)
         except Exception as e:
             print(f"  Failed to load {kp_file.name}: {e}")
             continue
 
-        print(f"Processing: {seq_name} ({len(gt_keypoints)} frames, cam={setting})")
+        # Get camera setting
+        setting = get_camera_setting(seq_name, mapping_file)
 
-        num_examples = process_sequence(
-            video_path,
-            gt_keypoints,
-            output_dir,
-            seq_name,
-            pose,
-            camera_pos,
-            max_frames=1000,  # Increased for maximum data (500 samples/video after skip)
-            frame_skip=2,
-        )
+        # Process each camera view
+        for cam_view in camera_views:
+            video_name = get_video_name(seq_name, cam_view)
+            video_path = video_dict.get(video_name)
 
-        total_examples += num_examples
-        processed += 1
-        print(f"  -> {num_examples} training pairs")
+            if video_path is None:
+                continue
+
+            # Cache key includes camera view
+            cache_key = f"{setting}_{cam_view}"
+            if cache_key not in camera_cache:
+                try:
+                    camera_cache[cache_key] = load_camera_params(cameras_dir, setting, cam_view)
+                except Exception as e:
+                    # Camera view not available for this setting
+                    continue
+
+            camera_pos = camera_cache[cache_key]['position']
+
+            # Unique sequence name per camera view
+            seq_name_cam = f"{seq_name}_{cam_view}"
+
+            print(f"Processing: {seq_name_cam} ({len(gt_keypoints)} frames, cam={setting})")
+
+            num_examples = process_sequence(
+                video_path,
+                gt_keypoints,
+                output_dir,
+                seq_name_cam,
+                pose,
+                camera_pos,
+                max_frames=180,   # ~180 frames per video-camera for ~1.5M total
+                frame_skip=3,     # 60fps -> 20fps effective (more temporal diversity)
+            )
+
+            total_examples += num_examples
+            processed += 1
+            print(f"  -> {num_examples} training pairs")
 
     print()
     print("=" * 80)
@@ -498,13 +607,19 @@ def main():
     print(f"Saved to: {output_dir}")
     print()
     print("Training data includes:")
-    print("  - corrupted: MediaPipe 3D pose (17, 3) - REAL depth errors!")
-    print("  - ground_truth: AIST++ mocap (17, 3) - clean depth")
+    print("  - corrupted: MediaPipe 3D pose (17, 3) - REAL depth errors, SCALE-NORMALIZED")
+    print("  - ground_truth: AIST++ mocap (17, 3) - clean depth, SCALE-NORMALIZED")
     print("  - visibility: Per-joint visibility (17,) from MediaPipe")
     print("  - pose_2d: MediaPipe 2D pose (17, 2) - KEY FOR CAMERA PREDICTION!")
     print("  - azimuth: Horizontal view angle (0-360°) from camera position")
     print("  - elevation: Vertical view angle (-90 to +90°) from camera position")
     print("  - camera_relative: Camera position (3,) relative to pelvis")
+    print("  - mp_scale: Original MediaPipe torso scale (for denormalization)")
+    print("  - gt_scale: Original AIST++ torso scale (reference)")
+    print()
+    print("IMPORTANT: Both poses are normalized to unit torso scale!")
+    print("This ensures model learns DEPTH CORRECTIONS, not scale adjustments.")
+    print("At inference: normalize input, apply model, then denormalize output.")
     print()
     print("2D pose encodes camera viewpoint through foreshortening patterns!")
     print("(ElePose CVPR 2022 insight - 2D appearance directly encodes viewpoint)")

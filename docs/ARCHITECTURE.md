@@ -67,19 +67,19 @@
 ║  │ (--estimate-missing)    │              │  │                         │                                    │ │ ║
 ║  │                         │              │  │                         ▼                                    │ │ ║
 ║  │ PRE-AUGMENTATION:       │              │  │   ┌─────────────────────────────────────────────────────┐    │ │ ║
-║  │ • Mirror L↔R arms       │              │  │   │           CAMERA PREDICTOR                         │    │ │ ║
+║  │ • Mirror L↔R arms       │              │  │   │      DIRECT ANGLE PREDICTOR (ElePose)              │    │ │ ║
 ║  │ • Extrapolate Head      │              │  │   │                                                     │    │ │ ║
-║  │ • Estimate SmallToes    │              │  │   │   joint_features + viewpoint_features              │    │ │ ║
+║  │ • Estimate SmallToes    │              │  │   │   pose_2d ──▶ ElePose Backbone (1024-dim)          │    │ │ ║
 ║  └───────────┬─────────────┘              │  │   │              │                                      │    │ │ ║
 ║              │                            │  │   │              ▼                                      │    │ │ ║
-║              │ 22 markers                 │  │   │   MLP (1088 → 64 → 32 → 3)                         │    │ │ ║
+║              │ 22 markers                 │  │   │   Fusion: [joint + 3D + vis + elepose] → MLP       │    │ │ ║
 ║              ▼                            │  │   │              │                                      │    │ │ ║
 ║  ┌─────────────────────────────────────┐  │  │   │              ▼                                      │    │ │ ║
-║  │      MARKER AUGMENTATION LAYER      │  │  │   │   camera_pos (x, y, z) relative to pelvis          │    │ │ ║
+║  │      MARKER AUGMENTATION LAYER      │  │  │   │   [az_sin, az_cos, elevation]                      │    │ │ ║
 ║  │      src/markeraugmentation/        │  │  │   │              │                                      │    │ │ ║
 ║  │                                     │  │  │   │              ▼                                      │    │ │ ║
-║  │  ┌───────────────────────────────┐  │  │  │   │   azimuth = atan2(x, z)    0-360°                  │    │ │ ║
-║  │  │     Pose2Sim LSTM             │  │  │  │   │   elevation = asin(y/r)    -90 to +90°             │    │ │ ║
+║  │  ┌───────────────────────────────┐  │  │  │   │   azimuth = atan2(sin,cos)  0-360°                 │    │ │ ║
+║  │  │     Pose2Sim LSTM             │  │  │  │   │   elevation = tanh(e)×90    -90 to +90°            │    │ │ ║
 ║  │  │     (GPU accelerated)         │  │  │  │   │                                                     │    │ │ ║
 ║  │  │                               │  │  │  │   │   NO CAMERA CALIBRATION NEEDED AT INFERENCE!       │    │ │ ║
 ║  │  │  • 20 cycles (default)        │  │  │  │   └──────────────────────────┬──────────────────────────┘    │ │ ║
@@ -322,11 +322,15 @@ Final: 59-65 markers (unreliable removed)
 
 ### Neural Depth Refinement Status
 
-- **Training data**: Generating ~900K samples from 3119 AIST++ videos
-- **Model**: 226K parameters, transformer-based
-- **Camera prediction**: 1.4° accuracy (no calibration needed at inference)
-- **Integration**: Future `--learned-depth-refinement` flag
+- **Training data**: 1.2M frames from AIST++ (30 subjects, 9 cameras)
+- **Model**: 7.3M parameters (ElePose + Transformer)
+  - ElePose backbone: 1024-dim 2D foreshortening features
+  - DirectAnglePredictor: azimuth/elevation without body-frame mismatch
+  - CrossJointAttention: 6 layers, 8 heads, d_model=128
+- **Camera prediction**: 7.1° azimuth, 4.4° elevation error
+- **Depth error**: 11.2 cm (45% improvement over raw MediaPipe)
+- **Integration**: `--neural-depth-refinement --depth-model-path PATH`
 
 ---
 
-*Last updated: 2026-01-13*
+*Last updated: 2026-01-16*

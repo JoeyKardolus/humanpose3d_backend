@@ -300,7 +300,7 @@ def main():
     parser = argparse.ArgumentParser(description="Apply depth refinement to TRC files")
     parser.add_argument("--input", type=str, required=True,
                         help="Input TRC file")
-    parser.add_argument("--model", type=str, default="models/checkpoints/best_model.pth",
+    parser.add_argument("--model", type=str, default="models/checkpoints/best_depth_model.pth",
                         help="Trained model checkpoint")
     parser.add_argument("--output", type=str, default=None,
                         help="Output TRC file (default: <input>_refined.trc)")

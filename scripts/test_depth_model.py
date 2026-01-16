@@ -106,7 +106,7 @@ def main():
 
         output = model(corrupted, visibility, pose_2d=pose_2d)
         print(f"Output keys: {list(output.keys())}")
-        print(f"  delta_z shape: {output['delta_z'].shape}")
+        print(f"  delta_xyz shape: {output['delta_xyz'].shape}")
         print(f"  pred_azimuth shape: {output['pred_azimuth'].shape}")
         print(f"  pred_elevation shape: {output['pred_elevation'].shape}")
         if 'confidence' in output:

@@ -46,11 +46,299 @@ from src.anatomical.joint_constraints import (
 from src.markeraugmentation.markeraugmentation import run_pose2sim_augment
 from src.markeraugmentation.gpu_config import patch_pose2sim_gpu, get_gpu_info
 from src.depth_refinement.inference import DepthRefiner
+from src.joint_refinement.inference import JointRefiner
 from src.mediastream.media_stream import read_video_rgb
 from src.posedetector.pose_detector import extract_world_landmarks
 from src.visualizedata.visualize_data import VisualizeData
 
 OUTPUT_ROOT = Path("data/output/pose-3d")
+
+# Mapping from OpenCap/MediaPipe marker names to COCO 17 joint indices
+# COCO 17: nose, left_eye, right_eye, left_ear, right_ear, left_shoulder, right_shoulder,
+#          left_elbow, right_elbow, left_wrist, right_wrist, left_hip, right_hip,
+#          left_knee, right_knee, left_ankle, right_ankle
+OPENCAP_TO_COCO = {
+    "Nose": 0,
+    "LShoulder": 5,
+    "RShoulder": 6,
+    "LElbow": 7,
+    "RElbow": 8,
+    "LWrist": 9,
+    "RWrist": 10,
+    "LHip": 11,
+    "RHip": 12,
+    "LKnee": 13,
+    "RKnee": 14,
+    "LAnkle": 15,
+    "RAnkle": 16,
+}
+COCO_TO_OPENCAP = {v: k for k, v in OPENCAP_TO_COCO.items()}
+
+
+def apply_neural_depth_refinement(
+    records: list,
+    model_path: str | Path,
+) -> list:
+    """Apply neural 3D pose refinement to landmark records.
+
+    Uses a trained transformer model to correct MediaPipe pose errors
+    on all three axes (X, Y, Z), with emphasis on depth (Z) corrections.
+
+    IMPORTANT: The model was trained on pelvis-centered, Y-up data (AIST++ convention).
+    MediaPipe outputs Y-down (image coordinates). We must transform coordinates to
+    match training convention before inference, then transform back.
+
+    Args:
+        records: List of LandmarkRecord named tuples
+        model_path: Path to trained pose refinement model
+
+    Returns:
+        Updated records with refined x, y, z coordinates
+    """
+    import numpy as np
+    from collections import defaultdict
+    from src.datastream.data_stream import LandmarkRecord
+
+    model_path = Path(model_path)
+    if not model_path.exists():
+        print(f"[depth] WARNING: Model not found at {model_path}, skipping refinement")
+        return records
+
+    # Initialize refiner
+    try:
+        refiner = DepthRefiner(model_path)
+    except Exception as e:
+        print(f"[depth] WARNING: Failed to load model: {e}")
+        return records
+
+    # Group records by timestamp
+    frames_data = defaultdict(dict)
+    for rec in records:
+        frames_data[rec.timestamp_s][rec.landmark] = (rec.x_m, rec.y_m, rec.z_m, rec.visibility)
+
+    timestamps = sorted(frames_data.keys())
+    if not timestamps:
+        return records
+
+    # Convert to COCO format arrays
+    # COCO indices: left_hip=11, right_hip=12
+    n_frames = len(timestamps)
+    pose_3d = np.zeros((n_frames, 17, 3), dtype=np.float32)
+    visibility = np.zeros((n_frames, 17), dtype=np.float32)
+    pose_2d = np.zeros((n_frames, 17, 2), dtype=np.float32)
+
+    for fi, ts in enumerate(timestamps):
+        frame_landmarks = frames_data[ts]
+        for name, coco_idx in OPENCAP_TO_COCO.items():
+            if name in frame_landmarks:
+                x, y, z, vis = frame_landmarks[name]
+                pose_3d[fi, coco_idx] = [x, y, z]
+                visibility[fi, coco_idx] = vis
+                # Use x, y as normalized 2D pose (approximate)
+                pose_2d[fi, coco_idx] = [x, y]
+
+    # === TRANSFORM TO TRAINING CONVENTION ===
+    # Training data was: pelvis-centered, Y-up, Z-away from camera
+    # MediaPipe outputs: pelvis-centered (by our pipeline), Y-down, Z-toward camera
+
+    # 1. Compute pelvis position per frame (midpoint of hips)
+    # COCO: left_hip=11, right_hip=12
+    pelvis = (pose_3d[:, 11, :] + pose_3d[:, 12, :]) / 2  # (n_frames, 3)
+
+    # 2. Center 3D pose on pelvis
+    pose_centered = pose_3d - pelvis[:, np.newaxis, :]  # (n_frames, 17, 3)
+
+    # 3. Flip Y and Z to match training convention
+    # Y: down -> up (negate)
+    # Z: toward camera -> away (negate)
+    pose_centered[:, :, 1] = -pose_centered[:, :, 1]
+    pose_centered[:, :, 2] = -pose_centered[:, :, 2]
+
+    # NOTE: pose_2d should be RAW MediaPipe coordinates (not centered, not flipped)
+    # Training used raw 2D pose for camera angle prediction
+
+    # Apply refinement in training coordinate system (with bone locking for temporal consistency)
+    try:
+        refined_centered = refiner.refine_sequence_with_bone_locking(
+            pose_centered, visibility, pose_2d, calibration_frames=50
+        )
+    except Exception as e:
+        print(f"[depth] WARNING: Refinement failed: {e}")
+        return records
+
+    # === TRANSFORM BACK TO ORIGINAL CONVENTION ===
+    # 1. Flip Y and Z back
+    refined_centered[:, :, 1] = -refined_centered[:, :, 1]
+    refined_centered[:, :, 2] = -refined_centered[:, :, 2]
+
+    # 2. Un-center (add pelvis back)
+    refined_poses = refined_centered + pelvis[:, np.newaxis, :]
+
+    # Compute 3D corrections for reporting (in original coordinate system)
+    corrections = refined_poses - pose_3d  # (n_frames, 17, 3)
+    mask = visibility > 0.3
+    mean_correction_xyz = np.abs(corrections[mask]).mean(axis=0)  # Per axis
+    total_correction = np.linalg.norm(corrections[mask], axis=-1).mean()
+    print(f"[depth] Applied neural 3D refinement:")
+    print(f"        Mean |correction|: X={mean_correction_xyz[0]*100:.2f}cm, "
+          f"Y={mean_correction_xyz[1]*100:.2f}cm, Z={mean_correction_xyz[2]*100:.2f}cm")
+    print(f"        Total 3D: {total_correction*100:.2f} cm")
+
+    # Create lookup for refined values
+    timestamp_to_fi = {ts: fi for fi, ts in enumerate(timestamps)}
+
+    # Foot markers that should follow ankle corrections
+    # COCO: LAnkle=15, RAnkle=16
+    LEFT_FOOT_MARKERS = {'LHeel', 'LBigToe', 'LSmallToe'}
+    RIGHT_FOOT_MARKERS = {'RHeel', 'RBigToe', 'RSmallToe'}
+
+    # Update records with refined x, y, z values
+    new_records = []
+    for rec in records:
+        if rec.landmark in OPENCAP_TO_COCO:
+            fi = timestamp_to_fi[rec.timestamp_s]
+            coco_idx = OPENCAP_TO_COCO[rec.landmark]
+            x_refined = float(refined_poses[fi, coco_idx, 0])
+            y_refined = float(refined_poses[fi, coco_idx, 1])
+            z_refined = float(refined_poses[fi, coco_idx, 2])
+            new_records.append(LandmarkRecord(
+                timestamp_s=rec.timestamp_s,
+                landmark=rec.landmark,
+                x_m=x_refined,
+                y_m=y_refined,
+                z_m=z_refined,
+                visibility=rec.visibility,
+            ))
+        elif rec.landmark in LEFT_FOOT_MARKERS:
+            # Propagate LAnkle correction to left foot markers
+            fi = timestamp_to_fi[rec.timestamp_s]
+            ankle_correction = corrections[fi, 15]  # LAnkle = COCO index 15
+            new_records.append(LandmarkRecord(
+                timestamp_s=rec.timestamp_s,
+                landmark=rec.landmark,
+                x_m=rec.x_m + float(ankle_correction[0]),
+                y_m=rec.y_m + float(ankle_correction[1]),
+                z_m=rec.z_m + float(ankle_correction[2]),
+                visibility=rec.visibility,
+            ))
+        elif rec.landmark in RIGHT_FOOT_MARKERS:
+            # Propagate RAnkle correction to right foot markers
+            fi = timestamp_to_fi[rec.timestamp_s]
+            ankle_correction = corrections[fi, 16]  # RAnkle = COCO index 16
+            new_records.append(LandmarkRecord(
+                timestamp_s=rec.timestamp_s,
+                landmark=rec.landmark,
+                x_m=rec.x_m + float(ankle_correction[0]),
+                y_m=rec.y_m + float(ankle_correction[1]),
+                z_m=rec.z_m + float(ankle_correction[2]),
+                visibility=rec.visibility,
+            ))
+        else:
+            # Keep other landmarks unchanged
+            new_records.append(rec)
+
+    return new_records
+
+
+def apply_neural_joint_refinement(
+    angle_results: dict,
+    model_path: str,
+) -> dict:
+    """Apply neural joint constraint refinement to computed angles.
+
+    Uses a trained transformer model to refine joint angles with learned
+    soft constraints from AIST++ data.
+
+    Args:
+        angle_results: Dict mapping joint names to DataFrames with angle columns
+        model_path: Path to trained joint refinement model
+
+    Returns:
+        Dict with refined angle DataFrames
+    """
+    import numpy as np
+    import pandas as pd
+
+    model_path = Path(model_path)
+    if not model_path.exists():
+        print(f"[joint] WARNING: Model not found at {model_path}, skipping refinement")
+        return angle_results
+
+    # Joint order matching the training data
+    JOINT_ORDER = [
+        'pelvis', 'hip_R', 'hip_L', 'knee_R', 'knee_L',
+        'ankle_R', 'ankle_L', 'trunk', 'shoulder_R', 'shoulder_L',
+        'elbow_R', 'elbow_L',
+    ]
+
+    # Load refiner
+    refiner = JointRefiner(model_path)
+
+    # Get number of frames from first available joint
+    n_frames = None
+    for joint in JOINT_ORDER:
+        if joint in angle_results:
+            n_frames = len(angle_results[joint])
+            break
+
+    if n_frames is None:
+        print("[joint] WARNING: No joint angle data found")
+        return angle_results
+
+    # Extract angles into (n_frames, 12, 3) array
+    angles = np.zeros((n_frames, 12, 3), dtype=np.float32)
+
+    for i, joint in enumerate(JOINT_ORDER):
+        if joint in angle_results:
+            df = angle_results[joint]
+            # Columns are: time_s, {joint}_flex_deg, {joint}_abd_deg, {joint}_rot_deg
+            flex_col = f"{joint}_flex_deg"
+            abd_col = f"{joint}_abd_deg"
+            rot_col = f"{joint}_rot_deg"
+
+            if flex_col in df.columns:
+                angles[:, i, 0] = df[flex_col].values
+            if abd_col in df.columns:
+                angles[:, i, 1] = df[abd_col].values
+            if rot_col in df.columns:
+                angles[:, i, 2] = df[rot_col].values
+
+    # Apply refinement
+    refined_angles = refiner.refine_batch(angles, batch_size=64)
+
+    # Compute statistics
+    delta = refined_angles - angles
+    mean_delta = np.abs(delta).mean()
+    max_delta = np.abs(delta).max()
+    print(f"[joint] Applied neural joint constraint refinement:")
+    print(f"        Mean |correction|: {mean_delta:.2f}°")
+    print(f"        Max |correction|: {max_delta:.2f}°")
+
+    # Update angle_results with refined values
+    refined_results = {}
+    for joint_name, df in angle_results.items():
+        if joint_name in JOINT_ORDER:
+            i = JOINT_ORDER.index(joint_name)
+            # Create a copy of the DataFrame
+            refined_df = df.copy()
+
+            flex_col = f"{joint_name}_flex_deg"
+            abd_col = f"{joint_name}_abd_deg"
+            rot_col = f"{joint_name}_rot_deg"
+
+            if flex_col in refined_df.columns:
+                refined_df[flex_col] = refined_angles[:, i, 0]
+            if abd_col in refined_df.columns:
+                refined_df[abd_col] = refined_angles[:, i, 1]
+            if rot_col in refined_df.columns:
+                refined_df[rot_col] = refined_angles[:, i, 2]
+
+            refined_results[joint_name] = refined_df
+        else:
+            # Keep other joints unchanged (e.g., wrist if added later)
+            refined_results[joint_name] = df
+
+    return refined_results
 
 
 def cleanup_output_directory(run_dir: Path, video_stem: str) -> None:
@@ -319,6 +607,28 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Visualize upper body angles (3-panel: trunk/shoulder/elbow)",
     )
+    parser.add_argument(
+        "--neural-depth-refinement",
+        action="store_true",
+        help="Apply neural depth refinement to correct MediaPipe depth errors (requires trained model)",
+    )
+    parser.add_argument(
+        "--depth-model-path",
+        type=str,
+        default="models/checkpoints/best_depth_model.pth",
+        help="Path to trained depth refinement model (default: models/checkpoints/best_depth_model.pth)",
+    )
+    parser.add_argument(
+        "--joint-constraint-refinement",
+        action="store_true",
+        help="Apply neural joint constraint refinement to computed angles (requires trained model)",
+    )
+    parser.add_argument(
+        "--joint-model-path",
+        type=str,
+        default="models/checkpoints/best_joint_model.pth",
+        help="Path to trained joint refinement model (default: models/checkpoints/best_joint_model.pth)",
+    )
     return parser.parse_args()
 
 
@@ -363,6 +673,11 @@ def main() -> None:
             records = estimate_missing_markers(records)
             estimated_count = len(records) - original_count
             print(f"[main] estimated {estimated_count} missing markers using symmetry")
+
+        # Apply neural depth refinement if requested (before other constraints)
+        if args.neural_depth_refinement:
+            records = apply_neural_depth_refinement(records, args.depth_model_path)
+            append_build_log(f"main step1.5 neural depth refinement applied")
 
         # Apply anatomical constraints if requested
         if args.anatomical_constraints:
@@ -620,6 +935,13 @@ def main() -> None:
                     zero_window_s=0.5,
                     verbose=True,
                 )
+
+                # Apply neural joint constraint refinement if requested
+                if args.joint_constraint_refinement:
+                    angle_results = apply_neural_joint_refinement(
+                        angle_results,
+                        args.joint_model_path,
+                    )
 
                 # Save all angle CSVs
                 save_comprehensive_angles_csv(

@@ -27,6 +27,49 @@ def estimate_missing_markers(records: List[LandmarkRecord]) -> List[LandmarkReco
         for landmark, rec in landmarks.items():
             estimated_records.append(rec)
 
+        # Derive Neck from shoulders (needed for Nose correction and other estimations)
+        # This mirrors what csv_to_trc_strict does, but earlier in the pipeline
+        if "Neck" not in landmarks and "LShoulder" in landmarks and "RShoulder" in landmarks:
+            l_shoulder = landmarks["LShoulder"]
+            r_shoulder = landmarks["RShoulder"]
+            neck_rec = LandmarkRecord(
+                timestamp_s=timestamp_s,
+                landmark="Neck",
+                x_m=(l_shoulder.x_m + r_shoulder.x_m) / 2,
+                y_m=(l_shoulder.y_m + r_shoulder.y_m) / 2,
+                z_m=(l_shoulder.z_m + r_shoulder.z_m) / 2,
+                visibility=min(l_shoulder.visibility, r_shoulder.visibility)
+            )
+            estimated_records.append(neck_rec)
+            landmarks["Neck"] = neck_rec
+
+        # Correct Nose Z depth - MediaPipe often places it too far forward
+        # Anatomically, nose should be ~12-15cm in front of neck
+        if "Nose" in landmarks and "Neck" in landmarks:
+            nose = landmarks["Nose"]
+            neck = landmarks["Neck"]
+            nose_offset = nose.z_m - neck.z_m  # How far nose is from neck in Z
+
+            # Clamp nose to be 10-18cm in front of neck (negative Z = forward)
+            max_offset = -0.18  # 18cm forward max
+            min_offset = -0.10  # 10cm forward min
+
+            if nose_offset < max_offset or nose_offset > min_offset:
+                # Nose Z is outside anatomical range, correct it
+                corrected_z = neck.z_m + max(min_offset, min(max_offset, nose_offset))
+                corrected_nose = LandmarkRecord(
+                    timestamp_s=timestamp_s,
+                    landmark="Nose",
+                    x_m=nose.x_m,
+                    y_m=nose.y_m,
+                    z_m=corrected_z,
+                    visibility=nose.visibility
+                )
+                # Replace the nose in estimated_records
+                estimated_records = [r for r in estimated_records if not (r.landmark == "Nose" and r.timestamp_s == timestamp_s)]
+                estimated_records.append(corrected_nose)
+                landmarks["Nose"] = corrected_nose
+
         # Estimate missing right arm from left arm (mirror)
         if "RElbow" not in landmarks and "LElbow" in landmarks and "Neck" in landmarks:
             l_elbow = landmarks["LElbow"]
@@ -53,22 +96,6 @@ def estimate_missing_markers(records: List[LandmarkRecord]) -> List[LandmarkReco
                 y_m=l_wrist.y_m,
                 z_m=-l_wrist.z_m,
                 visibility=0.3
-            ))
-
-        # Estimate Head from Nose and Neck
-        if "Head" not in landmarks and "Nose" in landmarks and "Neck" in landmarks:
-            nose = landmarks["Nose"]
-            neck = landmarks["Neck"]
-            # Head is above nose, extrapolated from neck-nose direction
-            direction = np.array([nose.x_m - neck.x_m, nose.y_m - neck.y_m, nose.z_m - neck.z_m])
-            head_pos = np.array([nose.x_m, nose.y_m, nose.z_m]) + direction * 0.3
-            estimated_records.append(LandmarkRecord(
-                timestamp_s=timestamp_s,
-                landmark="Head",
-                x_m=head_pos[0],
-                y_m=head_pos[1],
-                z_m=head_pos[2],
-                visibility=0.4
             ))
 
         # Estimate SmallToes from BigToes and Heels

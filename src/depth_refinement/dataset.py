@@ -20,8 +20,10 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 import random
+import re
+from collections import defaultdict
 
 
 class AISTPPDepthDataset(Dataset):
@@ -78,9 +80,24 @@ class AISTPPDepthDataset(Dataset):
 
     @staticmethod
     def _get_sequence(path: Path) -> str:
-        """Extract sequence name from filename."""
-        # e.g., gBR_sBM_cAll_d04_mBR0_ch01_f000000.npz -> gBR_sBM_cAll_d04_mBR0_ch01
-        return '_'.join(path.stem.split('_')[:-1])
+        """Extract sequence name from filename (contains dancer ID)."""
+        # e.g., gBR_sBM_cAll_d04_mBR0_ch01_f0001_a30_n050.npz -> gBR_sBM_cAll_d04_mBR0_ch01
+        # The sequence name is everything before _f{frame}
+        stem = path.stem
+        match = re.match(r'^(.+)_f\d+', stem)
+        if match:
+            return match.group(1)
+        # Fallback for old format
+        return '_'.join(stem.split('_')[:-1])
+
+    @staticmethod
+    def _get_frame_num(path: Path) -> int:
+        """Extract frame number from filename."""
+        # e.g., gBR_sBM_cAll_d04_mBR0_ch01_f0001_a30_n050.npz -> 1
+        match = re.search(r'_f(\d+)', path.stem)
+        if match:
+            return int(match.group(1))
+        return 0
 
     def __len__(self) -> int:
         return len(self.files)
@@ -226,6 +243,223 @@ class AISTPPDepthDataset(Dataset):
             pose_2d = 0.5 + (pose_2d - 0.5) * scale
 
         return corrupted, ground_truth, azimuth, camera_pos, pose_2d
+
+
+class TemporalWindowDataset(Dataset):
+    """Dataset that returns temporal windows from same sequence (same person).
+
+    This enables bone locking during training - bone lengths should be consistent
+    within a window since it's the same person.
+    """
+
+    def __init__(
+        self,
+        data_dir: str | Path,
+        window_size: int = 50,
+        split: str = 'train',
+        val_ratio: float = 0.1,
+        seed: int = 42,
+        max_sequences: Optional[int] = None,
+    ):
+        """
+        Initialize temporal window dataset.
+
+        Args:
+            data_dir: Path to training data (NPZ files)
+            window_size: Number of consecutive frames per window
+            split: 'train' or 'val'
+            val_ratio: Fraction of sequences for validation
+            seed: Random seed for train/val split
+            max_sequences: Limit number of sequences (for debugging)
+        """
+        self.data_dir = Path(data_dir)
+        self.window_size = window_size
+        self.split = split
+
+        # Find all NPZ files and group by sequence
+        all_files = sorted(self.data_dir.glob('*.npz'))
+
+        # Group files by sequence (same dancer)
+        sequence_files: Dict[str, List[Path]] = defaultdict(list)
+        for f in all_files:
+            seq = self._get_sequence(f)
+            sequence_files[seq].append(f)
+
+        # Sort files within each sequence by frame number
+        for seq in sequence_files:
+            sequence_files[seq].sort(key=lambda f: self._get_frame_num(f))
+
+        # Filter sequences that have enough frames for a window
+        valid_sequences = {
+            seq: files for seq, files in sequence_files.items()
+            if len(files) >= window_size
+        }
+
+        # Split sequences into train/val
+        sequences = sorted(valid_sequences.keys())
+        rng = random.Random(seed)
+        rng.shuffle(sequences)
+
+        if max_sequences:
+            sequences = sequences[:max_sequences]
+
+        n_val = max(1, int(len(sequences) * val_ratio))
+        val_sequences = set(sequences[:n_val])
+        train_sequences = set(sequences[n_val:])
+
+        # Keep only sequences for this split
+        if split == 'train':
+            self.sequences = {s: valid_sequences[s] for s in train_sequences if s in valid_sequences}
+        else:
+            self.sequences = {s: valid_sequences[s] for s in val_sequences if s in valid_sequences}
+
+        # Create list of (sequence_name, start_idx) pairs for all valid windows
+        self.windows = []
+        for seq_name, files in self.sequences.items():
+            # How many windows can we extract from this sequence?
+            n_windows = len(files) - window_size + 1
+            for start_idx in range(n_windows):
+                self.windows.append((seq_name, start_idx))
+
+        print(f"[{split}] {len(self.windows)} windows from {len(self.sequences)} sequences (window_size={window_size})")
+
+    @staticmethod
+    def _get_sequence(path: Path) -> str:
+        """Extract sequence name from filename (contains dancer ID)."""
+        stem = path.stem
+        match = re.match(r'^(.+)_f\d+', stem)
+        if match:
+            return match.group(1)
+        return '_'.join(stem.split('_')[:-1])
+
+    @staticmethod
+    def _get_frame_num(path: Path) -> int:
+        """Extract frame number from filename."""
+        match = re.search(r'_f(\d+)', path.stem)
+        if match:
+            return int(match.group(1))
+        return 0
+
+    def __len__(self) -> int:
+        return len(self.windows)
+
+    def __getitem__(self, idx: int) -> dict:
+        """Load a temporal window.
+
+        Returns:
+            dict with tensors of shape (window_size, ...):
+                'corrupted': (W, 17, 3)
+                'ground_truth': (W, 17, 3)
+                'visibility': (W, 17)
+                'pose_2d': (W, 17, 2)
+                'azimuth': (W,)
+                'elevation': (W,)
+        """
+        seq_name, start_idx = self.windows[idx]
+        files = self.sequences[seq_name][start_idx:start_idx + self.window_size]
+
+        # Load all frames in window
+        corrupted_list = []
+        ground_truth_list = []
+        visibility_list = []
+        pose_2d_list = []
+        azimuth_list = []
+        elevation_list = []
+
+        for f in files:
+            data = np.load(f)
+
+            corrupted_list.append(data['corrupted'].astype(np.float32))
+            ground_truth_list.append(data['ground_truth'].astype(np.float32))
+            visibility_list.append(data['visibility'].astype(np.float32))
+
+            if 'pose_2d' in data:
+                pose_2d_list.append(data['pose_2d'].astype(np.float32))
+            else:
+                # Backward compatibility
+                pose_2d = corrupted_list[-1][:, :2] / (corrupted_list[-1][:, 2:3] + 1e-6)
+                pose_2d = (pose_2d + 1) / 2
+                pose_2d_list.append(pose_2d)
+
+            if 'azimuth' in data:
+                azimuth_list.append(float(data['azimuth']))
+                elevation_list.append(float(data['elevation']))
+            else:
+                azimuth_list.append(float(data['view_angle']))
+                elevation_list.append(0.0)
+
+        return {
+            'corrupted': torch.from_numpy(np.stack(corrupted_list)),
+            'ground_truth': torch.from_numpy(np.stack(ground_truth_list)),
+            'visibility': torch.from_numpy(np.stack(visibility_list)),
+            'pose_2d': torch.from_numpy(np.stack(pose_2d_list)),
+            'azimuth': torch.tensor(azimuth_list, dtype=torch.float32),
+            'elevation': torch.tensor(elevation_list, dtype=torch.float32),
+        }
+
+
+def create_temporal_dataloaders(
+    data_dir: str | Path,
+    window_size: int = 50,
+    batch_size: int = 1,  # Each "batch" is actually a window
+    num_workers: int = 4,
+    val_ratio: float = 0.1,
+    seed: int = 42,
+    max_sequences: Optional[int] = None,
+) -> Tuple[DataLoader, DataLoader]:
+    """Create train and validation dataloaders with temporal windows.
+
+    Each batch contains window_size consecutive frames from the same sequence
+    (same person), enabling bone locking during training.
+
+    Args:
+        data_dir: Path to training data
+        window_size: Frames per window (default: 50)
+        batch_size: Number of windows per batch (default: 1)
+        num_workers: Number of data loading workers
+        val_ratio: Validation split ratio
+        seed: Random seed
+        max_sequences: Limit sequences (for debugging)
+
+    Returns:
+        (train_loader, val_loader)
+    """
+    train_dataset = TemporalWindowDataset(
+        data_dir,
+        window_size=window_size,
+        split='train',
+        val_ratio=val_ratio,
+        seed=seed,
+        max_sequences=max_sequences,
+    )
+
+    val_dataset = TemporalWindowDataset(
+        data_dir,
+        window_size=window_size,
+        split='val',
+        val_ratio=val_ratio,
+        seed=seed,
+        max_sequences=max_sequences,
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=True,
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    return train_loader, val_loader
 
 
 def create_dataloaders(

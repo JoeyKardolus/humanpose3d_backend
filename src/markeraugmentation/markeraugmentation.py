@@ -11,6 +11,39 @@ from textwrap import dedent
 import numpy as np
 
 
+# Complete marker set after Pose2Sim LSTM augmentation (64 markers total)
+# Order: Original 21 + Lower body 35 + Upper body 8
+ORIGINAL_MARKERS = [
+    "Neck", "RShoulder", "LShoulder", "RHip", "LHip", "RKnee", "LKnee",
+    "RAnkle", "LAnkle", "RHeel", "LHeel", "RSmallToe", "LSmallToe",
+    "RBigToe", "LBigToe", "RElbow", "LElbow", "RWrist", "LWrist",
+    "Hip", "Nose"
+]  # 21 markers (Head removed - not used by pipeline)
+
+LOWER_BODY_AUGMENTED = [
+    "r.ASIS_study", "L.ASIS_study", "r.PSIS_study", "L.PSIS_study",
+    "r_knee_study", "r_mknee_study", "r_ankle_study", "r_mankle_study",
+    "r_toe_study", "r_5meta_study", "r_calc_study",
+    "L_knee_study", "L_mknee_study", "L_ankle_study", "L_mankle_study",
+    "L_toe_study", "L_calc_study", "L_5meta_study",
+    "r_shoulder_study", "L_shoulder_study", "C7_study",
+    "r_thigh1_study", "r_thigh2_study", "r_thigh3_study",
+    "L_thigh1_study", "L_thigh2_study", "L_thigh3_study",
+    "r_sh1_study", "r_sh2_study", "r_sh3_study",
+    "L_sh1_study", "L_sh2_study", "L_sh3_study",
+    "RHJC_study", "LHJC_study"
+]
+
+UPPER_BODY_AUGMENTED = [
+    "r_lelbow_study", "r_melbow_study",  # lateral/medial right elbow
+    "r_lwrist_study", "r_mwrist_study",  # lateral/medial right wrist
+    "L_lelbow_study", "L_melbow_study",  # lateral/medial left elbow
+    "L_lwrist_study", "L_mwrist_study"   # lateral/medial left wrist
+]
+
+ALL_MARKERS_64 = ORIGINAL_MARKERS + LOWER_BODY_AUGMENTED + UPPER_BODY_AUGMENTED
+
+
 def _resolve_pose2sim_command(config_path: Path) -> list[str]:
     """Derive the Pose2Sim invocation command for augment_markers_all."""
     cmd_env = os.environ.get("POSE2SIM_CMD")
@@ -192,11 +225,10 @@ def _average_trc_files(trc_files: list[Path], out_dir: Path, base_name: str) -> 
             data_start_idx = i
             break
 
-    header_lines = all_lines[:data_start_idx]
-
     # Determine expected number of columns from first data line
     first_data_parts = all_lines[data_start_idx].strip().split("\t")
     expected_cols = len(first_data_parts)
+    n_markers = (expected_cols - 2) // 3  # Subtract Frame#, Time; divide by 3 coords
 
     print(f"[augment] expected columns per row: {expected_cols}")
 
@@ -259,8 +291,18 @@ def _average_trc_files(trc_files: list[Path], out_dir: Path, base_name: str) -> 
     stacked = np.stack(all_data, axis=0)  # shape: (n_files, n_frames, n_cols)
     averaged_data = np.nanmean(stacked, axis=0)  # shape: (n_frames, n_cols)
 
+    # Build proper header with all marker names
+    # Pose2Sim bug: header doesn't include augmented marker names, but data does
+    output_filename = f"{base_name}_LSTM.trc"
+    header_lines = _build_trc_header(
+        filename=output_filename,
+        n_frames=len(averaged_data),
+        n_markers=n_markers,
+        data_rate=30.0,
+    )
+
     # Write output
-    output_path = out_dir / f"{base_name}_LSTM.trc"
+    output_path = out_dir / output_filename
     with open(output_path, "w") as f:
         # Write header
         for line in header_lines:
@@ -276,6 +318,45 @@ def _average_trc_files(trc_files: list[Path], out_dir: Path, base_name: str) -> 
     print(f"[augment] wrote {len(averaged_data)} frames with {expected_cols} columns")
 
     return output_path
+
+
+def _build_trc_header(
+    filename: str,
+    n_frames: int,
+    n_markers: int,
+    data_rate: float = 30.0,
+) -> list[str]:
+    """Build a proper TRC header with all marker names.
+
+    Fixes Pose2Sim bug where augmented marker names aren't written to header.
+    """
+    # Use ALL_MARKERS_64 if we have 64 markers, otherwise use what we have
+    if n_markers == 64:
+        markers = ALL_MARKERS_64
+    elif n_markers == 21:
+        markers = ORIGINAL_MARKERS
+    else:
+        # Fallback: generate generic marker names
+        markers = [f"Marker{i+1}" for i in range(n_markers)]
+
+    # Line 0: PathFileType
+    line0 = f"PathFileType\t4\t(X/Y/Z)\t{filename}\n"
+
+    # Line 1: DataRate, CameraRate, NumFrames, NumMarkers, Units
+    line1 = f"DataRate\t{data_rate:.2f}\tCameraRate\t{data_rate:.2f}\tNumFrames\t{n_frames}\tNumMarkers\t{n_markers}\tUnits\tm\n"
+
+    # Line 2: Empty
+    line2 = "\n"
+
+    # Line 3: Frame#, Time, then marker names (each repeated 3x for X, Y, Z)
+    marker_names = "\t".join(f"{m}\t{m}\t{m}" for m in markers)
+    line3 = f"Frame#\tTime\t{marker_names}\n"
+
+    # Line 4: Empty, Empty, then X1 Y1 Z1 X2 Y2 Z2 ... for each marker
+    xyz_labels = "\t".join(f"X{i+1}\tY{i+1}\tZ{i+1}" for i in range(n_markers))
+    line4 = f"\t\t{xyz_labels}\n"
+
+    return [line0, line1, line2, line3, line4]
 
 
 def _copy_trc_with_perturbation(

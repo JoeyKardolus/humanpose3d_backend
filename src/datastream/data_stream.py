@@ -26,9 +26,8 @@ ORDER_22: Tuple[str, ...] = (
     "RWrist",
     "LWrist",
     "Hip",
-    "Head",
     "Nose",
-)
+)  # 21 markers (Head removed - not used by pipeline)
 
 DERIVED_PARENTS = {
     "Hip": ("LHip", "RHip"),
