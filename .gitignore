@@ -24,3 +24,11 @@ data/output/*
 models/*
 *:Zone.Identifier
 data/training/
+
+# Logs
+logs/
+*.log
+wget-log
+
+# External repos
+use/MonocularTotalCapture/
