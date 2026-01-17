@@ -101,19 +101,32 @@ uv run python visualize_interactive.py [file.trc]  # 3D viewer
 ### Depth Refinement
 Corrects MediaPipe depth errors using camera viewpoint prediction. Trains on AIST++ dataset (1.2M frames) with real MediaPipe errors paired with motion capture ground truth.
 
-**Architecture**: Transformer with ElePose-style direct angle prediction
-- Uses ElePose backbone (CVPR 2022) for deep 2D foreshortening features
-- Predicts camera azimuth/elevation directly from 2D+3D pose features
-- Avoids body-frame mismatch between training (GT pose) and inference (corrupted pose)
-- Key insight: 2D foreshortening (shoulder width ratio, limb lengths) encodes viewpoint
+**Architecture**: Transformer with Part Orientation Fields (POF)
+- Based on MonocularTotalCapture (CVPR 2019) Part Orientation Fields
+- Predicts 14 per-limb 3D unit vectors (local depth info per body part)
+- Uses camera direction vector for front/back disambiguation
+- Optional MTC-style least-squares solver for geometric consistency
+- Key insight: 2D foreshortening directly encodes 3D limb orientation
 
-**Model**: 7.3M params with ElePose (d_model=128, 6 layers, 8 heads, elepose_hidden_dim=1024)
+**Model**: ~765K params (d_model=64, 4 layers, 4 heads)
 
 **Key components**:
-- **ElePose backbone**: ResNet-style 2D pose encoder (1024-dim features)
-- **DirectAnglePredictor**: Predicts azimuth/elevation directly (avoids body-frame mismatch)
-- **ViewAngleEncoder**: Fourier features for periodic angle patterns
+- **LimbOrientationPredictor**: Predicts 3D unit vectors for 14 limbs from 2D foreshortening
+- **LeastSquaresDepthSolver**: MTC-style solver ensuring 3D is consistent with 2D observations
+- **DirectAnglePredictor**: Predicts global azimuth/elevation for disambiguation
+- **Camera Direction Vector**: Explicit (x,y,z) direction toward camera for front/back
 - **CrossJointAttention**: Transformer for inter-joint depth reasoning
+
+**14 Limbs** (COCO-17 indices):
+| Limb | Parent → Child | Limb | Parent → Child |
+|------|----------------|------|----------------|
+| L upper arm | 5→7 | R upper arm | 6→8 |
+| L forearm | 7→9 | R forearm | 8→10 |
+| L thigh | 11→13 | R thigh | 12→14 |
+| L shin | 13→15 | R shin | 14→16 |
+| Shoulder width | 5↔6 | Hip width | 11↔12 |
+| L torso | 5→11 | R torso | 6→12 |
+| L cross-body | 5→12 | R cross-body | 6→11 |
 
 **Performance**:
 | Metric | Value |
@@ -126,14 +139,20 @@ Corrects MediaPipe depth errors using camera viewpoint prediction. Trains on AIS
 **Bone Length Consistency**: Training includes bone variance loss to encourage temporally consistent bone lengths. At inference, bone locking computes median bone lengths from first 50 frames and projects all frames to those lengths. Result: more consistent than ground truth (0.57x GT variance).
 
 ```bash
-# Generate training data (parallel, ~2-4 hours)
-bash scripts/run_parallel_conversion.sh
+# Train model with POF (recommended)
+uv run --group neural python scripts/train/depth_model.py \
+  --epochs 50 --batch-size 256 --workers 8 --bf16 \
+  --use-limb-orientations --limb-orientation-weight 0.5
 
-# Train model (recommended settings with ElePose)
-uv run --group neural python scripts/train_depth_model.py \
-  --epochs 50 --batch-size 256 --workers 8 --fp16 \
-  --d-model 128 --num-layers 6 --num-heads 8 \
-  --elepose --elepose-hidden-dim 1024
+# Train with MTC-style least-squares solver (experimental)
+uv run --group neural python scripts/train/depth_model.py \
+  --epochs 50 --batch-size 256 --workers 8 --bf16 \
+  --use-limb-orientations --limb-orientation-weight 0.5 \
+  --use-least-squares --projection-loss-weight 0.3
+
+# Diagnose POF predictions
+uv run --group neural python scripts/debug/diagnose_pof.py \
+  --checkpoint models/checkpoints/best_depth_model.pth
 
 # Use trained model
 --neural-depth-refinement --depth-model-path models/checkpoints/best_depth_model.pth
@@ -142,12 +161,60 @@ uv run --group neural python scripts/train_depth_model.py \
 **Training flags**:
 | Flag | Description |
 |------|-------------|
-| `--elepose` | Use ElePose backbone for camera angle prediction (recommended) |
-| `--elepose-hidden-dim 1024` | Hidden dimension for ElePose backbone |
-| `--d-model 128` | Model hidden dimension |
-| `--num-layers 6` | Number of transformer layers |
-| `--num-heads 8` | Number of attention heads |
+| `--use-limb-orientations` | Enable POF (Part Orientation Fields) prediction |
+| `--limb-orientation-weight 0.5` | Weight for limb orientation loss |
+| `--use-least-squares` | Enable MTC-style least-squares depth solver (experimental) |
+| `--projection-loss-weight 0.3` | Weight for projection consistency loss |
+| `--optimizer adamw` | Optimizer: adamw, lion, ademamix, sophia, schedule_free, soap |
+| `--d-model 64` | Model hidden dimension |
+| `--num-layers 4` | Number of transformer layers |
+| `--num-heads 4` | Number of attention heads |
 | `--checkpoint PATH` | Resume from checkpoint |
+
+**Least-Squares Solver** (MTC-style, experimental):
+- Solves for joint depths hierarchically: hips → torso → arms/legs
+- Uses input 3D X,Y as "2D" positions (MTC insight: under orthographic projection, 3D[:2] ≈ 2D)
+- This ensures coordinate consistency between delta_2d and orientation vectors
+- Scale factor regularization penalizes negative scales (wrong limb direction)
+- Note: Experimental feature, may require further tuning for stability
+
+**Training Data Generation** (`scripts/data/convert_aistpp.py`):
+
+Processes AIST++ dataset (1400 sequences × 6 camera views) to create ~1.5M training pairs with REAL MediaPipe errors.
+
+```bash
+# Parallel (recommended, ~2-4 hours)
+uv run python scripts/data/convert_aistpp.py --workers 8
+
+# Single-threaded (verbose output)
+uv run python scripts/data/convert_aistpp.py
+
+# Verify alignment (saves to data/training/viz/)
+uv run python scripts/viz/training_sample_viz.py --num-samples 40
+```
+
+**Coordinate transformations**:
+1. **Y/Z flip**: MediaPipe (Y-down, Z-toward-camera) → AIST++ (Y-up, Z-away)
+2. **Body frame alignment**: `align_body_frames()` rotates MediaPipe to match GT world orientation
+3. **Scale normalization**: Both poses normalized to unit torso scale
+4. **2D projection**: GT 3D → 2D via camera calibration (for POF foreshortening)
+5. **c05 flip**: Camera c05 videos are horizontally flipped in AIST++; script compensates
+
+**Expected alignment quality** (from viz stats):
+- Body Frame Error: ~0°
+- Torso Orientation: ~6°
+- Arms/Legs Orientation: ~20-30° (actual MediaPipe depth errors)
+
+Training sample fields (`.npz`):
+| Field | Shape | Description |
+|-------|-------|-------------|
+| `corrupted` | (17, 3) | MediaPipe 3D, normalized |
+| `ground_truth` | (17, 3) | AIST++ GT 3D, normalized |
+| `pose_2d` | (17, 2) | MediaPipe 2D detection |
+| `projected_2d` | (17, 2) | GT 3D projected to 2D (for POF) |
+| `azimuth` | scalar | Camera angle 0-360° |
+| `elevation` | scalar | Camera angle -90 to +90° |
+| `visibility` | (17,) | Per-joint visibility |
 
 ### Joint Constraint Refinement
 Learns soft joint constraints from AIST++ motion capture data. Transformer-based model corrects joint angles using cross-joint attention.
@@ -158,10 +225,10 @@ Learns soft joint constraints from AIST++ motion capture data. Transformer-based
 
 ```bash
 # Generate training data (processes all AIST++ sequences)
-uv run python scripts/generate_joint_angle_training.py --max-sequences 10000 --workers 4
+uv run python scripts/data/generate_joint_angles.py --max-sequences 10000 --workers 4
 
 # Train model (recommended settings)
-uv run --group neural python scripts/train_joint_model.py \
+uv run --group neural python scripts/train/joint_model.py \
   --epochs 100 --batch-size 1024 --workers 8 --fp16 \
   --d-model 128 --n-layers 4
 
