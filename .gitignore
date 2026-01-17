@@ -21,7 +21,9 @@ wheels/
 # Folders
 data/input/*
 data/output/*
-models/*
+# Models - keep best, ignore checkpoints
+models/checkpoints/old/
+models/checkpoints/checkpoint_*.pth
 *:Zone.Identifier
 data/training/
 
