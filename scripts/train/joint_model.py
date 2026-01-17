@@ -36,6 +36,9 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
 
+# Compact logging mode (disable tqdm progress bars when piped to file)
+IS_TTY = sys.stdout.isatty()
+
 from src.joint_refinement.model import create_model
 from src.joint_refinement.losses import JointRefinementLoss
 from src.joint_refinement.dataset import create_dataloaders
@@ -56,7 +59,7 @@ def train_epoch(
     loss_components = {'reconstruction': 0.0, 'symmetry': 0.0, 'delta_reg': 0.0}
     num_batches = 0
 
-    pbar = tqdm(train_loader, desc='Train', leave=False)
+    pbar = tqdm(train_loader, desc='Train', leave=False, disable=not IS_TTY)
 
     for batch in pbar:
         corrupted = batch['corrupted_angles'].to(device)
@@ -120,7 +123,7 @@ def validate(
     num_batches = 0
 
     with torch.no_grad():
-        for batch in tqdm(val_loader, desc='Val', leave=False):
+        for batch in tqdm(val_loader, desc='Val', leave=False, disable=not IS_TTY):
             corrupted = batch['corrupted_angles'].to(device)
             ground_truth = batch['ground_truth_angles'].to(device)
             visibility = batch['joint_visibility'].to(device)
@@ -270,15 +273,22 @@ def main():
 
         epoch_time = time.time() - start_time
 
-        # Print progress
-        print(f"\nEpoch {epoch + 1}/{args.epochs} ({epoch_time:.1f}s)")
-        print(f"  Train: loss={train_metrics['total_loss']:.4f}, "
-              f"recon={train_metrics['reconstruction']:.4f}, "
-              f"sym={train_metrics['symmetry']:.4f}")
-        print(f"  Val:   loss={val_metrics['val_loss']:.4f}, "
-              f"angle_err={val_metrics['mean_angle_error']:.2f}° "
-              f"{'*BEST*' if is_best else ''}")
-        print(f"  LR: {scheduler.get_last_lr()[0]:.2e}")
+        # Print progress - compact mode for logs, verbose for terminal
+        if IS_TTY:
+            print(f"\nEpoch {epoch + 1}/{args.epochs} ({epoch_time:.1f}s)")
+            print(f"  Train: loss={train_metrics['total_loss']:.4f}, "
+                  f"recon={train_metrics['reconstruction']:.4f}, "
+                  f"sym={train_metrics['symmetry']:.4f}")
+            print(f"  Val:   loss={val_metrics['val_loss']:.4f}, "
+                  f"angle_err={val_metrics['mean_angle_error']:.2f}° "
+                  f"{'*BEST*' if is_best else ''}")
+            print(f"  LR: {scheduler.get_last_lr()[0]:.2e}")
+        else:
+            # Compact single-line output for log files
+            best_marker = " *BEST*" if is_best else ""
+            print(f"E{epoch+1:03d} | trn={train_metrics['total_loss']:.4f} val={val_metrics['val_loss']:.4f} | "
+                  f"angle_err={val_metrics['mean_angle_error']:.2f}° | "
+                  f"lr={scheduler.get_last_lr()[0]:.1e} {epoch_time:.0f}s{best_marker}")
 
     # Training complete
     print("\n" + "=" * 60)

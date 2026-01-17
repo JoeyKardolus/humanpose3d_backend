@@ -6,12 +6,261 @@ Key losses:
 2. Bone length consistency (corrected pose should have consistent bone lengths)
 3. Symmetry (left/right limbs should have similar bone lengths)
 4. Confidence calibration (high confidence should correlate with low error)
+5. Limb orientation loss (POF-inspired: predicted limb orientations should match GT)
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Optional
+
+
+# Limb definitions for Part Orientation Fields (POF-inspired)
+# Each limb is (parent_joint, child_joint) using COCO-17 indices
+LIMBS = [
+    (5, 7),    # 0: L shoulder → elbow
+    (7, 9),    # 1: L elbow → wrist
+    (6, 8),    # 2: R shoulder → elbow
+    (8, 10),   # 3: R elbow → wrist
+    (11, 13),  # 4: L hip → knee
+    (13, 15),  # 5: L knee → ankle
+    (12, 14),  # 6: R hip → knee
+    (14, 16),  # 7: R knee → ankle
+    (5, 6),    # 8: Shoulder width
+    (11, 12),  # 9: Hip width
+    (5, 11),   # 10: L torso
+    (6, 12),   # 11: R torso
+    # Cross-body diagonals (help with reaching poses and torso twist)
+    (5, 12),   # 12: L shoulder → R hip
+    (6, 11),   # 13: R shoulder → L hip
+]
+
+
+def compute_limb_orientations_from_pose(pose_3d: torch.Tensor) -> torch.Tensor:
+    """Compute 3D unit vectors for each limb from a pose.
+
+    Args:
+        pose_3d: (batch, 17, 3) or (17, 3) joint positions
+
+    Returns:
+        (batch, 14, 3) or (14, 3) unit vectors for each limb
+    """
+    single_pose = pose_3d.dim() == 2
+    if single_pose:
+        pose_3d = pose_3d.unsqueeze(0)  # (1, 17, 3)
+
+    orientations = []
+    for parent, child in LIMBS:
+        vec = pose_3d[:, child] - pose_3d[:, parent]  # (batch, 3)
+        length = torch.norm(vec, dim=-1, keepdim=True)  # (batch, 1)
+        unit_vec = vec / (length + 1e-8)  # (batch, 3)
+        orientations.append(unit_vec)
+
+    orientations = torch.stack(orientations, dim=1)  # (batch, 14, 3)
+
+    if single_pose:
+        orientations = orientations[0]  # (14, 3)
+
+    return orientations
+
+
+def limb_orientation_loss(
+    pred_orientations: torch.Tensor,
+    gt_orientations: torch.Tensor,
+    visibility: torch.Tensor = None,
+    reduction: str = 'mean',
+) -> torch.Tensor:
+    """Cosine similarity loss for limb orientations (POF-inspired).
+
+    Measures how well predicted limb orientations match ground truth.
+    Uses 1 - cos(theta) so that perfect alignment = 0 loss.
+
+    Args:
+        pred_orientations: (batch, 14, 3) predicted unit vectors per limb
+        gt_orientations: (batch, 14, 3) ground truth unit vectors per limb
+        visibility: (batch, 17) optional per-joint visibility scores.
+                   If provided, weights each limb by min(parent_vis, child_vis)
+        reduction: 'mean', 'sum', or 'none'
+
+    Returns:
+        Cosine similarity loss (0 = perfect alignment, 2 = opposite directions)
+    """
+    # Cosine similarity: dot product of unit vectors
+    # cos(theta) = pred · gt (both unit vectors)
+    cos_sim = (pred_orientations * gt_orientations).sum(dim=-1)  # (batch, 14)
+
+    # Loss = 1 - cos(theta)
+    # cos(0°) = 1 → loss = 0 (perfect)
+    # cos(90°) = 0 → loss = 1 (orthogonal)
+    # cos(180°) = -1 → loss = 2 (opposite)
+    loss = 1.0 - cos_sim  # (batch, 14)
+
+    # Apply visibility weighting if provided
+    if visibility is not None:
+        # Compute per-limb visibility as min of parent and child joint visibility
+        limb_vis = []
+        for parent, child in LIMBS:
+            vis = torch.min(visibility[:, parent], visibility[:, child])  # (batch,)
+            limb_vis.append(vis)
+        limb_vis = torch.stack(limb_vis, dim=1)  # (batch, 14)
+
+        # Weight loss by visibility (low vis limbs contribute less)
+        loss = loss * limb_vis
+
+        if reduction == 'mean':
+            # Weighted mean: sum(loss * weight) / sum(weight)
+            return loss.sum() / (limb_vis.sum() + 1e-6)
+        elif reduction == 'sum':
+            return loss.sum()
+        return loss
+
+    if reduction == 'mean':
+        return loss.mean()
+    elif reduction == 'sum':
+        return loss.sum()
+    return loss
+
+
+def limb_orientation_angle_error(
+    pred_orientations: torch.Tensor,
+    gt_orientations: torch.Tensor,
+) -> torch.Tensor:
+    """Compute angular error between predicted and GT limb orientations in degrees.
+
+    Args:
+        pred_orientations: (batch, 14, 3) predicted unit vectors
+        gt_orientations: (batch, 14, 3) ground truth unit vectors
+
+    Returns:
+        (batch, 14) angular error in degrees for each limb
+    """
+    # Cosine of angle between vectors
+    cos_theta = (pred_orientations * gt_orientations).sum(dim=-1)  # (batch, 14)
+    cos_theta = cos_theta.clamp(-1.0, 1.0)  # Numerical stability
+
+    # Convert to degrees
+    angle_rad = torch.acos(cos_theta)
+    angle_deg = angle_rad * (180.0 / 3.14159265)
+
+    return angle_deg
+
+
+def projection_consistency_loss(
+    corrected_3d: torch.Tensor,
+    observed_2d: torch.Tensor,
+    visibility: torch.Tensor = None,
+    projection: str = 'ortho',
+) -> torch.Tensor:
+    """Loss to ensure 3D pose projects back to observed 2D positions.
+
+    This is a key constraint from MonocularTotalCapture: the reconstructed 3D
+    must be consistent with the 2D observations. If it doesn't project back
+    correctly, the 3D is wrong.
+
+    NOTE: For orthographic projection with least-squares solver, this loss is
+    always 0 because the solver guarantees X,Y match. Use solved_depth_loss instead.
+
+    Args:
+        corrected_3d: (batch, 17, 3) corrected 3D pose
+        observed_2d: (batch, 17, 2) observed 2D joint positions
+        visibility: (batch, 17) optional visibility weights
+        projection: 'ortho' (orthographic) or 'weak_persp' (weak perspective)
+
+    Returns:
+        Scalar loss measuring 2D reprojection error
+    """
+    # Handle any NaN/Inf in inputs
+    corrected_3d = torch.nan_to_num(corrected_3d, nan=0.0, posinf=1.0, neginf=-1.0)
+
+    if projection == 'ortho':
+        # Orthographic: X, Y directly correspond to x, y
+        projected_2d = corrected_3d[:, :, :2]  # (batch, 17, 2)
+    else:
+        # Weak perspective: x = X/Z, y = Y/Z
+        z = corrected_3d[:, :, 2:3].clamp(min=0.1)  # Avoid division by zero
+        projected_2d = corrected_3d[:, :, :2] / z  # (batch, 17, 2)
+
+    # L2 error between projected and observed
+    error = (projected_2d - observed_2d) ** 2  # (batch, 17, 2)
+    error = error.sum(dim=-1)  # (batch, 17) - squared distance per joint
+
+    # Clamp error to prevent extreme values
+    error = error.clamp(max=10.0)
+
+    if visibility is not None:
+        # Weight by visibility
+        weighted_error = error * visibility
+        return weighted_error.sum() / (visibility.sum() + 1e-6)
+    else:
+        return error.mean()
+
+
+def solved_depth_loss(
+    solved_pose: torch.Tensor,
+    gt_pose: torch.Tensor,
+    visibility: torch.Tensor = None,
+) -> torch.Tensor:
+    """Loss comparing depths from least-squares solver to ground truth.
+
+    This is the KEY training signal for the MTC-style approach:
+    "If we trust the predicted limb orientations and solve for depth,
+    do we get the correct depths?"
+
+    This trains the network to predict orientations that lead to correct depths.
+
+    Args:
+        solved_pose: (batch, 17, 3) pose from least-squares solver
+        gt_pose: (batch, 17, 3) ground truth pose
+        visibility: (batch, 17) optional visibility weights
+
+    Returns:
+        Scalar loss measuring depth error
+    """
+    # Handle any NaN/Inf
+    solved_pose = torch.nan_to_num(solved_pose, nan=0.0, posinf=1.0, neginf=-1.0)
+
+    # Compare depths (Z axis)
+    depth_error = (solved_pose[:, :, 2] - gt_pose[:, :, 2]).abs()  # (batch, 17)
+
+    # Clamp to prevent extreme values
+    depth_error = depth_error.clamp(max=1.0)
+
+    if visibility is not None:
+        weighted_error = depth_error * visibility
+        return weighted_error.sum() / (visibility.sum() + 1e-6)
+    else:
+        return depth_error.mean()
+
+
+def scale_factor_regularization(
+    scale_factors: torch.Tensor,
+    target_scale: float = 0.3,
+) -> torch.Tensor:
+    """Regularize scale factors from least-squares solver.
+
+    MTC insight: negative scale factors indicate wrong limb direction.
+    This loss encourages positive scale factors close to expected bone lengths.
+
+    Args:
+        scale_factors: (batch, 14) scale factors from least-squares solver
+        target_scale: expected average scale (related to bone length, ~0.3m)
+
+    Returns:
+        Scalar loss penalizing negative and extreme scale factors
+    """
+    # Handle any NaN/Inf in scale factors (shouldn't happen but be safe)
+    scale_factors = torch.nan_to_num(scale_factors, nan=0.0, posinf=2.0, neginf=-2.0)
+
+    # Penalize negative scale factors (wrong direction)
+    negative_penalty = F.relu(-scale_factors).mean()
+
+    # Penalize extreme scale factors (too large or too small)
+    # Expected scale is roughly bone_length for unit orientation vectors
+    deviation = (scale_factors.abs() - target_scale).abs()
+    extreme_penalty = deviation.mean()
+
+    return negative_penalty + 0.1 * extreme_penalty
+
 
 # COCO 17 bone definitions (joint pairs)
 COCO_BONES = [

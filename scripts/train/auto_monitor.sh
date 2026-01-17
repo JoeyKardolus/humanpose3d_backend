@@ -53,7 +53,7 @@ sleep 5
 log ""
 log "Phase 2: Starting depth model training..."
 
-uv run python scripts/train_depth_model.py \
+uv run python scripts/train/depth_model.py \
     --epochs 100 \
     --batch-size 256 \
     --lr 0.001 \
@@ -68,7 +68,7 @@ log ""
 log "Phase 3: Starting joint angle generation..."
 
 # Run joint angle generation in background
-nohup uv run python scripts/generate_joint_angle_training.py \
+nohup uv run python scripts/data/generate_joint_angles.py \
     --max-sequences 3000 \
     --workers 1 \
     > logs/joint_angle_generation.log 2>&1 &
@@ -106,7 +106,7 @@ kill $JOINT_PID 2>/dev/null || true
 log ""
 log "Phase 4: Starting joint angle model training..."
 
-uv run python scripts/train_joint_model.py \
+uv run python scripts/train/joint_model.py \
     --epochs 100 \
     --batch-size 256 \
     2>&1 | tee logs/joint_training.log

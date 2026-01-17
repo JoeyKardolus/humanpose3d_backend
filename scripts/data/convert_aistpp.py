@@ -16,10 +16,25 @@ This script:
 Key insight: We use REAL MediaPipe errors, not synthetic noise.
 """
 
-import sys
-from pathlib import Path
+import os
+# Suppress TensorFlow and MediaPipe warnings BEFORE imports
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['GLOG_minloglevel'] = '2'
+os.environ['ABSL_MIN_LOG_LEVEL'] = '2'
 
-project_root = Path(__file__).parent.parent
+import sys
+import argparse
+from pathlib import Path
+from multiprocessing import Pool
+
+import warnings
+warnings.filterwarnings('ignore')
+
+import logging
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+logging.getLogger('absl').setLevel(logging.ERROR)
+
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import json
@@ -29,6 +44,8 @@ from tqdm import tqdm
 import cv2
 import mediapipe as mp
 from scipy.spatial.transform import Rotation
+
+from src.depth_refinement.data_utils import align_body_frames
 
 
 # COCO 17 keypoints (AIST++ format)
@@ -63,7 +80,7 @@ MEDIAPIPE_TO_COCO = {
 
 def load_camera_params(cameras_dir: Path, setting_name: str, camera_name: str = 'c01') -> dict:
     """
-    Load camera extrinsics from AIST++ calibration.
+    Load full camera calibration from AIST++ calibration.
 
     Args:
         cameras_dir: Path to annotations/cameras/
@@ -71,7 +88,12 @@ def load_camera_params(cameras_dir: Path, setting_name: str, camera_name: str = 
         camera_name: Camera identifier (e.g., 'c01')
 
     Returns:
-        Dict with 'position' (camera position in world coords, meters)
+        Dict with:
+            'position': camera position in world coords (meters)
+            'rotation': 3x3 rotation matrix (world to camera)
+            'translation': translation vector (meters)
+            'intrinsic': 3x3 intrinsic matrix
+            'name': camera identifier
     """
     setting_file = cameras_dir / f"{setting_name}.json"
     with open(setting_file, 'r') as f:
@@ -89,7 +111,16 @@ def load_camera_params(cameras_dir: Path, setting_name: str, camera_name: str = 
             # Camera position in world coords: C = -R^T @ t
             cam_pos = -R.T @ t
 
-            return {'position': cam_pos, 'name': camera_name}
+            # Intrinsic matrix (3x3)
+            K = np.array(cam['matrix']).reshape(3, 3)
+
+            return {
+                'position': cam_pos,
+                'rotation': R,
+                'translation': t,
+                'intrinsic': K,
+                'name': camera_name,
+            }
 
     raise ValueError(f"Camera {camera_name} not found in {setting_file}")
 
@@ -315,13 +346,49 @@ def get_video_name(seq_name: str, view: str = 'c01') -> str:
     return seq_name.replace('cAll', view)
 
 
+def project_3d_to_2d(points_3d: np.ndarray, R: np.ndarray, t: np.ndarray, K: np.ndarray,
+                     image_width: int = 1920, image_height: int = 1080) -> np.ndarray:
+    """
+    Project 3D world points to normalized 2D image coordinates.
+
+    Args:
+        points_3d: (N, 3) 3D points in world coordinates
+        R: (3, 3) rotation matrix (world to camera)
+        t: (3,) translation vector
+        K: (3, 3) intrinsic camera matrix
+        image_width: Image width for normalization
+        image_height: Image height for normalization
+
+    Returns:
+        (N, 2) normalized 2D coordinates in [0, 1] range
+    """
+    # Transform to camera frame: X_cam = R @ X_world + t
+    points_cam = (R @ points_3d.T).T + t
+
+    # Perspective projection
+    points_2d_hom = (K @ points_cam.T).T
+
+    # Perspective divide
+    points_2d = points_2d_hom[:, :2] / points_2d_hom[:, 2:3]
+
+    # Normalize to [0, 1] range
+    points_2d[:, 0] = points_2d[:, 0] / image_width
+    points_2d[:, 1] = points_2d[:, 1] / image_height
+
+    return points_2d
+
+
+def process_sequence_worker(args):
+    """Worker function for multiprocessing - unpacks args and calls process_sequence."""
+    return process_sequence(*args)
+
+
 def process_sequence(
     video_path: Path,
     keypoints3d: np.ndarray,
     output_dir: Path,
     sequence_name: str,
-    pose,
-    camera_pos: np.ndarray,
+    camera_params: dict,
     max_frames: int = 500,
     frame_skip: int = 2,
 ) -> int:
@@ -333,23 +400,36 @@ def process_sequence(
         keypoints3d: (n_frames, 17, 3) ground truth keypoints (in meters)
         output_dir: Output directory
         sequence_name: Name for output files
-        pose: MediaPipe Pose object
-        camera_pos: Camera position in world coords (meters)
+        camera_params: Camera parameters dict with 'position', 'rotation', 'translation', 'intrinsic'
         max_frames: Max frames to process
         frame_skip: Process every N frames (60fps -> 30fps effective)
 
     Returns:
         Number of training examples generated
     """
+    # Extract camera parameters
+    camera_pos = camera_params['position']
+    camera_R = camera_params['rotation']
+    camera_t = camera_params['translation']
+    camera_K = camera_params['intrinsic']
+
     # Skip if sequence already processed (check if ANY frame exists)
     existing = list(output_dir.glob(f"{sequence_name}_f*.npz"))
-    if existing:
-        print(f"  Skipping {sequence_name} ({len(existing)} frames already exist)")
+    if len(existing) >= max_frames // 2:
         return len(existing)
+
+    # Create MediaPipe Pose instance for this worker
+    mp_pose = mp.solutions.pose
+    pose = mp_pose.Pose(
+        static_image_mode=True,
+        model_complexity=2,
+        enable_segmentation=False,
+        min_detection_confidence=0.5,
+    )
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
-        print(f"  Failed to open video: {video_path}")
+        pose.close()
         return 0
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -359,8 +439,6 @@ def process_sequence(
     n_frames = min(total_frames, gt_frames, max_frames * frame_skip)
 
     examples_generated = 0
-    pbar = tqdm(total=n_frames // frame_skip, desc=f"  {sequence_name[:25]}", leave=False)
-
     frame_idx = 0
     while frame_idx < n_frames:
         ret, frame = cap.read()
@@ -390,7 +468,19 @@ def process_sequence(
             continue
 
         # Extract MediaPipe 3D pose, visibility, and 2D pose
-        mp_pose, visibility, pose_2d = extract_mediapipe_coco(results)
+        mp_pose_data, visibility, pose_2d = extract_mediapipe_coco(results)
+
+        # Project GT 3D pose to 2D using camera parameters
+        projected_2d = project_3d_to_2d(gt_pose, camera_R, camera_t, camera_K)
+
+        # c05 videos appear to be horizontally flipped in AIST++
+        # Flip projected_2d X and swap left/right joints to match MediaPipe's view
+        if '_c05' in sequence_name:
+            projected_2d[:, 0] = 1.0 - projected_2d[:, 0]
+            # Swap left/right joint pairs: (1,2), (3,4), (5,6), (7,8), (9,10), (11,12), (13,14), (15,16)
+            swap_pairs = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16)]
+            for i, j in swap_pairs:
+                projected_2d[[i, j]] = projected_2d[[j, i]]
 
         # Compute view angles from GT pose and actual camera position
         # BEFORE centering - we need world coordinates
@@ -402,7 +492,7 @@ def process_sequence(
         camera_relative = camera_pos - gt_pelvis  # Camera pos in subject-centered coords
 
         # Center both on pelvis (for training, we want pelvis-centered)
-        mp_centered = center_on_pelvis(mp_pose)
+        mp_centered = center_on_pelvis(mp_pose_data)
         gt_centered = center_on_pelvis(gt_pose)
 
         # Fix MediaPipe coordinate system to match AIST++
@@ -410,6 +500,12 @@ def process_sequence(
         # AIST++: Y up, Z away from camera (standard)
         mp_centered[:, 1] = -mp_centered[:, 1]  # Y: down -> up
         mp_centered[:, 2] = -mp_centered[:, 2]  # Z: toward camera -> away
+
+        # === BODY FRAME ALIGNMENT (CRITICAL) ===
+        # MediaPipe world landmarks are body-centric (aligned to torso).
+        # AIST++ ground truth is in world coordinates.
+        # Rotate MediaPipe to match GT's body frame orientation.
+        mp_centered = align_body_frames(mp_centered, gt_centered)
 
         # === SCALE NORMALIZATION (CRITICAL) ===
         # MediaPipe and AIST++ may have different body size estimates.
@@ -436,7 +532,6 @@ def process_sequence(
         # Skip if already exists (resume support)
         if output_path.exists():
             examples_generated += 1
-            pbar.update(1)
             frame_idx += 1
             continue
 
@@ -446,6 +541,7 @@ def process_sequence(
             ground_truth=gt_normalized.astype(np.float32), # (17, 3) AIST++ GT, scale-normalized
             visibility=visibility.astype(np.float32),      # (17,) MediaPipe visibility
             pose_2d=pose_2d.astype(np.float32),            # (17, 2) MediaPipe 2D pose (key for camera!)
+            projected_2d=projected_2d.astype(np.float32),  # (17, 2) GT projected to 2D via camera
             azimuth=np.float32(azimuth),                   # Horizontal angle: 0-360° (from camera pos!)
             elevation=np.float32(elevation),               # Vertical angle: -90 to +90° (from camera pos!)
             camera_relative=camera_relative.astype(np.float32),  # (3,) Camera pos relative to pelvis
@@ -456,17 +552,21 @@ def process_sequence(
         )
 
         examples_generated += 1
-        pbar.update(1)
         frame_idx += 1
 
-    pbar.close()
     cap.release()
+    pose.close()
 
     return examples_generated
 
 
 def main():
     """Convert AIST++ dataset to training pairs."""
+    parser = argparse.ArgumentParser(description='Convert AIST++ to depth refinement training data')
+    parser.add_argument('--workers', type=int, default=1, help='Number of parallel workers (default: 1)')
+    parser.add_argument('--max-frames', type=int, default=180, help='Max frames per video (default: 180)')
+    parser.add_argument('--frame-skip', type=int, default=3, help='Frame skip rate (default: 3)')
+    args = parser.parse_args()
 
     print("=" * 80)
     print("AIST++ -> DEPTH REFINEMENT TRAINING DATA")
@@ -493,7 +593,6 @@ def main():
 
     if not videos_dir.exists():
         print(f"ERROR: videos not found at {videos_dir}")
-        print("Run: python data/AIST++/api/downloader.py --download_folder data/AIST++/videos --accept_terms")
         return
 
     if not cameras_dir.exists():
@@ -509,57 +608,30 @@ def main():
     print(f"Found {len(video_files)} videos")
 
     if len(video_files) == 0:
-        print("No videos found. Download in progress or not started.")
-        print("Run: python data/AIST++/api/downloader.py --download_folder data/AIST++/videos --accept_terms --num_processes 8")
+        print("No videos found.")
         return
 
     video_dict = {v.stem: v for v in video_files}
     print()
 
-    # Initialize MediaPipe
-    print("Initializing MediaPipe Pose...")
-    mp_pose = mp.solutions.pose
-    pose = mp_pose.Pose(
-        static_image_mode=True,  # Per-frame for consistency
-        model_complexity=2,
-        enable_segmentation=False,
-        min_detection_confidence=0.5,
-    )
-    print("Ready")
-    print()
-
     # Cache camera params per setting
     camera_cache = {}
 
-    # === TARGET: ~1.5M SAMPLES ===
-    # Configuration for diverse viewpoints with controlled sample count:
-    # - ~1400 sequences (keypoint files)
-    # - 6 primary camera views (good viewpoint diversity: front, sides, back)
-    # - ~180 frames per video (frame_skip=3 from 60fps source)
-    # - 1400 × 6 × 180 ≈ 1.5M samples
-    total_examples = 0
-    processed = 0
-    skipped_no_camera = 0
-    max_sequences = None  # Process all available
+    # Camera views: 6 views for diverse angles
+    camera_views = ['c01', 'c02', 'c03', 'c05', 'c07', 'c09']
 
-    # Camera views: 6 views for diverse angles (0°, 60°, 120°, 180°, 240°, 300° roughly)
-    # c01-c09 are arranged in a circle around the performer
-    camera_views = ['c01', 'c02', 'c03', 'c05', 'c07', 'c09']  # Every ~60° for diversity
+    # Build task list
+    tasks = []
+    for kp_file in kp_files:
+        seq_name = kp_file.stem
 
-    for kp_file in kp_files[:max_sequences]:
-        seq_name = kp_file.stem  # e.g., gBR_sBM_cAll_d04_mBR0_ch01
-
-        # Load ground truth once (same for all camera views)
         try:
             gt_keypoints = load_keypoints3d(kp_file)
-        except Exception as e:
-            print(f"  Failed to load {kp_file.name}: {e}")
+        except Exception:
             continue
 
-        # Get camera setting
         setting = get_camera_setting(seq_name, mapping_file)
 
-        # Process each camera view
         for cam_view in camera_views:
             video_name = get_video_name(seq_name, cam_view)
             video_path = video_dict.get(video_name)
@@ -567,62 +639,52 @@ def main():
             if video_path is None:
                 continue
 
-            # Cache key includes camera view
             cache_key = f"{setting}_{cam_view}"
             if cache_key not in camera_cache:
                 try:
                     camera_cache[cache_key] = load_camera_params(cameras_dir, setting, cam_view)
-                except Exception as e:
-                    # Camera view not available for this setting
+                except Exception:
                     continue
 
-            camera_pos = camera_cache[cache_key]['position']
-
-            # Unique sequence name per camera view
+            camera_params = camera_cache[cache_key]
             seq_name_cam = f"{seq_name}_{cam_view}"
 
-            print(f"Processing: {seq_name_cam} ({len(gt_keypoints)} frames, cam={setting})")
-
-            num_examples = process_sequence(
+            tasks.append((
                 video_path,
                 gt_keypoints,
                 output_dir,
                 seq_name_cam,
-                pose,
-                camera_pos,
-                max_frames=180,   # ~180 frames per video-camera for ~1.5M total
-                frame_skip=3,     # 60fps -> 20fps effective (more temporal diversity)
-            )
+                camera_params,
+                args.max_frames,
+                args.frame_skip,
+            ))
 
-            total_examples += num_examples
-            processed += 1
-            print(f"  -> {num_examples} training pairs")
+    # Process tasks
+    total_examples = 0
+    if args.workers > 1:
+        print(f"Processing {len(tasks)} tasks with {args.workers} parallel workers...")
+        print()
+        with Pool(args.workers) as pool:
+            for count in tqdm(pool.imap_unordered(process_sequence_worker, tasks), total=len(tasks)):
+                total_examples += count
+    else:
+        # Single-threaded: verbose output like before
+        print(f"Processing {len(tasks)} sequences...")
+        print()
+        for task in tasks:
+            video_path, gt_keypoints, out_dir, seq_name_cam, cam_params, max_frames, frame_skip = task
+            n_frames = len(gt_keypoints)
+            print(f"Processing: {seq_name_cam} ({n_frames} frames)")
+            count = process_sequence_worker(task)
+            total_examples += count
+            print(f"  -> {count} training pairs")
 
+    # Final count
+    final_count = len(list(output_dir.glob("*.npz")))
     print()
     print("=" * 80)
-    print(f"Processed {processed} sequences")
-    if skipped_no_camera > 0:
-        print(f"Skipped {skipped_no_camera} sequences (no camera params)")
-    print(f"Generated {total_examples} training examples")
+    print(f"Completed: {final_count} training samples")
     print(f"Saved to: {output_dir}")
-    print()
-    print("Training data includes:")
-    print("  - corrupted: MediaPipe 3D pose (17, 3) - REAL depth errors, SCALE-NORMALIZED")
-    print("  - ground_truth: AIST++ mocap (17, 3) - clean depth, SCALE-NORMALIZED")
-    print("  - visibility: Per-joint visibility (17,) from MediaPipe")
-    print("  - pose_2d: MediaPipe 2D pose (17, 2) - KEY FOR CAMERA PREDICTION!")
-    print("  - azimuth: Horizontal view angle (0-360°) from camera position")
-    print("  - elevation: Vertical view angle (-90 to +90°) from camera position")
-    print("  - camera_relative: Camera position (3,) relative to pelvis")
-    print("  - mp_scale: Original MediaPipe torso scale (for denormalization)")
-    print("  - gt_scale: Original AIST++ torso scale (reference)")
-    print()
-    print("IMPORTANT: Both poses are normalized to unit torso scale!")
-    print("This ensures model learns DEPTH CORRECTIONS, not scale adjustments.")
-    print("At inference: normalize input, apply model, then denormalize output.")
-    print()
-    print("2D pose encodes camera viewpoint through foreshortening patterns!")
-    print("(ElePose CVPR 2022 insight - 2D appearance directly encodes viewpoint)")
     print("=" * 80)
 
 

@@ -2,7 +2,7 @@
 # Run AIST++ conversion for incomplete cameras in parallel (batches of 4)
 # Each camera runs in its own process, with automatic skip for already-processed sequences
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 echo "============================================="
 echo "AIST++ Parallel Conversion - Resumable"
@@ -24,7 +24,7 @@ BATCH=4
 echo "=== Batch 1: c01 c03 c04 c05 ==="
 for cam in c01 c03 c04 c05; do
     echo "Starting $cam (log: $LOG_DIR/${cam}.log)"
-    uv run python scripts/convert_aistpp_parallel.py $cam > "$LOG_DIR/${cam}.log" 2>&1 &
+    uv run python scripts/data/convert_aistpp_parallel.py $cam > "$LOG_DIR/${cam}.log" 2>&1 &
 done
 
 echo ""
@@ -36,7 +36,7 @@ echo ""
 echo "=== Batch 2: c06 c07 c08 c09 ==="
 for cam in c06 c07 c08 c09; do
     echo "Starting $cam (log: $LOG_DIR/${cam}.log)"
-    uv run python scripts/convert_aistpp_parallel.py $cam > "$LOG_DIR/${cam}.log" 2>&1 &
+    uv run python scripts/data/convert_aistpp_parallel.py $cam > "$LOG_DIR/${cam}.log" 2>&1 &
 done
 
 echo ""

@@ -15,4 +15,4 @@ echo "Total files: $FILES"
 echo ""
 echo "Starting training..."
 
-uv run python scripts/train_depth_model.py --epochs 50 --batch-size 64 --fp16
+uv run python scripts/train/depth_model.py --epochs 50 --batch-size 64 --fp16

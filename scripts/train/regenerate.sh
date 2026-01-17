@@ -20,7 +20,7 @@
 set -e  # Exit on error
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
 cd "$PROJECT_ROOT"
 
@@ -72,7 +72,7 @@ if [ "$JOINT_ONLY" = false ]; then
     echo "This will take several hours. Progress will be logged."
     echo ""
 
-    uv run python scripts/convert_aistpp_to_training.py 2>&1 | tee logs/depth_conversion.log
+    uv run python scripts/data/convert_aistpp.py 2>&1 | tee logs/depth_conversion.log
 
     # Count samples
     DEPTH_COUNT=$(ls data/training/aistpp_converted/*.npz 2>/dev/null | wc -l)
@@ -122,7 +122,7 @@ if [ "$DEPTH_ONLY" = false ]; then
     # We'll process ~2500 sequences to be safe and let caching handle duplicates
 
     # Process sequences - the script handles grouping and caching
-    uv run python scripts/generate_joint_angle_training.py \
+    uv run python scripts/data/generate_joint_angles.py \
         --max-sequences 2500 \
         --workers 1 \
         2>&1 | tee logs/joint_angle_conversion.log
@@ -158,6 +158,6 @@ echo ""
 echo "Training data ready at: data/training/"
 echo ""
 echo "Next steps:"
-echo "  1. Train depth model:  uv run python scripts/train_depth_model.py --epochs 100"
-echo "  2. Train joint model:  uv run python scripts/train_joint_model.py --epochs 100"
+echo "  1. Train depth model:  uv run python scripts/train/depth_model.py --epochs 100"
+echo "  2. Train joint model:  uv run python scripts/train/joint_model.py --epochs 100"
 echo ""

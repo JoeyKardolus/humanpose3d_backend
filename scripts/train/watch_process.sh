@@ -20,7 +20,7 @@ while true; do
 
         if [ $count -ge $MIN_VIDEOS ] && [ $running -eq 0 ]; then
             echo "[$(date)] Starting $cam processing ($count videos available)"
-            nohup uv run python scripts/convert_aistpp_parallel.py $cam > $LOG_DIR/aistpp_${cam}.log 2>&1 &
+            nohup uv run python scripts/data/convert_aistpp_parallel.py $cam > $LOG_DIR/aistpp_${cam}.log 2>&1 &
         fi
     done
 

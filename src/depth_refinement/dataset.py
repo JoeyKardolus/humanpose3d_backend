@@ -26,6 +26,138 @@ import re
 from collections import defaultdict
 
 
+def _project_3d_to_2d_torch(
+    points_3d: torch.Tensor,
+    R: torch.Tensor,
+    t: torch.Tensor,
+    K: torch.Tensor,
+    image_width: float = 1920.0,
+    image_height: float = 1080.0,
+) -> torch.Tensor:
+    """Project 3D world points to 2D using camera params (torch version).
+
+    Used during augmentation to re-project after Y-rotation, ensuring
+    projected_2d stays geometrically consistent with rotated 3D pose.
+
+    Args:
+        points_3d: (N, 3) world coordinates in meters
+        R: (3, 3) rotation matrix (world to camera)
+        t: (3,) translation vector in meters
+        K: (3, 3) intrinsic camera matrix
+        image_width: Image width for normalization (AIST++ uses 1920)
+        image_height: Image height for normalization (AIST++ uses 1080)
+
+    Returns:
+        (N, 2) normalized pixel coordinates in [0, 1] range
+    """
+    # Transform to camera frame: X_cam = R @ X_world + t
+    points_cam = torch.matmul(points_3d, R.T) + t  # (N, 3)
+
+    # Perspective projection: x = K @ X_cam
+    points_2d_hom = torch.matmul(points_cam, K.T)  # (N, 3)
+
+    # Perspective divide (normalize by depth)
+    points_2d = points_2d_hom[:, :2] / points_2d_hom[:, 2:3]  # (N, 2)
+
+    # Normalize to [0, 1] range
+    points_2d = points_2d.clone()
+    points_2d[:, 0] = points_2d[:, 0] / image_width
+    points_2d[:, 1] = points_2d[:, 1] / image_height
+
+    return points_2d
+
+
+# Limb definitions for Part Orientation Fields (POF-inspired)
+# Each limb is (parent_joint, child_joint) using COCO-17 indices
+LIMBS = [
+    (5, 7),    # 0: L shoulder → elbow
+    (7, 9),    # 1: L elbow → wrist
+    (6, 8),    # 2: R shoulder → elbow
+    (8, 10),   # 3: R elbow → wrist
+    (11, 13),  # 4: L hip → knee
+    (13, 15),  # 5: L knee → ankle
+    (12, 14),  # 6: R hip → knee
+    (14, 16),  # 7: R knee → ankle
+    (5, 6),    # 8: Shoulder width
+    (11, 12),  # 9: Hip width
+    (5, 11),   # 10: L torso
+    (6, 12),   # 11: R torso
+    # Cross-body diagonals (help with reaching poses and torso twist)
+    (5, 12),   # 12: L shoulder → R hip
+    (6, 11),   # 13: R shoulder → L hip
+]
+
+# Mapping for left/right swap when doing X flip augmentation
+# Index in LIMBS list: (left_limb_idx, right_limb_idx)
+LIMB_SWAP_PAIRS = [
+    (0, 2),   # L upper arm ↔ R upper arm
+    (1, 3),   # L forearm ↔ R forearm
+    (4, 6),   # L thigh ↔ R thigh
+    (5, 7),   # L shin ↔ R shin
+    (10, 11), # L torso ↔ R torso
+    (12, 13), # L_shoulder→R_hip ↔ R_shoulder→L_hip (cross-body)
+]
+
+
+def compute_limb_orientations(pose_3d: np.ndarray) -> np.ndarray:
+    """Compute 3D unit vectors for each limb from a pose.
+
+    This is our version of Part Orientation Fields (POFs) from
+    MonocularTotalCapture (CVPR 2019).
+
+    Args:
+        pose_3d: (17, 3) or (N, 17, 3) joint positions
+
+    Returns:
+        (14, 3) or (N, 14, 3) unit vectors for each limb
+    """
+    single_pose = pose_3d.ndim == 2
+    if single_pose:
+        pose_3d = pose_3d[np.newaxis, ...]  # (1, 17, 3)
+
+    orientations = []
+    for parent, child in LIMBS:
+        vec = pose_3d[:, child] - pose_3d[:, parent]  # (N, 3)
+        length = np.linalg.norm(vec, axis=-1, keepdims=True)  # (N, 1)
+        unit_vec = vec / (length + 1e-8)  # (N, 3)
+        orientations.append(unit_vec)
+
+    orientations = np.stack(orientations, axis=1)  # (N, 14, 3)
+
+    if single_pose:
+        orientations = orientations[0]  # (14, 3)
+
+    return orientations
+
+
+def compute_limb_orientations_torch(pose_3d: torch.Tensor) -> torch.Tensor:
+    """Compute 3D unit vectors for each limb (PyTorch version).
+
+    Args:
+        pose_3d: (17, 3) or (batch, 17, 3) joint positions
+
+    Returns:
+        (14, 3) or (batch, 14, 3) unit vectors for each limb
+    """
+    single_pose = pose_3d.dim() == 2
+    if single_pose:
+        pose_3d = pose_3d.unsqueeze(0)  # (1, 17, 3)
+
+    orientations = []
+    for parent, child in LIMBS:
+        vec = pose_3d[:, child] - pose_3d[:, parent]  # (batch, 3)
+        length = torch.norm(vec, dim=-1, keepdim=True)  # (batch, 1)
+        unit_vec = vec / (length + 1e-8)  # (batch, 3)
+        orientations.append(unit_vec)
+
+    orientations = torch.stack(orientations, dim=1)  # (batch, 14, 3)
+
+    if single_pose:
+        orientations = orientations[0]  # (14, 3)
+
+    return orientations
+
+
 class AISTPPDepthDataset(Dataset):
     """Dataset for AIST++ depth refinement training pairs."""
 
@@ -110,7 +242,8 @@ class AISTPPDepthDataset(Dataset):
                 'corrupted': (17, 3) tensor
                 'ground_truth': (17, 3) tensor
                 'visibility': (17,) tensor
-                'pose_2d': (17, 2) tensor - 2D pose (normalized image coords)
+                'pose_2d': (17, 2) tensor - MediaPipe 2D pose (for camera prediction)
+                'projected_2d': (17, 2) tensor - GT 3D projected to 2D (for POF foreshortening)
                 'camera_pos': (3,) tensor - camera position relative to pelvis
                 'azimuth': scalar tensor (0-360 degrees)
                 'elevation': scalar tensor (-90 to +90 degrees)
@@ -132,6 +265,14 @@ class AISTPPDepthDataset(Dataset):
             # Normalize to [0, 1] range (rough approximation)
             pose_2d = (pose_2d + 1) / 2
 
+        # Load projected 2D (GT 3D projected to 2D - geometrically consistent for POF)
+        # This is critical for limb orientation prediction: 2D foreshortening directly encodes 3D orientation
+        if 'projected_2d' in data:
+            projected_2d = torch.from_numpy(data['projected_2d'].astype(np.float32))
+        else:
+            # Backward compatibility: fall back to pose_2d (will be less accurate for POF)
+            projected_2d = pose_2d.clone()
+
         # Load camera position (new format) or create dummy
         if 'camera_relative' in data:
             camera_pos = torch.from_numpy(data['camera_relative'].astype(np.float32))
@@ -151,20 +292,36 @@ class AISTPPDepthDataset(Dataset):
             azimuth = torch.tensor(view_angle, dtype=torch.float32)
             elevation = torch.tensor(0.0, dtype=torch.float32)
 
+        # Compute ground truth limb orientations (for POF-inspired training)
+        # These are unit vectors in 3D space for each limb
+        gt_limb_orientations = compute_limb_orientations_torch(ground_truth)
+
+        # Load camera params for augmentation re-projection
+        # These allow proper re-projection of projected_2d after Y-rotation
+        camera_R = torch.from_numpy(data['camera_R'].astype(np.float32)) if 'camera_R' in data else None
+        camera_t = torch.from_numpy(data['camera_t'].astype(np.float32)) if 'camera_t' in data else None
+        camera_K = torch.from_numpy(data['camera_K'].astype(np.float32)) if 'camera_K' in data else None
+        pelvis_world = torch.from_numpy(data['pelvis_world'].astype(np.float32)) if 'pelvis_world' in data else None
+        gt_scale = torch.tensor(float(data['gt_scale']), dtype=torch.float32) if 'gt_scale' in data else torch.tensor(1.0)
+
         # Optional augmentation
         if self.augment:
-            corrupted, ground_truth, azimuth, camera_pos, pose_2d = self._augment(
-                corrupted, ground_truth, azimuth, camera_pos, pose_2d
+            corrupted, ground_truth, azimuth, camera_pos, pose_2d, projected_2d, gt_limb_orientations = self._augment(
+                corrupted, ground_truth, azimuth, camera_pos, pose_2d, projected_2d, gt_limb_orientations,
+                camera_R=camera_R, camera_t=camera_t, camera_K=camera_K,
+                pelvis_world=pelvis_world, gt_scale=gt_scale
             )
 
         return {
             'corrupted': corrupted,
             'ground_truth': ground_truth,
             'visibility': visibility,
-            'pose_2d': pose_2d,
+            'pose_2d': pose_2d,              # MediaPipe 2D (for camera prediction)
+            'projected_2d': projected_2d,    # GT projected 2D (for POF foreshortening)
             'camera_pos': camera_pos,
             'azimuth': azimuth,
             'elevation': elevation,
+            'gt_limb_orientations': gt_limb_orientations,  # (14, 3) unit vectors
         }
 
     def _augment(
@@ -174,13 +331,24 @@ class AISTPPDepthDataset(Dataset):
         azimuth: torch.Tensor,
         camera_pos: torch.Tensor,
         pose_2d: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        projected_2d: torch.Tensor,
+        gt_limb_orientations: torch.Tensor,
+        # Camera params for re-projection (optional, for backward compatibility)
+        camera_R: Optional[torch.Tensor] = None,
+        camera_t: Optional[torch.Tensor] = None,
+        camera_K: Optional[torch.Tensor] = None,
+        pelvis_world: Optional[torch.Tensor] = None,
+        gt_scale: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Apply data augmentation.
 
         Augmentations that preserve depth error patterns:
-        - Random rotation around Y axis (vertical) - adjusts azimuth, camera_pos, and 2D pose
-        - Random X flip (mirror left/right) - mirrors azimuth, camera_pos, and 2D pose
+        - Random rotation around Y axis (vertical) - adjusts azimuth, camera_pos, limb orientations, and 2D poses
+        - Random X flip (mirror left/right) - mirrors azimuth, camera_pos, limb orientations, and 2D poses
         - Small random scale
+
+        Note: projected_2d must be augmented consistently with ground_truth since it's the
+        camera projection of GT 3D. With camera params, we properly re-project after Y-rotation.
         """
         # Random Y rotation (rotates the pose, adjusts azimuth and camera position)
         if random.random() > 0.5:
@@ -195,6 +363,9 @@ class AISTPPDepthDataset(Dataset):
             corrupted = torch.matmul(corrupted, rot)
             ground_truth = torch.matmul(ground_truth, rot)
 
+            # Rotate limb orientations (they're unit vectors, rotation preserves norm)
+            gt_limb_orientations = torch.matmul(gt_limb_orientations, rot)
+
             # Rotate camera position (inverse rotation - if we rotate pose CW, camera appears CCW)
             rot_inv = rot.T
             camera_pos = torch.matmul(camera_pos, rot_inv)
@@ -203,20 +374,34 @@ class AISTPPDepthDataset(Dataset):
             angle_deg = np.degrees(angle)
             azimuth = (azimuth - angle_deg) % 360.0
 
-            # 2D pose: small rotations in world don't significantly change 2D appearance
-            # (it's a projection), but we could apply a slight rotation in image space
-            # For simplicity, we keep 2D unchanged for Y rotation (rotation around vertical)
+            # RE-PROJECT projected_2d from rotated world pose (geometrically correct)
+            if camera_R is not None and camera_t is not None and camera_K is not None and pelvis_world is not None:
+                # Reconstruct world pose: gt_world = gt_normalized * scale + pelvis
+                gt_world = ground_truth * gt_scale + pelvis_world
+
+                # Rotate around pelvis (local vertical axis)
+                # The normalized pose is already centered, so rotating around origin is correct
+                # But we need to rotate in world space, so rotate around the pelvis
+                gt_world_rot = torch.matmul(gt_world - pelvis_world, rot) + pelvis_world
+
+                # Re-project to 2D using camera params
+                projected_2d = _project_3d_to_2d_torch(gt_world_rot, camera_R, camera_t, camera_K)
+            # If camera params not available, keep projected_2d unchanged (approximation)
 
         # Random X flip (left/right swap) - mirrors the view
         if random.random() > 0.5:
             corrupted[:, 0] = -corrupted[:, 0]
             ground_truth[:, 0] = -ground_truth[:, 0]
 
+            # Mirror limb orientations X coordinate
+            gt_limb_orientations[:, 0] = -gt_limb_orientations[:, 0]
+
             # Mirror camera position X coordinate
             camera_pos[0] = -camera_pos[0]
 
-            # Mirror 2D pose X coordinate (flip horizontally in image)
+            # Mirror 2D poses X coordinate (flip horizontally in image)
             pose_2d[:, 0] = 1.0 - pose_2d[:, 0]  # Assuming normalized [0, 1] coordinates
+            projected_2d[:, 0] = 1.0 - projected_2d[:, 0]  # Same for projected_2d
 
             # Swap left/right joints in 3D
             # COCO order: 0=nose, 1=Leye, 2=Reye, 3=Lear, 4=Rear, 5=Lshoulder, 6=Rshoulder,
@@ -227,22 +412,30 @@ class AISTPPDepthDataset(Dataset):
                 corrupted[[i, j]] = corrupted[[j, i]]
                 ground_truth[[i, j]] = ground_truth[[j, i]]
                 pose_2d[[i, j]] = pose_2d[[j, i]]  # Swap 2D joints too!
+                projected_2d[[i, j]] = projected_2d[[j, i]]  # Swap projected_2d joints too!
+
+            # Swap left/right limb orientations
+            # LIMB_SWAP_PAIRS maps left limb index to right limb index
+            for left_idx, right_idx in LIMB_SWAP_PAIRS:
+                gt_limb_orientations[[left_idx, right_idx]] = gt_limb_orientations[[right_idx, left_idx]]
 
             # Mirror azimuth: 90° (right) becomes 270° (left), etc.
             # Formula: new_az = (360 - az) % 360
             azimuth = (360.0 - azimuth) % 360.0
 
         # Small random scale (only affects pose, not camera position direction)
+        # Note: limb orientations are unit vectors, so scale doesn't affect them
         if random.random() > 0.5:
             scale = random.uniform(0.9, 1.1)
             corrupted = corrupted * scale
             ground_truth = ground_truth * scale
             # Camera position distance scales too
             camera_pos = camera_pos * scale
-            # 2D pose: scale around center (0.5, 0.5)
+            # 2D poses: scale around center (0.5, 0.5)
             pose_2d = 0.5 + (pose_2d - 0.5) * scale
+            projected_2d = 0.5 + (projected_2d - 0.5) * scale
 
-        return corrupted, ground_truth, azimuth, camera_pos, pose_2d
+        return corrupted, ground_truth, azimuth, camera_pos, pose_2d, projected_2d, gt_limb_orientations
 
 
 class TemporalWindowDataset(Dataset):
@@ -351,7 +544,8 @@ class TemporalWindowDataset(Dataset):
                 'corrupted': (W, 17, 3)
                 'ground_truth': (W, 17, 3)
                 'visibility': (W, 17)
-                'pose_2d': (W, 17, 2)
+                'pose_2d': (W, 17, 2) - MediaPipe 2D (for camera prediction)
+                'projected_2d': (W, 17, 2) - GT projected 2D (for POF foreshortening)
                 'azimuth': (W,)
                 'elevation': (W,)
         """
@@ -363,6 +557,7 @@ class TemporalWindowDataset(Dataset):
         ground_truth_list = []
         visibility_list = []
         pose_2d_list = []
+        projected_2d_list = []
         azimuth_list = []
         elevation_list = []
 
@@ -381,6 +576,13 @@ class TemporalWindowDataset(Dataset):
                 pose_2d = (pose_2d + 1) / 2
                 pose_2d_list.append(pose_2d)
 
+            # Load projected 2D (GT projected to 2D for POF)
+            if 'projected_2d' in data:
+                projected_2d_list.append(data['projected_2d'].astype(np.float32))
+            else:
+                # Backward compatibility: fall back to pose_2d
+                projected_2d_list.append(pose_2d_list[-1].copy())
+
             if 'azimuth' in data:
                 azimuth_list.append(float(data['azimuth']))
                 elevation_list.append(float(data['elevation']))
@@ -388,11 +590,15 @@ class TemporalWindowDataset(Dataset):
                 azimuth_list.append(float(data['view_angle']))
                 elevation_list.append(0.0)
 
+        # Note: Camera params not used for temporal windows (no per-frame augmentation)
+        # Temporal training focuses on bone variance across frames, not 2D re-projection
+
         return {
             'corrupted': torch.from_numpy(np.stack(corrupted_list)),
             'ground_truth': torch.from_numpy(np.stack(ground_truth_list)),
             'visibility': torch.from_numpy(np.stack(visibility_list)),
             'pose_2d': torch.from_numpy(np.stack(pose_2d_list)),
+            'projected_2d': torch.from_numpy(np.stack(projected_2d_list)),
             'azimuth': torch.tensor(azimuth_list, dtype=torch.float32),
             'elevation': torch.tensor(elevation_list, dtype=torch.float32),
         }
@@ -549,6 +755,12 @@ if __name__ == '__main__':
     print(f"Azimuth (0-360°): {batch['azimuth']}")
     print(f"Elevation (-90 to +90°): {batch['elevation']}")
     print(f"Visibility range: {batch['visibility'].min():.2f} - {batch['visibility'].max():.2f}")
+
+    print(f"\nGT Limb Orientations (POF-inspired):")
+    print(f"  Shape: {batch['gt_limb_orientations'].shape}")
+    # Check that they're unit vectors
+    norms = torch.norm(batch['gt_limb_orientations'], dim=-1)
+    print(f"  Norms (should be ~1.0): min={norms.min():.4f}, max={norms.max():.4f}")
 
     # Check depth errors
     depth_errors = batch['corrupted'][:, :, 2] - batch['ground_truth'][:, :, 2]
