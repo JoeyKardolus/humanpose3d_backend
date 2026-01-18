@@ -117,16 +117,49 @@ class AISTPPJointDataset(Dataset):
                 'joint_visibility': (12,) tensor - visibility per joint
                 'visibility': (17,) tensor - raw COCO visibility
         """
-        data = np.load(self.files[idx])
+        # Try multiple samples to skip gimbal lock cases
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            actual_idx = (idx + attempt) % len(self.files)
+            data = np.load(self.files[actual_idx])
 
+            corrupted_angles_np = data['corrupted_angles'].astype(np.float32)
+            ground_truth_angles_np = data['ground_truth_angles'].astype(np.float32)
+
+            # Skip gimbal lock cases (angles near ±180° from Euler decomposition)
+            if np.any(np.abs(ground_truth_angles_np) > 170):
+                continue
+            if np.any(np.abs(corrupted_angles_np) > 170):
+                continue
+
+            # Valid sample - proceed with loading
+            corrupted_angles = torch.from_numpy(corrupted_angles_np)
+            ground_truth_angles = torch.from_numpy(ground_truth_angles_np)
+            visibility = torch.from_numpy(data['visibility'].astype(np.float32))
+
+            # Compute per-joint visibility from COCO visibility
+            joint_visibility = self._compute_joint_visibility(visibility)
+
+            # Optional augmentation
+            if self.augment:
+                corrupted_angles, ground_truth_angles = self._augment(
+                    corrupted_angles, ground_truth_angles
+                )
+
+            return {
+                'corrupted_angles': corrupted_angles,
+                'ground_truth_angles': ground_truth_angles,
+                'joint_visibility': joint_visibility,
+                'visibility': visibility,
+            }
+
+        # Fallback: return original sample if no valid sample found after max_attempts
+        data = np.load(self.files[idx])
         corrupted_angles = torch.from_numpy(data['corrupted_angles'].astype(np.float32))
         ground_truth_angles = torch.from_numpy(data['ground_truth_angles'].astype(np.float32))
         visibility = torch.from_numpy(data['visibility'].astype(np.float32))
-
-        # Compute per-joint visibility from COCO visibility
         joint_visibility = self._compute_joint_visibility(visibility)
 
-        # Optional augmentation
         if self.augment:
             corrupted_angles, ground_truth_angles = self._augment(
                 corrupted_angles, ground_truth_angles

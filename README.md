@@ -2,12 +2,40 @@
 
 3D human pose estimation pipeline using MediaPipe for detection and Pose2Sim for marker augmentation, with advanced biomechanical constraint optimization.
 
+## Prerequisites
+
+### 1. Install uv (Python package manager)
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.local/bin/env  # Add to PATH (or restart shell)
+```
+
+### 2. Clone and setup
+
+```bash
+git clone <repo-url>
+cd humanpose3d_backend
+uv sync  # Creates .venv and installs all dependencies
+```
+
+### 3. Environment setup (headless/WSL)
+
+For headless environments (servers, WSL, Docker), set the matplotlib backend:
+
+```bash
+export MPLBACKEND=Agg  # Add to .bashrc for persistence
+```
+
+Or use the included `.envrc` with [direnv](https://direnv.net/):
+
+```bash
+direnv allow  # Automatically sets MPLBACKEND=Agg
+```
+
 ## Quick Start
 
 ```bash
-# Install dependencies
-uv sync
-
 # Run with multi-constraint optimization + joint angles (RECOMMENDED)
 uv run python main.py \
   --video data/input/joey.mp4 \
@@ -150,49 +178,58 @@ uv run --group neural python scripts/apply_depth_refinement.py \
 
 ## Requirements
 
+### System Requirements
+
+- **Python**: 3.12+ (tested with 3.12.3)
+- **OS**: Linux, macOS, Windows (WSL2 recommended for Windows)
+- **RAM**: 8GB minimum, 16GB recommended
+- **Disk**: ~5GB for dependencies
+
+### Optional System Dependencies
+
+```bash
+# For GUI matplotlib (interactive plots) - not needed for headless/WSL
+sudo apt install python3-tk
+
+# For GPU acceleration (see GPU section below)
+sudo apt install cuda-toolkit-12-6 libcudnn9-cuda-12
+```
+
 ### Core Dependencies
 
-Install core pipeline dependencies:
+Managed via `pyproject.toml` and installed with `uv sync`:
 
-```bash
-# Using uv (recommended)
-uv sync
+| Package | Version | Purpose |
+|---------|---------|---------|
+| mediapipe | ≥0.10.21 | Pose detection (33 landmarks) |
+| pose2sim | ≥0.10.0 | Marker augmentation (LSTM) |
+| opencv-python | ≥4.11.0 | Video I/O |
+| numpy | ≥1.24.0 | Array operations |
+| pandas | ≥2.0.0 | Data manipulation |
+| matplotlib | ≥3.7.0 | Visualization |
+| tensorflow | ≥2.13.0 | LSTM backend |
+| onnxruntime-gpu | ≥1.23.0 | GPU-accelerated inference |
+| torch | ≥2.9.1 | Neural models |
+| django | ≥6.0.1 | Web API (optional) |
 
-# Or using pip
-pip install -r requirements.txt
-```
+### Neural Refinement Dependencies (Optional)
 
-**Includes:**
-- Python 3.12+
-- MediaPipe (pose detection)
-- Pose2Sim (marker augmentation)
-- NumPy, Pandas, Matplotlib (data processing and visualization)
-- OpenCV (video I/O)
-- TensorFlow + ONNX Runtime (LSTM inference with GPU support)
+Install with `uv sync --group neural` for training neural depth/joint models:
 
-### Neural Depth Refinement Dependencies (Optional)
-
-For training the PoseFormer depth refinement model:
-
-```bash
-# Using uv (recommended)
-uv sync --group neural
-
-# Or using pip
-pip install -r requirements.txt -r requirements-neural.txt
-```
-
-**Adds:**
-- PyTorch 2.9+ with CUDA support
-- TorchVision (vision utilities)
-- Einops (tensor operations)
-- TensorBoard (training monitoring)
-- tqdm (progress bars)
+| Package | Version | Purpose |
+|---------|---------|---------|
+| torch | ≥2.9.1 | Neural network training |
+| torchvision | ≥0.24.1 | Vision utilities |
+| einops | ≥0.8.1 | Tensor operations |
+| ezc3d | ≥1.5.0 | C3D file support |
+| tensorboard | ≥2.18.0 | Training visualization |
+| tqdm | ≥4.66.0 | Progress bars |
 
 ### GPU Acceleration (Optional)
 
-For **3-10x speedup** on LSTM augmentation:
+For **3-10x speedup** on LSTM augmentation. **Not required** - pipeline automatically falls back to CPU.
 
+**Requirements:**
 - NVIDIA GPU with CUDA support
 - CUDA Toolkit 12.x
 - cuDNN 9 for CUDA 12
@@ -208,7 +245,6 @@ sudo apt update
 sudo apt install -y cuda-toolkit-12-6 libcudnn9-cuda-12
 
 # Reinstall onnxruntime-gpu to detect CUDA
-uv pip uninstall onnxruntime-gpu
 uv pip install onnxruntime-gpu --force-reinstall
 ```
 
@@ -218,7 +254,15 @@ uv run python -c "import onnxruntime as ort; print(ort.get_available_providers()
 # Should see: ['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider']
 ```
 
-**Note:** Pipeline automatically falls back to CPU if GPU is unavailable. No code changes needed.
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `uv: command not found` | Run `curl -LsSf https://astral.sh/uv/install.sh \| sh` then restart shell |
+| `ModuleNotFoundError: tkinter` | Set `export MPLBACKEND=Agg` or install `python3-tk` |
+| TensorFlow CUDA warnings | Safe to ignore - TF/ONNX conflict, doesn't affect functionality |
+| `CUDA not available` | Install CUDA toolkit or use CPU (automatic fallback) |
+| Permission denied on video | Check file path and permissions |
 
 ## Citation
 

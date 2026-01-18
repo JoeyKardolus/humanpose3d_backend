@@ -1,6 +1,6 @@
 # HumanPose3D Core Dependencies
 # Install with: pip install -r requirements.txt
-# Or use uv (recommended): uv sync
+# Recommended: use uv instead (uv sync)
 
 # Pose Detection
 mediapipe>=0.10.21
@@ -19,6 +19,10 @@ pose2sim>=0.10.0
 # Deep Learning (LSTM augmentation with GPU support)
 tensorflow>=2.13.0
 onnxruntime-gpu>=1.23.0
+torch>=2.9.1
+
+# Web API (optional)
+django>=6.0.1
 
 # Development Tools
 jupyter>=1.1.1

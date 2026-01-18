@@ -87,14 +87,58 @@ Automatic CPU fallback if GPU unavailable.
 | Scattered markers | Use `--multi-constraint-optimization` |
 | Markers disappear mid-video | Use `--visibility-min 0.1` (MediaPipe confidence drops below default 0.3 threshold) |
 
+## Setup
+
+### Prerequisites
+
+```bash
+# Install uv package manager
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.local/bin/env  # or restart shell
+
+# Clone and install
+git clone <repo-url>
+cd humanpose3d_backend
+uv sync
+```
+
+### Environment (headless/WSL)
+
+```bash
+# Required for headless environments (no GUI)
+export MPLBACKEND=Agg
+
+# Or use direnv with included .envrc
+direnv allow
+```
+
+### Verify Installation
+
+```bash
+# Check imports work
+uv run python -c "import mediapipe; from Pose2Sim import Pose2Sim; print('OK')"
+
+# Check GPU (optional)
+uv run python -c "import onnxruntime as ort; print(ort.get_available_providers())"
+```
+
 ## Development
 
 ```bash
 uv sync                           # Install dependencies
+uv sync --group neural            # Install neural training deps
 uv run pytest                     # Run tests
 uv run python -m black src tests  # Format code
 uv run python visualize_interactive.py [file.trc]  # 3D viewer
 ```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `ModuleNotFoundError: tkinter` | `export MPLBACKEND=Agg` (headless) or `apt install python3-tk` (GUI) |
+| TensorFlow CUDA warnings | Ignore - TF/ONNX runtime conflict, doesn't affect results |
+| `Pose2Sim` import fails | Use `from Pose2Sim import Pose2Sim` (capitalized) |
 
 ## Neural Refinement
 
@@ -257,9 +301,13 @@ Learns soft joint constraints from AIST++ motion capture data. Transformer-based
 **Training**: 660K samples from AIST++ (6 camera views), 100 epochs
 **Performance**: Mean correction 3.47°, handles errors up to 73°
 
+**Data Quality**:
+- **Gimbal lock filter**: Dataset skips samples with angles >170° (Euler singularities at ±180°)
+- **Body-local foot estimation**: Foot markers use hip→shoulder "up" vector (not world Y), handles variable pose orientations after body frame alignment
+
 ```bash
 # Generate training data (processes all AIST++ sequences)
-uv run python scripts/data/generate_joint_angles.py --max-sequences 10000 --workers 4
+uv run python scripts/data/generate_joint_angles.py --max-sequences 10000 --workers 12
 
 # Train model (recommended settings)
 uv run --group neural python scripts/train/joint_model.py \

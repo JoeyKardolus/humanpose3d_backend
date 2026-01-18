@@ -26,7 +26,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 # Add project root to path
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.datastream.data_stream import LandmarkRecord, ORDER_22, write_landmark_csv
@@ -102,11 +102,15 @@ def estimate_feet_from_pose(pose: np.ndarray) -> dict:
     # Right direction (left to right hip)
     right_vec = normalize(pose[R_HIP] - pose[L_HIP])
 
-    # Up direction
-    up_vec = np.array([0.0, 1.0, 0.0])
+    # Up direction FROM BODY (hip center to shoulder center)
+    # This handles poses with variable orientation after body frame alignment
+    hip_center = (pose[L_HIP] + pose[R_HIP]) / 2
+    shoulder_center = (pose[L_SHOULDER] + pose[R_SHOULDER]) / 2
+    up_vec = normalize(shoulder_center - hip_center)
 
     # Forward direction (perpendicular to right and up)
     forward_vec = normalize(np.cross(up_vec, right_vec))
+    # Re-orthogonalize right to ensure orthonormal frame
     right_vec = normalize(np.cross(forward_vec, up_vec))
 
     # === SCALE-AWARE FOOT GEOMETRY ===
