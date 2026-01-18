@@ -41,7 +41,7 @@ class PipelineCommandBuilder:
         _add_flag("--age", form_data.get("age"), default="30")
         if sex_raw in {"male", "female"}:
             _add_flag("--sex", sex_raw)
-        _add_flag("--visibility-min", form_data.get("visibility_min"), default="0.3")
+        _add_flag("--visibility-min", form_data.get("visibility_min"), default="0.1")
         _add_flag(
             "--augmentation-cycles", form_data.get("augmentation_cycles"), default="20"
         )

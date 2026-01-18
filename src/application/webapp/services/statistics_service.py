@@ -24,6 +24,7 @@ class StatisticsService:
         joint_options: list[dict[str, str]] = []
 
         angle_files = sorted(run_dir.rglob("*_angles_*.csv"))
+        source_csv: str | None = None
         joint_files: dict[str, Path] = {}
         for csv_path in angle_files:
             stem = csv_path.stem
@@ -33,6 +34,8 @@ class StatisticsService:
             if joint_name in {"R", "L"}:
                 continue
             joint_files[joint_name] = csv_path
+            if source_csv is None:
+                source_csv = csv_path.name
 
         for joint_name, csv_path in joint_files.items():
             with csv_path.open("r", newline="", encoding="utf-8") as handle:
@@ -97,6 +100,8 @@ class StatisticsService:
         if landmark_csv is None:
             landmark_csv = next(run_dir.rglob("*.csv"), None)
         if landmark_csv and landmark_csv.exists():
+            if source_csv is None:
+                source_csv = landmark_csv.name
             landmark_series: dict[str, dict[str, list[float]]] = {}
             with landmark_csv.open("r", newline="", encoding="utf-8") as handle:
                 reader = csv.DictReader(handle)
@@ -135,6 +140,7 @@ class StatisticsService:
                 "run_key": run_key,
                 "markers": [],
                 "series": {},
+                "source_csv": source_csv or "",
                 "error": "No joint angles or landmark CSVs found for this run.",
             }
 
@@ -185,6 +191,7 @@ class StatisticsService:
             "run_key": run_key,
             "markers": markers,
             "series": series,
+            "source_csv": source_csv or "",
             "video_path": video_path,
             "video_type": video_type,
             "video_route": video_route,
