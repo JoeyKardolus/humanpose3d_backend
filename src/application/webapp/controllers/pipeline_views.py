@@ -21,6 +21,7 @@ from src.application.webapp.dto.pipeline_request import PipelineRequestData
 from src.application.webapp.repositories.run_status_repository import RunStatusRepository
 from src.application.webapp.services.media_service import MediaService
 from src.application.webapp.services.output_directory_service import OutputDirectoryService
+from src.application.webapp.services.output_history_service import OutputHistoryService
 from src.application.webapp.services.pipeline_command_builder import PipelineCommandBuilder
 from src.application.webapp.services.pipeline_log_service import PipelineLogService
 from src.application.webapp.services.pipeline_progress_tracker import PipelineProgressTracker
@@ -56,6 +57,7 @@ _OUTPUT_DIRS = OutputDirectoryService(_APP_PATHS.output_root, _APP_PATHS.repo_ro
 _RUN_ID_FACTORY = RunIdFactory()
 _RUN_KEY_SERVICE = RunKeyService(_PATH_VALIDATOR)
 _RUN_VALIDATOR = RunRequestValidator(_PATH_VALIDATOR)
+_OUTPUT_HISTORY = OutputHistoryService(_APP_PATHS.output_root)
 
 _PREPARE_PIPELINE = PreparePipelineRunUseCase(
     validator=_RUN_VALIDATOR,
@@ -93,7 +95,7 @@ class HomeView(View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the home page."""
-        return render(request, "home.html")
+        return render(request, "home.html", self._build_context())
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Run the pipeline synchronously and redirect to results."""
@@ -104,13 +106,13 @@ class HomeView(View):
             return render(
                 request,
                 "home.html",
-                {"errors": preparation.errors},
+                self._build_context(errors=preparation.errors),
             )
         if preparation.prepared is None:
             return render(
                 request,
                 "home.html",
-                {"errors": ["Unable to prepare pipeline run."]},
+                self._build_context(errors=["Unable to prepare pipeline run."]),
             )
 
         spec = preparation.prepared
@@ -120,7 +122,7 @@ class HomeView(View):
             return render(
                 request,
                 "home.html",
-                {"errors": [f"Failed to start pipeline: {exc}"]},
+                self._build_context(errors=[f"Failed to start pipeline: {exc}"]),
             )
 
         if result.return_code != 0:
@@ -130,8 +132,8 @@ class HomeView(View):
             return render(
                 request,
                 "home.html",
-                {
-                    "errors": [
+                self._build_context(
+                    errors=[
                         "Pipeline failed to run. Check the server logs for details.",
                         f"Exit code: {result.return_code}",
                         f"Log file: {log_path.relative_to(_APP_PATHS.repo_root)}",
@@ -139,13 +141,19 @@ class HomeView(View):
                         if tail_text
                         else "No output captured.",
                     ]
-                },
+                ),
             )
 
         if request.POST.get("fix_header") is not None:
             _RUN_PIPELINE_SYNC.apply_header_fix(spec)
 
         return redirect("results", run_key=spec.run_key)
+
+    def _build_context(self, **kwargs: object) -> dict[str, object]:
+        """Build template context shared by home page renders."""
+        context: dict[str, object] = {"previous_runs": _OUTPUT_HISTORY.list_runs()}
+        context.update(kwargs)
+        return context
 
 
 class RunPipelineView(View):

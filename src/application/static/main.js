@@ -9,6 +9,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const processingOverlay = document.getElementById("processingOverlay");
     const progressBar = document.getElementById("processingProgress");
     const progressStage = document.getElementById("progressStage");
+    const previousRunSelect = document.getElementById("previousRunSelect");
+    const openPreviousRun = document.getElementById("openPreviousRun");
+    const previousRunTimestamp = document.getElementById("previousRunTimestamp");
+    const videoUpload = document.getElementById("videoUpload");
     const ajaxErrors = document.getElementById("ajaxErrors");
     const ajaxErrorsList = document.getElementById("ajaxErrorsList");
     const instructionsKey = "instructionsAccepted";
@@ -143,6 +147,10 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (analyzeForm) {
+        if (videoUpload) {
+            videoUpload.value = "";
+        }
+
         analyzeForm.addEventListener("submit", async (event) => {
             const runUrl = analyzeForm.dataset.runUrl;
             if (!runUrl) {
@@ -178,5 +186,49 @@ document.addEventListener("DOMContentLoaded", () => {
                 handleAjaxFailure(["Unable to start pipeline. Please try again."]);
             }
         });
+    }
+
+    window.addEventListener("pageshow", () => {
+        if (videoUpload) {
+            videoUpload.value = "";
+        }
+    });
+
+    if (previousRunSelect && openPreviousRun) {
+        const updatePreviousRunButton = () => {
+            openPreviousRun.disabled = !previousRunSelect.value;
+        };
+
+        updatePreviousRunButton();
+        previousRunSelect.addEventListener("change", updatePreviousRunButton);
+        openPreviousRun.addEventListener("click", () => {
+            const runKey = previousRunSelect.value;
+            const template = previousRunSelect.dataset.resultsTemplate;
+            if (!runKey || !template) {
+                return;
+            }
+            const target = template.replace("__RUN_KEY__", encodeURIComponent(runKey));
+            window.location.href = target;
+        });
+    }
+
+    if (previousRunSelect && previousRunTimestamp) {
+        const updateTimestamp = () => {
+            const selectedOption = previousRunSelect.selectedOptions[0];
+            const modifiedRaw = selectedOption?.dataset.modified;
+            if (!modifiedRaw) {
+                previousRunTimestamp.textContent = "Last updated: --";
+                return;
+            }
+            const modifiedDate = new Date(Number(modifiedRaw) * 1000);
+            if (Number.isNaN(modifiedDate.getTime())) {
+                previousRunTimestamp.textContent = "Last updated: --";
+                return;
+            }
+            previousRunTimestamp.textContent = `Last updated: ${modifiedDate.toLocaleString()}`;
+        };
+
+        updateTimestamp();
+        previousRunSelect.addEventListener("change", updateTimestamp);
     }
 });
