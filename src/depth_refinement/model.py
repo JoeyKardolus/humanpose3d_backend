@@ -684,7 +684,8 @@ class LimbOrientationPredictor(nn.Module):
             parent_3d = pose_3d[:, self.parent_indices, :]  # (batch, 14, 3)
             child_3d = pose_3d[:, self.child_indices, :]    # (batch, 14, 3)
             current_limb_vec = child_3d - parent_3d  # (batch, 14, 3)
-            current_orientations = F.normalize(current_limb_vec, dim=-1, eps=1e-6)  # (batch, 14, 3)
+            # Use 1e-4 eps for BF16 stability (1e-6 rounds to 0 in BF16)
+            current_orientations = F.normalize(current_limb_vec, dim=-1, eps=1e-4)  # (batch, 14, 3)
         else:
             # Fallback: no current orientations (model will predict from scratch - less accurate)
             current_orientations = torch.zeros(batch_size, self.num_limbs, 3, device=device)
@@ -731,7 +732,8 @@ class LimbOrientationPredictor(nn.Module):
 
             limb_2d_vec = child_2d - parent_2d  # (batch, 14, 2)
             limb_2d_length = torch.norm(limb_2d_vec, dim=-1, keepdim=True)  # (batch, 14, 1)
-            limb_2d_dir = limb_2d_vec / (limb_2d_length + 1e-6)  # (batch, 14, 2)
+            # Use 1e-4 epsilon for BF16 stability (1e-6 rounds to 0 in BF16)
+            limb_2d_dir = limb_2d_vec / (limb_2d_length.clamp(min=1e-4))  # (batch, 14, 2)
 
             # Foreshortening ratio (using expected 2D lengths as reference)
             length_ratio = limb_2d_length / (self.expected_2d_lengths.view(1, -1, 1) + 1e-6)
@@ -758,7 +760,8 @@ class LimbOrientationPredictor(nn.Module):
         # Apply delta to current orientations and normalize
         # This is the key residual connection: output = normalize(current + delta)
         corrected = current_orientations + delta  # (batch, 14, 3)
-        limb_orientations = F.normalize(corrected, dim=-1, eps=1e-6)
+        # Use 1e-4 eps for BF16 stability (1e-6 rounds to 0 in BF16)
+        limb_orientations = F.normalize(corrected, dim=-1, eps=1e-4)
 
         return limb_orientations
 

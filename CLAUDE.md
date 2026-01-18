@@ -108,7 +108,7 @@ Corrects MediaPipe depth errors using camera viewpoint prediction. Trains on AIS
 - Optional MTC-style least-squares solver for geometric consistency
 - Key insight: 2D foreshortening directly encodes 3D limb orientation
 
-**Model**: ~765K params (d_model=64, 4 layers, 4 heads)
+**Model**: ~3M params (d_model=128, 6 layers, 8 heads)
 
 **Key components**:
 - **LimbOrientationPredictor**: Predicts 3D unit vectors for 14 limbs from 2D foreshortening
@@ -141,8 +141,10 @@ Corrects MediaPipe depth errors using camera viewpoint prediction. Trains on AIS
 ```bash
 # Train model with POF (recommended)
 uv run --group neural python scripts/train/depth_model.py \
+  --data "data/training/aistpp_converted,data/training/mtc_converted" \
   --epochs 50 --batch-size 256 --workers 8 --bf16 \
-  --use-limb-orientations --limb-orientation-weight 0.5
+  --use-limb-orientations --limb-orientation-weight 0.5 \
+  --d-model 128 --num-layers 6 --num-heads 8
 
 # Train with MTC-style least-squares solver (experimental)
 uv run --group neural python scripts/train/depth_model.py \
@@ -166,9 +168,9 @@ uv run --group neural python scripts/debug/diagnose_pof.py \
 | `--use-least-squares` | Enable MTC-style least-squares depth solver (experimental) |
 | `--projection-loss-weight 0.3` | Weight for projection consistency loss |
 | `--optimizer adamw` | Optimizer: adamw, lion, ademamix, sophia, schedule_free, soap |
-| `--d-model 64` | Model hidden dimension |
-| `--num-layers 4` | Number of transformer layers |
-| `--num-heads 4` | Number of attention heads |
+| `--d-model 128` | Model hidden dimension (recommended) |
+| `--num-layers 6` | Number of transformer layers (recommended) |
+| `--num-heads 8` | Number of attention heads (recommended) |
 | `--checkpoint PATH` | Resume from checkpoint |
 
 **Least-Squares Solver** (MTC-style, experimental):
@@ -215,6 +217,38 @@ Training sample fields (`.npz`):
 | `azimuth` | scalar | Camera angle 0-360° |
 | `elevation` | scalar | Camera angle -90 to +90° |
 | `visibility` | (17,) | Per-joint visibility |
+
+**CMU MTC Dataset** (`scripts/data/convert_cmu_mtc.py`):
+
+Additional training data from CMU Panoptic MTC dataset (~28K frames × 31 cameras). Provides diverse multi-view poses with high-quality motion capture ground truth.
+
+```bash
+# Extract dataset (290GB archive, use pigz for speed)
+cd data/mtc
+pigz -dc mtc_dataset.tar.gz | tar -xf -
+# Or standard tar (slower):
+tar -xzf mtc_dataset.tar.gz
+
+# Explore dataset structure
+uv run python scripts/data/convert_cmu_mtc.py --explore --mtc-dir data/mtc/a4_release
+
+# Convert to training format
+uv run python scripts/data/convert_cmu_mtc.py \
+  --mtc-dir data/mtc/a4_release \
+  --output-dir data/training/mtc_converted \
+  --frame-skip 3 --workers 4
+
+# Train with combined AIST++ and MTC data (recommended)
+uv run --group neural python scripts/train/depth_model.py \
+  --data "data/training/aistpp_converted,data/training/mtc_converted" \
+  --epochs 50 --batch-size 256 --workers 8 --bf16 \
+  --use-limb-orientations --limb-orientation-weight 0.5 \
+  --d-model 128 --num-layers 6 --num-heads 8
+```
+
+**MTC coordinate transforms** (different from AIST++):
+- MTC uses Y-down, Z-toward convention; script flips both Y and Z
+- Camera params (t) are in cm; projection converts accordingly
 
 ### Joint Constraint Refinement
 Learns soft joint constraints from AIST++ motion capture data. Transformer-based model corrects joint angles using cross-joint attention.

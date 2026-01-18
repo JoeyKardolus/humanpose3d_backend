@@ -147,7 +147,8 @@ def compute_limb_orientations_torch(pose_3d: torch.Tensor) -> torch.Tensor:
     for parent, child in LIMBS:
         vec = pose_3d[:, child] - pose_3d[:, parent]  # (batch, 3)
         length = torch.norm(vec, dim=-1, keepdim=True)  # (batch, 1)
-        unit_vec = vec / (length + 1e-8)  # (batch, 3)
+        # Use 1e-4 for BF16 stability (1e-8 rounds to 0 in BF16)
+        unit_vec = vec / length.clamp(min=1e-4)  # (batch, 3)
         orientations.append(unit_vec)
 
     orientations = torch.stack(orientations, dim=1)  # (batch, 14, 3)
@@ -163,7 +164,7 @@ class AISTPPDepthDataset(Dataset):
 
     def __init__(
         self,
-        data_dir: str | Path,
+        data_dir: str | Path | list,
         split: str = 'train',
         val_ratio: float = 0.1,
         seed: int = 42,
@@ -174,19 +175,43 @@ class AISTPPDepthDataset(Dataset):
         Initialize dataset.
 
         Args:
-            data_dir: Path to training data (NPZ files)
+            data_dir: Path to training data (NPZ files), or list of paths,
+                      or comma-separated string of paths
             split: 'train' or 'val'
             val_ratio: Fraction of data for validation
             seed: Random seed for train/val split
             augment: Whether to apply data augmentation
             max_samples: Limit number of samples (for debugging)
         """
-        self.data_dir = Path(data_dir)
         self.split = split
         self.augment = augment and (split == 'train')
 
-        # Find all NPZ files
-        all_files = sorted(self.data_dir.glob('*.npz'))
+        # Support multiple data directories
+        if isinstance(data_dir, str) and ',' in data_dir:
+            data_dirs = [Path(d.strip()) for d in data_dir.split(',')]
+        elif isinstance(data_dir, list):
+            data_dirs = [Path(d) for d in data_dir]
+        else:
+            data_dirs = [Path(data_dir)]
+
+        self.data_dirs = data_dirs
+
+        # Find all NPZ files from all directories, filtering out empty/corrupted files
+        all_files = []
+        skipped = 0
+        for d in data_dirs:
+            if d.exists():
+                for f in sorted(d.glob('*.npz')):
+                    # Skip empty files (corrupted)
+                    if f.stat().st_size == 0:
+                        skipped += 1
+                        continue
+                    all_files.append(f)
+            else:
+                print(f"Warning: data directory not found: {d}")
+
+        if skipped > 0:
+            print(f"Warning: skipped {skipped} empty/corrupted files")
 
         if max_samples:
             all_files = all_files[:max_samples]
@@ -248,7 +273,15 @@ class AISTPPDepthDataset(Dataset):
                 'azimuth': scalar tensor (0-360 degrees)
                 'elevation': scalar tensor (-90 to +90 degrees)
         """
-        data = np.load(self.files[idx])
+        try:
+            data = np.load(self.files[idx])
+        except (EOFError, ValueError, OSError) as e:
+            # Handle corrupted files by returning a random valid sample
+            import random
+            alt_idx = random.randint(0, len(self.files) - 1)
+            if alt_idx == idx:
+                alt_idx = (idx + 1) % len(self.files)
+            return self.__getitem__(alt_idx)
 
         corrupted = torch.from_numpy(data['corrupted'].astype(np.float32))
         ground_truth = torch.from_numpy(data['ground_truth'].astype(np.float32))
@@ -469,8 +502,8 @@ class TemporalWindowDataset(Dataset):
         self.window_size = window_size
         self.split = split
 
-        # Find all NPZ files and group by sequence
-        all_files = sorted(self.data_dir.glob('*.npz'))
+        # Find all NPZ files and group by sequence, filtering out empty files
+        all_files = [f for f in sorted(self.data_dir.glob('*.npz')) if f.stat().st_size > 0]
 
         # Group files by sequence (same dancer)
         sequence_files: Dict[str, List[Path]] = defaultdict(list)

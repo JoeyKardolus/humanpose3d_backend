@@ -33,4 +33,4 @@ logs/
 wget-log
 
 # External repos
-use/MonocularTotalCapture/
+external/

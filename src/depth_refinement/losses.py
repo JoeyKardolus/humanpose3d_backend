@@ -53,7 +53,8 @@ def compute_limb_orientations_from_pose(pose_3d: torch.Tensor) -> torch.Tensor:
     for parent, child in LIMBS:
         vec = pose_3d[:, child] - pose_3d[:, parent]  # (batch, 3)
         length = torch.norm(vec, dim=-1, keepdim=True)  # (batch, 1)
-        unit_vec = vec / (length + 1e-8)  # (batch, 3)
+        # Use 1e-4 for BF16 stability (1e-8 rounds to 0 in BF16)
+        unit_vec = vec / length.clamp(min=1e-4)  # (batch, 3)
         orientations.append(unit_vec)
 
     orientations = torch.stack(orientations, dim=1)  # (batch, 14, 3)
@@ -109,7 +110,8 @@ def limb_orientation_loss(
 
         if reduction == 'mean':
             # Weighted mean: sum(loss * weight) / sum(weight)
-            return loss.sum() / (limb_vis.sum() + 1e-6)
+            # Use 1e-4 for BF16 stability (1e-6 rounds to 0 in BF16)
+            return loss.sum() / limb_vis.sum().clamp(min=1e-4)
         elif reduction == 'sum':
             return loss.sum()
         return loss
@@ -190,7 +192,8 @@ def projection_consistency_loss(
     if visibility is not None:
         # Weight by visibility
         weighted_error = error * visibility
-        return weighted_error.sum() / (visibility.sum() + 1e-6)
+        # Use clamp for BF16 stability (1e-6 rounds to 0 in BF16)
+        return weighted_error.sum() / visibility.sum().clamp(min=1e-4)
     else:
         return error.mean()
 
@@ -227,7 +230,8 @@ def solved_depth_loss(
 
     if visibility is not None:
         weighted_error = depth_error * visibility
-        return weighted_error.sum() / (visibility.sum() + 1e-6)
+        # Use clamp for BF16 stability (1e-6 rounds to 0 in BF16)
+        return weighted_error.sum() / visibility.sum().clamp(min=1e-4)
     else:
         return depth_error.mean()
 
@@ -504,12 +508,14 @@ def project_to_bone_lengths(
             current_len = torch.norm(bone_vec, dim=-1, keepdim=True)  # (N, 1)
 
             # Skip if bone length is tiny (avoid division by zero)
-            valid = current_len.squeeze(-1) > 1e-6
+            # Use 1e-4 threshold for BF16 stability
+            valid = current_len.squeeze(-1) > 1e-4
             if not valid.any():
                 continue
 
             # Compute new child position along bone direction
-            bone_dir = bone_vec / (current_len + 1e-8)  # (N, 3)
+            # Use clamp for BF16 stability (1e-8 rounds to 0 in BF16)
+            bone_dir = bone_vec / current_len.clamp(min=1e-4)  # (N, 3)
             new_child = result[:, parent_idx] + bone_dir * target_len
 
             # Blend: prioritize Z (depth) correction (80%), less XY change (20%)
@@ -622,7 +628,8 @@ def visibility_weighted_symmetric_bone_loss(
         right_vis = torch.min(visibility[:, ri], visibility[:, rj])  # (batch,)
 
         # Visibility-weighted reference length
-        total_vis = left_vis + right_vis + 1e-6
+        # Use clamp for BF16 stability (1e-6 rounds to 0 in BF16)
+        total_vis = (left_vis + right_vis).clamp(min=1e-4)
         ref_length = (left_bone * left_vis + right_bone * right_vis) / total_vis
 
         # Both bones should match reference, weighted by visibility
@@ -659,7 +666,8 @@ def scale_preservation_loss(
     output_distances = torch.norm(corrected, dim=-1)       # (batch, 17)
 
     # Visibility-weighted mean scale
-    vis_sum = visibility.sum(dim=1, keepdim=True) + 1e-6
+    # Use clamp for BF16 stability (1e-6 rounds to 0 in BF16)
+    vis_sum = visibility.sum(dim=1, keepdim=True).clamp(min=1e-4)
     input_scale = (input_distances * visibility).sum(dim=1) / vis_sum.squeeze()
     output_scale = (output_distances * visibility).sum(dim=1) / vis_sum.squeeze()
 
@@ -756,7 +764,8 @@ def confidence_calibration_loss(
     error_per_joint = torch.norm(pred_delta_xyz - gt_delta_xyz, dim=-1)  # (batch, 17)
 
     # Normalize error to [0, 1] range for comparison
-    error_norm = error_per_joint / (error_per_joint.max() + 1e-6)
+    # Use clamp for BF16 stability (1e-6 rounds to 0 in BF16)
+    error_norm = error_per_joint / error_per_joint.max().clamp(min=1e-4)
 
     # We want: high confidence where error is low
     # Loss: confidence should be (1 - normalized_error)

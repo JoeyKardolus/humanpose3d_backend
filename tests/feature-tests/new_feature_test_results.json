@@ -1,0 +1,94 @@
+[
+  {
+    "config_id": "config_11_ground_plane",
+    "name": "Baseline + Ground Plane Refinement (NEW)",
+    "description": "Stance detection and depth propagation from foot contacts",
+    "processing_time": 34.699522972106934,
+    "bone_length_stats": {
+      "RShoulder-RElbow": 0.018673175597202777,
+      "RElbow-RWrist": 0.021434200892015892,
+      "LShoulder-LElbow": 0.01733264990564167,
+      "LElbow-LWrist": 0.037105247202082435,
+      "RHip-RKnee": 0.012555527642607424,
+      "RKnee-RAnkle": 0.019207962933215396,
+      "LHip-LKnee": 0.017583610225030327,
+      "LKnee-LAnkle": 0.01625912112138636,
+      "average_std": 0.020018936939897786
+    },
+    "augmentation_success": {
+      "count": 8,
+      "total": 43,
+      "percentage": 18.6046511627907
+    },
+    "output_file": "data/output/pose-3d/joey/joey_LSTM.trc"
+  },
+  {
+    "config_id": "config_12_ground_plane_bone",
+    "name": "Ground Plane + Bone Length",
+    "description": "Combined ground plane and bone length depth correction",
+    "processing_time": 31.473145484924316,
+    "bone_length_stats": {
+      "RShoulder-RElbow": 0.017959480374773427,
+      "RElbow-RWrist": 0.015958425242943736,
+      "LShoulder-LElbow": 0.013708890139375332,
+      "LElbow-LWrist": 0.021992747020872613,
+      "RHip-RKnee": 0.012457362272253266,
+      "RKnee-RAnkle": 0.019144233112145248,
+      "LHip-LKnee": 0.017499320780428748,
+      "LKnee-LAnkle": 0.015915105579965446,
+      "average_std": 0.016829445565344728
+    },
+    "augmentation_success": {
+      "count": 8,
+      "total": 43,
+      "percentage": 18.6046511627907
+    },
+    "output_file": "data/output/pose-3d/joey/joey_LSTM.trc"
+  },
+  {
+    "config_id": "config_13_force_complete",
+    "name": "Anatomical + Bone Length + Estimation + Force Complete",
+    "description": "Full pipeline with post-augmentation completion for 100% markers",
+    "processing_time": 32.019378900527954,
+    "bone_length_stats": {
+      "RShoulder-RElbow": 0.00015240466013670403,
+      "RElbow-RWrist": 0.00015687737504201725,
+      "LShoulder-LElbow": 0.0001507069915652594,
+      "LElbow-LWrist": 0.00015140456491342328,
+      "RHip-RKnee": 0.00015807751602147009,
+      "RKnee-RAnkle": 0.006741926451420128,
+      "LHip-LKnee": 0.00015419827560093083,
+      "LKnee-LAnkle": 0.007944166150471601,
+      "average_std": 0.0019512202481464416
+    },
+    "augmentation_success": {
+      "count": 43,
+      "total": 43,
+      "percentage": 100.0
+    },
+    "output_file": "data/output/pose-3d/joey/joey_LSTM.trc"
+  },
+  {
+    "config_id": "config_14_recommended_plus_ground",
+    "name": "RECOMMENDED + Ground Plane",
+    "description": "Best configuration + ground plane refinement",
+    "processing_time": 32.198606967926025,
+    "bone_length_stats": {
+      "RShoulder-RElbow": 0.00015240466013670403,
+      "RElbow-RWrist": 0.00015687737504201725,
+      "LShoulder-LElbow": 0.0001507069915652594,
+      "LElbow-LWrist": 0.00015140456491342328,
+      "RHip-RKnee": 0.0004971596874037485,
+      "RKnee-RAnkle": 0.006446844474067727,
+      "LHip-LKnee": 0.0003594422063013373,
+      "LKnee-LAnkle": 0.00667141855674691,
+      "average_std": 0.0018232823145221408
+    },
+    "augmentation_success": {
+      "count": 43,
+      "total": 43,
+      "percentage": 100.0
+    },
+    "output_file": "data/output/pose-3d/joey/joey_LSTM.trc"
+  }
+]

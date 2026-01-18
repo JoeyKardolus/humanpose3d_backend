@@ -36,8 +36,46 @@ Download manually (recommended for 270GB):
     tar -xzf mtc_dataset.tar.gz -C data/mtc
 """
 
+import os
 import sys
+
+# Suppress ALL TensorFlow, MediaPipe, and absl warnings BEFORE any imports
+# This must be done before importing anything that might trigger these libraries
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['GLOG_minloglevel'] = '3'  # 3 = FATAL only
+os.environ['GLOG_logtostderr'] = '0'
+os.environ['GLOG_log_dir'] = '/tmp'
+os.environ['ABSL_MIN_LOG_LEVEL'] = '3'
+os.environ['MEDIAPIPE_DISABLE_GPU'] = '1'  # Suppress GPU/GL messages
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''  # Force CPU for MediaPipe (faster anyway)
+
+# Redirect stderr to suppress C++ level warnings that Python can't catch
+import io
+import contextlib
+
+class SuppressMediaPipeOutput:
+    """Context manager to suppress MediaPipe's C++ stderr output."""
+    def __init__(self):
+        self._stderr = None
+        self._devnull = None
+
+    def __enter__(self):
+        # Only suppress in worker processes, not main process
+        return self
+
+    def __exit__(self, *args):
+        pass
+
 from pathlib import Path
+
+import warnings
+warnings.filterwarnings('ignore')
+
+import logging
+logging.getLogger('tensorflow').setLevel(logging.FATAL)
+logging.getLogger('absl').setLevel(logging.FATAL)
+logging.getLogger('mediapipe').setLevel(logging.FATAL)
 
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -46,6 +84,7 @@ from src.depth_refinement.data_utils import align_body_frames
 
 import argparse
 import json
+import pickle
 import subprocess
 import tarfile
 import numpy as np
@@ -54,6 +93,7 @@ import cv2
 import mediapipe as mp
 from scipy.spatial.transform import Rotation
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing import Pool
 import multiprocessing
 
 
@@ -202,9 +242,65 @@ def download_mtc_dataset(output_dir: Path, url: str = None):
 # DATA LOADING
 # ============================================================================
 
+def load_mtc_annotations(pkl_file: Path) -> dict:
+    """
+    Load MTC annotations from pickle file.
+
+    Returns dict with 'training_data' and 'testing_data' lists.
+    Each item has: seqName, frame_str, id, body (with landmarks).
+    """
+    with open(pkl_file, 'rb') as f:
+        data = pickle.load(f)
+    return data
+
+
+def load_mtc_camera_data(pkl_file: Path) -> dict:
+    """
+    Load MTC camera calibration from pickle file.
+
+    Returns dict mapping seq_name -> camera_id -> {K, R, t, distCoef}.
+    """
+    with open(pkl_file, 'rb') as f:
+        data = pickle.load(f)
+    return data
+
+
+def get_camera_params(camera_data: dict, seq_name: str, cam_id: int) -> dict:
+    """
+    Get camera parameters for a specific sequence and camera.
+
+    Returns dict with K, R, t, position or None if not found.
+    """
+    if seq_name not in camera_data:
+        return None
+
+    seq_cameras = camera_data[seq_name]
+    if cam_id not in seq_cameras:
+        return None
+
+    cam = seq_cameras[cam_id]
+
+    # Get intrinsics and extrinsics
+    K = np.array(cam['K']) if 'K' in cam else None
+    R = np.array(cam['R']) if 'R' in cam else None
+    t = np.array(cam['t']).flatten() if 't' in cam else None
+
+    # Camera position in world coords: C = -R^T @ t
+    position = None
+    if R is not None and t is not None:
+        position = -R.T @ t
+
+    return {
+        'K': K,
+        'R': R,
+        't': t,
+        'position': position,
+    }
+
+
 def load_cmu_calibration(calib_file: Path) -> dict:
     """
-    Load CMU Panoptic camera calibration.
+    Load CMU Panoptic camera calibration from JSON (legacy format).
 
     Returns dict mapping camera_id -> {K, R, t, position}
     """
@@ -224,12 +320,7 @@ def load_cmu_calibration(calib_file: Path) -> dict:
 
         # Camera position in world coords
         if R is not None and t is not None:
-            # Different conventions - try both
-            try:
-                # Convention 1: t is translation from world to camera
-                position = -R.T @ t
-            except:
-                position = t
+            position = -R.T @ t
         else:
             position = None
 
@@ -245,7 +336,7 @@ def load_cmu_calibration(calib_file: Path) -> dict:
 
 def load_skeleton_json(json_file: Path) -> list:
     """
-    Load 3D skeleton data from CMU Panoptic JSON format.
+    Load 3D skeleton data from CMU Panoptic JSON format (legacy).
 
     Returns list of bodies, each with 'id' and 'joints19' array.
     """
@@ -270,6 +361,37 @@ def load_skeleton_json(json_file: Path) -> list:
             })
 
     return bodies
+
+
+def parse_mtc_landmarks(landmarks: list) -> tuple:
+    """
+    Parse MTC body landmarks from flat list to (19, 3) array.
+
+    MTC landmarks are stored as: [x0, y0, z0, x1, y1, z1, ...]
+
+    MTC coordinate system: Y points DOWN, Z points toward camera
+    MediaPipe (after flip): Y points UP, Z points away from camera
+    We convert MTC to match MediaPipe convention for consistency.
+
+    Returns:
+        joints19: (19, 3) array of joint positions (Y-up, Z-away convention)
+        confidence: (19,) array of ones (MTC doesn't have per-joint confidence)
+    """
+    landmarks = np.array(landmarks)
+    n_joints = len(landmarks) // 3
+    if n_joints < 19:
+        return None, None
+
+    joints = landmarks[:19*3].reshape(19, 3)
+
+    # Flip Y and Z to convert coordinate systems
+    # MTC: Y-down, Z-toward -> Standard: Y-up, Z-away
+    joints[:, 1] = -joints[:, 1]
+    joints[:, 2] = -joints[:, 2]
+
+    confidence = np.ones(19, dtype=np.float32)
+
+    return joints, confidence
 
 
 def convert_coco19_to_coco17(joints19: np.ndarray, confidence19: np.ndarray = None) -> tuple:
@@ -436,8 +558,330 @@ def compute_torso_scale(pose_3d: np.ndarray) -> float:
     return (left_torso + right_torso) / 2
 
 
+def project_3d_to_2d(points_3d: np.ndarray, R: np.ndarray, t: np.ndarray, K: np.ndarray,
+                     image_width: int = 1920, image_height: int = 1080) -> np.ndarray:
+    """
+    Project 3D world points to normalized 2D image coordinates.
+
+    Args:
+        points_3d: (N, 3) 3D points in world coordinates
+        R: (3, 3) rotation matrix (world to camera)
+        t: (3,) translation vector
+        K: (3, 3) intrinsic camera matrix
+        image_width: Image width for normalization
+        image_height: Image height for normalization
+
+    Returns:
+        (N, 2) normalized 2D coordinates in [0, 1] range
+    """
+    # Transform to camera frame: X_cam = R @ X_world + t
+    points_cam = (R @ points_3d.T).T + t
+
+    # Perspective projection
+    points_2d_hom = (K @ points_cam.T).T
+
+    # Perspective divide
+    points_2d = points_2d_hom[:, :2] / points_2d_hom[:, 2:3]
+
+    # Normalize to [0, 1] range
+    points_2d[:, 0] = points_2d[:, 0] / image_width
+    points_2d[:, 1] = points_2d[:, 1] / image_height
+
+    return points_2d
+
+
 # ============================================================================
-# MAIN CONVERSION
+# MTC PICKLE FORMAT PROCESSING (a4_release structure)
+# ============================================================================
+
+def process_mtc_worker(args):
+    """Worker function for multiprocessing - unpacks args and calls process_mtc_sample."""
+    # Suppress stderr in worker processes to hide MediaPipe C++ warnings
+    # Must redirect at file descriptor level to catch C++ output
+    import os
+    import sys
+
+    # Re-apply environment variables in worker process
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    os.environ['GLOG_minloglevel'] = '3'
+    os.environ['GLOG_logtostderr'] = '0'
+    os.environ['ABSL_MIN_LOG_LEVEL'] = '3'
+
+    # Redirect stderr at file descriptor level (catches C++ output)
+    old_stderr_fd = os.dup(2)
+    devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull_fd, 2)
+
+    try:
+        result = process_mtc_sample(*args)
+    finally:
+        # Restore stderr
+        os.dup2(old_stderr_fd, 2)
+        os.close(old_stderr_fd)
+        os.close(devnull_fd)
+
+    return result
+
+
+def process_mtc_sample(
+    img_path: Path,
+    gt_joints19: np.ndarray,
+    cam_params: dict,
+    output_dir: Path,
+    seq_name: str,
+    frame_str: str,
+    cam_id: int,
+) -> int:
+    """
+    Process a single MTC sample (image + GT pose).
+
+    Returns 1 if sample created, 0 otherwise.
+    """
+    # Build output filename
+    sample_name = f"{seq_name}_c{cam_id:02d}_f{frame_str}"
+    sample_path = output_dir / f"{sample_name}.npz"
+
+    # Resume support: skip if file already exists
+    if sample_path.exists():
+        return 1
+
+    # Load image
+    if not img_path.exists():
+        return 0
+
+    frame = cv2.imread(str(img_path))
+    if frame is None:
+        return 0
+
+    # Initialize MediaPipe (per-worker) - stderr already redirected in worker wrapper
+    mp_pose = mp.solutions.pose
+    pose_detector = mp_pose.Pose(
+        static_image_mode=True,
+        model_complexity=2,
+        enable_segmentation=False,
+        min_detection_confidence=0.5,
+    )
+
+    # Run MediaPipe
+    mp_pose_3d, mp_2d, mp_vis = process_frame_mediapipe(frame, pose_detector)
+    pose_detector.close()
+
+    if mp_pose_3d is None:
+        return 0
+
+    # Convert GT COCO19 to COCO17
+    gt_pose, gt_conf = convert_coco19_to_coco17(gt_joints19)
+
+    # Center both poses on pelvis
+    gt_pelvis = (gt_pose[11] + gt_pose[12]) / 2
+    mp_pelvis = (mp_pose_3d[11] + mp_pose_3d[12]) / 2
+
+    gt_centered = gt_pose - gt_pelvis
+    mp_centered = mp_pose_3d - mp_pelvis
+
+    # Align body frames
+    mp_centered = align_body_frames(mp_centered, gt_centered)
+
+    # Compute scales
+    gt_scale = compute_torso_scale(gt_centered)
+    mp_scale = compute_torso_scale(mp_centered)
+
+    if gt_scale < 0.01 or mp_scale < 0.01:
+        return 0
+
+    # Normalize to unit torso
+    gt_normalized = gt_centered / gt_scale
+    mp_normalized = mp_centered / mp_scale
+
+    # Nose validation
+    if mp_normalized[0, 1] < 0.5 or gt_normalized[0, 1] < 0.5:
+        return 0
+
+    # Compute view angles
+    cam_pos = cam_params.get('position')
+    if cam_pos is not None:
+        cam_relative = cam_pos - gt_pelvis
+        azimuth, elevation = compute_view_angles(gt_centered, cam_pos)
+    else:
+        cam_relative = np.array([0., 0., 2.])
+        azimuth, elevation = 0.0, 0.0
+
+    # Compute projected_2d
+    # NOTE: MTC camera params (t) are in cm, so convert gt_pose back to cm for projection
+    cam_K = cam_params.get('K')
+    cam_R = cam_params.get('R')
+    cam_t = cam_params.get('t')
+    if cam_K is not None and cam_R is not None and cam_t is not None:
+        # gt_pose is in meters (after /100 conversion) with Y-up, Z-away convention
+        # Convert back to MTC convention (Y-down, Z-toward) and cm for projection
+        gt_pose_cm = gt_pose.copy()
+        gt_pose_cm[:, 1] = -gt_pose_cm[:, 1]  # Flip Y back to MTC Y-down
+        gt_pose_cm[:, 2] = -gt_pose_cm[:, 2]  # Flip Z back to MTC Z-toward
+        gt_pose_cm = gt_pose_cm * 100.0  # Convert meters to cm
+        projected_2d = project_3d_to_2d(gt_pose_cm, cam_R, cam_t, cam_K)
+    else:
+        projected_2d = mp_2d
+
+    # Save training sample
+    np.savez_compressed(
+        sample_path,
+        corrupted=mp_normalized.astype(np.float32),
+        ground_truth=gt_normalized.astype(np.float32),
+        visibility=mp_vis.astype(np.float32),
+        pose_2d=mp_2d.astype(np.float32),
+        projected_2d=projected_2d.astype(np.float32),
+        azimuth=np.float32(azimuth),
+        elevation=np.float32(elevation),
+        camera_relative=cam_relative.astype(np.float32),
+        mp_scale=np.float32(mp_scale),
+        gt_scale=np.float32(gt_scale),
+        sequence=sample_name,
+        frame_idx=int(frame_str),
+    )
+
+    return 1
+
+
+def process_mtc_pickle_format(
+    mtc_dir: Path,
+    output_dir: Path,
+    frame_skip: int = 3,
+    max_frames: int = None,
+    cameras: list = None,
+    workers: int = 1,
+    split: str = 'training_data',
+) -> int:
+    """
+    Process MTC dataset in pickle format (a4_release structure).
+
+    Args:
+        mtc_dir: Path to a4_release directory
+        output_dir: Output directory for NPZ files
+        frame_skip: Process every Nth frame
+        max_frames: Max frames total
+        cameras: List of camera IDs to use (0-30)
+        workers: Number of parallel workers
+        split: 'training_data' or 'testing_data'
+
+    Returns:
+        Number of samples created.
+    """
+    mtc_dir = Path(mtc_dir)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load annotations and camera data
+    annotation_file = mtc_dir / "annotation.pkl"
+    camera_file = mtc_dir / "camera_data.pkl"
+    img_dir = mtc_dir / "hdImgs"
+
+    if not annotation_file.exists():
+        print(f"ERROR: annotation.pkl not found in {mtc_dir}")
+        return 0
+
+    if not camera_file.exists():
+        print(f"ERROR: camera_data.pkl not found in {mtc_dir}")
+        return 0
+
+    print(f"Loading annotations from {annotation_file}...")
+    annotations = load_mtc_annotations(annotation_file)
+
+    print(f"Loading camera data from {camera_file}...")
+    camera_data = load_mtc_camera_data(camera_file)
+
+    # Get data split
+    data = annotations.get(split, [])
+    print(f"Found {len(data)} frames in {split}")
+
+    if not data:
+        print(f"No data found in {split}")
+        return 0
+
+    # Default cameras: use ALL 31 views (0-30) for maximum viewpoint diversity
+    # This is the main value of the MTC dataset - comprehensive multi-view coverage
+    if cameras is None:
+        cameras = list(range(31))
+
+    # Build task list
+    tasks = []
+    frame_count = 0
+
+    for i, sample in enumerate(data):
+        # Apply frame skip
+        if i % frame_skip != 0:
+            continue
+
+        if max_frames and frame_count >= max_frames:
+            break
+
+        seq_name = sample['seqName']
+        frame_str = sample['frame_str']
+        body = sample.get('body', {})
+        landmarks = body.get('landmarks', [])
+
+        if not landmarks:
+            continue
+
+        # Parse landmarks to (19, 3) array
+        gt_joints19, _ = parse_mtc_landmarks(landmarks)
+        if gt_joints19 is None:
+            continue
+
+        # MTC landmarks are in cm, convert to meters
+        gt_joints19 = gt_joints19 / 100.0
+
+        # Get 2D visibility info
+        visibility_2d = body.get('2D', {})
+
+        for cam_id in cameras:
+            # Check if this joint is visible in this camera
+            cam_vis = visibility_2d.get(cam_id, {})
+            inside_img = cam_vis.get('insideImg', [])
+
+            # Skip if too many joints are out of view
+            if inside_img and sum(inside_img) < 10:
+                continue
+
+            # Build image path
+            img_path = img_dir / seq_name / frame_str / f"00_{cam_id:02d}_{frame_str}.jpg"
+
+            # Get camera parameters
+            cam_params = get_camera_params(camera_data, seq_name, cam_id)
+            if cam_params is None:
+                continue
+
+            tasks.append((
+                img_path,
+                gt_joints19.copy(),
+                cam_params,
+                output_dir,
+                seq_name,
+                frame_str,
+                cam_id,
+            ))
+
+        frame_count += 1
+
+    print(f"Built {len(tasks)} tasks for {frame_count} frames x {len(cameras)} cameras")
+
+    # Process tasks
+    total_samples = 0
+    if workers > 1:
+        print(f"Processing with {workers} parallel workers...")
+        with Pool(workers) as pool:
+            for count in tqdm(pool.imap_unordered(process_mtc_worker, tasks), total=len(tasks)):
+                total_samples += count
+    else:
+        print("Processing sequentially...")
+        for task in tqdm(tasks):
+            count = process_mtc_worker(task)
+            total_samples += count
+
+    return total_samples
+
+
+# ============================================================================
+# LEGACY VIDEO FORMAT PROCESSING
 # ============================================================================
 
 def find_sequences(mtc_dir: Path) -> list:
@@ -620,6 +1064,12 @@ def process_sequence(
             gt_normalized = gt_centered / gt_scale
             mp_normalized = mp_centered / mp_scale
 
+            # Nose validation: nose should be above pelvis (use normalized poses)
+            # In normalized space (torso=1.0), nose should be ~1.0-1.5 above pelvis
+            if mp_normalized[0, 1] < 0.5 or gt_normalized[0, 1] < 0.5:
+                frame_idx += 1
+                continue
+
             # Compute view angles
             if cam_pos is not None:
                 # Adjust camera position relative to subject
@@ -634,17 +1084,44 @@ def process_sequence(
             sample_name = f"{seq_name}_c{cam_id}_f{frame_idx:06d}"
             sample_path = output_dir / f"{sample_name}.npz"
 
+            # Resume support: skip if file already exists
+            if sample_path.exists():
+                samples_created += 1
+                processed += 1
+                frame_idx += 1
+                continue
+
+            # Compute projected_2d (GT 3D -> 2D via camera params)
+            # This is critical for POF (Part Orientation Fields)
+            # NOTE: MTC camera params (t) are in cm, so use gt_pose_cm (before meter conversion)
+            if cam_id in cam_params and cam_params[cam_id]['K'] is not None:
+                cam_K = cam_params[cam_id]['K']
+                cam_R = cam_params[cam_id]['R']
+                cam_t = cam_params[cam_id]['t']
+                if cam_R is not None and cam_t is not None:
+                    # Use GT pose in original cm units for projection (matches camera t units)
+                    projected_2d = project_3d_to_2d(gt_pose_cm, cam_R, cam_t, cam_K)
+                else:
+                    # Fall back to MediaPipe 2D if no extrinsics
+                    projected_2d = mp_2d
+            else:
+                # Fall back to MediaPipe 2D if no calibration
+                projected_2d = mp_2d
+
             np.savez_compressed(
                 sample_path,
                 corrupted=mp_normalized.astype(np.float32),
                 ground_truth=gt_normalized.astype(np.float32),
                 visibility=mp_vis.astype(np.float32),
                 pose_2d=mp_2d.astype(np.float32),
+                projected_2d=projected_2d.astype(np.float32),  # GT projected to 2D via camera
                 azimuth=np.float32(azimuth),
                 elevation=np.float32(elevation),
                 camera_relative=cam_relative.astype(np.float32),
                 mp_scale=np.float32(mp_scale),
                 gt_scale=np.float32(gt_scale),
+                sequence=sample_name,
+                frame_idx=frame_idx,
             )
 
             samples_created += 1
@@ -655,6 +1132,32 @@ def process_sequence(
 
     pose_detector.close()
     return samples_created
+
+
+def detect_dataset_format(mtc_dir: Path) -> str:
+    """
+    Detect MTC dataset format.
+
+    Returns:
+        'pickle' if a4_release format (annotation.pkl, camera_data.pkl, hdImgs/)
+        'legacy' if legacy format (hdVideos/, hdPose3d/)
+        'unknown' otherwise
+    """
+    mtc_dir = Path(mtc_dir)
+
+    # Check for pickle format (a4_release)
+    # Could be directly in mtc_dir or in a subdirectory like a4_release
+    for check_dir in [mtc_dir, mtc_dir / "a4_release"]:
+        if (check_dir / "annotation.pkl").exists() and (check_dir / "camera_data.pkl").exists():
+            return 'pickle', check_dir
+
+    # Check for legacy format (sequence directories with hdVideos/)
+    for item in mtc_dir.iterdir():
+        if item.is_dir():
+            if (item / "hdVideos").exists() or (item / "hdPose3d_stage1_coco19").exists():
+                return 'legacy', mtc_dir
+
+    return 'unknown', mtc_dir
 
 
 def explore_dataset(mtc_dir: Path):
@@ -673,7 +1176,89 @@ def explore_dataset(mtc_dir: Path):
         print(f"ERROR: Directory does not exist: {mtc_dir}")
         return
 
-    # List top-level contents
+    # Detect format
+    fmt, data_dir = detect_dataset_format(mtc_dir)
+    print(f"DETECTED FORMAT: {fmt}")
+    if data_dir != mtc_dir:
+        print(f"DATA DIRECTORY: {data_dir}")
+    print("-" * 40)
+
+    if fmt == 'pickle':
+        # Explore pickle format (a4_release)
+        annotation_file = data_dir / "annotation.pkl"
+        camera_file = data_dir / "camera_data.pkl"
+        img_dir = data_dir / "hdImgs"
+
+        print(f"\n  annotation.pkl: {annotation_file.stat().st_size / (1024*1024):.1f} MB")
+        print(f"  camera_data.pkl: {camera_file.stat().st_size / (1024*1024):.1f} MB")
+
+        # Load and explore annotations
+        try:
+            annotations = load_mtc_annotations(annotation_file)
+            train_data = annotations.get('training_data', [])
+            test_data = annotations.get('testing_data', [])
+            print(f"\n  Training samples: {len(train_data)}")
+            print(f"  Testing samples: {len(test_data)}")
+
+            if train_data:
+                sample = train_data[0]
+                print(f"\n  Sample keys: {list(sample.keys())}")
+                print(f"  Sample seqName: {sample.get('seqName')}")
+                print(f"  Sample frame_str: {sample.get('frame_str')}")
+                body = sample.get('body', {})
+                if body:
+                    print(f"  Body keys: {list(body.keys())}")
+                    landmarks = body.get('landmarks', [])
+                    print(f"  Landmarks count: {len(landmarks)} ({len(landmarks)//3} joints)")
+
+            # Count unique sequences
+            seq_names = set(s.get('seqName') for s in train_data + test_data)
+            print(f"\n  Unique sequences: {len(seq_names)}")
+            for seq in sorted(seq_names)[:5]:
+                print(f"    - {seq}")
+            if len(seq_names) > 5:
+                print(f"    ... and {len(seq_names) - 5} more")
+
+        except Exception as e:
+            print(f"  Error loading annotations: {e}")
+
+        # Load and explore camera data
+        try:
+            camera_data = load_mtc_camera_data(camera_file)
+            print(f"\n  Camera data sequences: {len(camera_data)}")
+            for seq_name in list(camera_data.keys())[:2]:
+                cams = camera_data[seq_name]
+                print(f"    {seq_name}: {len(cams)} cameras")
+                if cams:
+                    cam_id = list(cams.keys())[0]
+                    cam = cams[cam_id]
+                    print(f"      Camera {cam_id} keys: {list(cam.keys())}")
+        except Exception as e:
+            print(f"  Error loading camera data: {e}")
+
+        # Check image directory
+        if img_dir.exists():
+            seq_dirs = [d for d in img_dir.iterdir() if d.is_dir()]
+            print(f"\n  Image sequences: {len(seq_dirs)}")
+            if seq_dirs:
+                first_seq = seq_dirs[0]
+                frame_dirs = [d for d in first_seq.iterdir() if d.is_dir()]
+                print(f"    {first_seq.name}: {len(frame_dirs)} frames")
+                if frame_dirs:
+                    first_frame = frame_dirs[0]
+                    imgs = list(first_frame.glob("*.jpg"))
+                    print(f"      {first_frame.name}: {len(imgs)} images (cameras)")
+
+        print(f"\n{'='*60}")
+        print("RECOMMENDATION:")
+        print("-" * 40)
+        print("  Dataset is in pickle format (a4_release structure).")
+        print("  Ready to convert! Use:")
+        print(f"    python {__file__} --mtc-dir {data_dir} --max-frames 1000 --workers 4")
+        print(f"{'='*60}\n")
+        return
+
+    # Legacy exploration for other formats
     print("TOP-LEVEL CONTENTS:")
     print("-" * 40)
     dirs = []
@@ -799,13 +1384,16 @@ def main():
     parser.add_argument("--explore", action="store_true",
                         help="Explore dataset structure without converting")
     parser.add_argument("--max-sequences", type=int, default=None,
-                        help="Limit number of sequences to process")
-    parser.add_argument("--max-frames", type=int, default=200,
-                        help="Max frames per camera per sequence")
+                        help="Limit number of sequences to process (legacy format only)")
+    parser.add_argument("--max-frames", type=int, default=None,
+                        help="Max frames to process total")
     parser.add_argument("--frame-skip", type=int, default=3,
                         help="Process every Nth frame (default: 3)")
     parser.add_argument("--workers", type=int, default=1,
                         help="Number of parallel workers")
+    parser.add_argument("--split", type=str, default="training_data",
+                        choices=["training_data", "testing_data"],
+                        help="Data split to process (pickle format only)")
 
     args = parser.parse_args()
 
@@ -827,36 +1415,63 @@ def main():
         print("Or use --explore to check the structure first")
         sys.exit(1)
 
-    # Find sequences
-    sequences = find_sequences(mtc_dir)
-    print(f"Found {len(sequences)} sequences")
+    # Detect dataset format
+    fmt, data_dir = detect_dataset_format(mtc_dir)
 
-    if len(sequences) == 0:
-        print("\nNo sequences found! Try --explore to check dataset structure.")
-        print("The script expects: mtc_dir/sequence_name/hdVideos/ and hdPose3d*/")
-        sys.exit(1)
-
-    if args.max_sequences:
-        sequences = sequences[:args.max_sequences]
-        print(f"Processing first {len(sequences)} sequences")
-
-    # Process sequences
-    output_dir.mkdir(parents=True, exist_ok=True)
-    total_samples = 0
-
-    for seq_info in tqdm(sequences, desc="Processing sequences"):
-        n_samples = process_sequence(
-            seq_info,
+    if fmt == 'pickle':
+        print(f"Detected pickle format (a4_release) at {data_dir}")
+        print(f"Processing {args.split}...")
+        total_samples = process_mtc_pickle_format(
+            data_dir,
             output_dir,
             frame_skip=args.frame_skip,
             max_frames=args.max_frames,
+            workers=args.workers,
+            split=args.split,
         )
-        total_samples += n_samples
+        print(f"\nConversion complete!")
+        print(f"Total samples: {total_samples}")
+        print(f"Output directory: {output_dir}")
+        return
 
-        if n_samples > 0:
-            tqdm.write(f"  {seq_info['name']}: {n_samples} samples")
+    elif fmt == 'legacy':
+        # Find sequences (legacy format)
+        sequences = find_sequences(mtc_dir)
+        print(f"Found {len(sequences)} sequences")
 
-    print(f"\nConversion complete!")
+        if len(sequences) == 0:
+            print("\nNo sequences found! Try --explore to check dataset structure.")
+            print("The script expects: mtc_dir/sequence_name/hdVideos/ and hdPose3d*/")
+            sys.exit(1)
+
+        if args.max_sequences:
+            sequences = sequences[:args.max_sequences]
+            print(f"Processing first {len(sequences)} sequences")
+
+        # Process sequences
+        output_dir.mkdir(parents=True, exist_ok=True)
+        total_samples = 0
+
+        for seq_info in tqdm(sequences, desc="Processing sequences"):
+            n_samples = process_sequence(
+                seq_info,
+                output_dir,
+                frame_skip=args.frame_skip,
+                max_frames=args.max_frames,
+            )
+            total_samples += n_samples
+
+            if n_samples > 0:
+                tqdm.write(f"  {seq_info['name']}: {n_samples} samples")
+
+        print(f"\nConversion complete!")
+        print(f"Total samples: {total_samples}")
+        print(f"Output directory: {output_dir}")
+
+    else:
+        print(f"Error: Unknown dataset format in {mtc_dir}")
+        print("Use --explore to check the dataset structure.")
+        sys.exit(1)
     print(f"Total samples: {total_samples}")
     print(f"Output directory: {output_dir}")
 

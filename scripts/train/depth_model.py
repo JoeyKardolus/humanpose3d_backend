@@ -381,6 +381,20 @@ def train_epoch(
                 optimizer.step()
         else:
             # Standard training: (batch, 17, 3)
+
+            # Input validation: skip batches with NaN/Inf (corrupted data)
+            has_nan = (torch.isnan(corrupted).any() or torch.isinf(corrupted).any() or
+                       torch.isnan(ground_truth).any() or torch.isinf(ground_truth).any() or
+                       torch.isnan(pose_2d).any() or torch.isinf(pose_2d).any())
+            if projected_2d is not None:
+                has_nan = has_nan or torch.isnan(projected_2d).any() or torch.isinf(projected_2d).any()
+            if gt_limb_orientations is not None:
+                has_nan = has_nan or torch.isnan(gt_limb_orientations).any() or torch.isinf(gt_limb_orientations).any()
+            if has_nan:
+                print(f"\nWarning: NaN/Inf in input data, skipping batch")
+                skipped_batches += 1
+                continue
+
             gt_torso_lengths = compute_torso_lengths(ground_truth)
 
             # Forward pass with optional AMP (supports both fp16 and bf16)
@@ -449,6 +463,20 @@ def train_epoch(
             'cam': f"{losses['camera'].item():.4f}",
             'bvar': f"{losses['bone_var'].item():.4f}",
         })
+
+        # Early detection of model corruption: check for NaN in model weights
+        # This catches issues before they cascade to all subsequent batches
+        if num_batches % 100 == 0:  # Check every 100 batches
+            for name, param in model.named_parameters():
+                if torch.isnan(param).any():
+                    print(f"\nERROR: NaN detected in model parameter {name}")
+                    print("This indicates numerical instability. Try reducing learning rate or using FP32.")
+                    raise RuntimeError(f"NaN in model parameter {name}")
+
+    # Handle case where all batches were skipped
+    if num_batches == 0:
+        print(f"\nWARNING: All batches were skipped! Skipped {skipped_batches} batches.")
+        return {'total': float('nan'), **{k: float('nan') for k in loss_components}}
 
     return {
         'total': total_loss / num_batches,
@@ -664,7 +692,7 @@ def validate(
 def main():
     parser = argparse.ArgumentParser(description='Train depth refinement model')
     parser.add_argument('--data', type=str, default='data/training/aistpp_converted',
-                        help='Path to training data')
+                        help='Path to training data (or comma-separated paths for multiple datasets, e.g., "data/training/aistpp_converted,data/training/mtc_converted")')
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser.add_argument('--batch-size', type=int, default=64, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
@@ -672,6 +700,8 @@ def main():
     parser.add_argument('--fp16', action='store_true', help='Use FP16 mixed precision (may cause NaN with limb orientations)')
     parser.add_argument('--bf16', action='store_true', help='Use BF16 mixed precision (recommended for RTX 30xx+, more stable)')
     parser.add_argument('--checkpoint', type=str, help='Resume from checkpoint')
+    parser.add_argument('--reset-scheduler', action='store_true',
+                        help='Reset LR scheduler when resuming from checkpoint (start fresh schedule)')
     parser.add_argument('--save-dir', type=str, default='models/checkpoints',
                         help='Directory to save checkpoints')
     # Model architecture
@@ -786,8 +816,18 @@ def main():
     # LR Scheduler - only if optimizer needs one
     scheduler = None
     if needs_scheduler:
-        scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
-        print(f"  Using CosineAnnealingLR scheduler")
+        # Main scheduler with less aggressive minimum (1e-5 instead of 1e-6)
+        main_scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-5)
+
+        # Add linear warmup for first 5% of epochs
+        warmup_epochs = max(1, args.epochs // 20)
+        warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer, [warmup_scheduler, main_scheduler], milestones=[warmup_epochs]
+        )
+        print(f"  Using CosineAnnealingLR with {warmup_epochs}-epoch warmup (eta_min=1e-5)")
     else:
         print(f"  No scheduler needed (schedule-free optimizer)")
 
@@ -811,8 +851,10 @@ def main():
         checkpoint = torch.load(args.checkpoint, map_location=device)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
-        if scheduler is not None and 'scheduler' in checkpoint:
+        if scheduler is not None and 'scheduler' in checkpoint and not args.reset_scheduler:
             scheduler.load_state_dict(checkpoint['scheduler'])
+        elif args.reset_scheduler:
+            print("  Resetting LR scheduler (--reset-scheduler flag)")
         start_epoch = checkpoint['epoch'] + 1
         best_val_loss = checkpoint.get('best_val_loss', float('inf'))
         print(f"Resuming from epoch {start_epoch}")
