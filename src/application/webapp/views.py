@@ -1,6 +1,7 @@
 """Public view exports for Django URL routing."""
 
 from src.application.webapp.controllers.pipeline_views import (
+    DownloadAllView,
     DownloadView,
     HomeView,
     MediaView,
@@ -12,6 +13,7 @@ from src.application.webapp.controllers.pipeline_views import (
 )
 
 __all__ = [
+    "DownloadAllView",
     "DownloadView",
     "HomeView",
     "MediaView",

@@ -1,6 +1,16 @@
 /* Global styles for the webapp UI. */
 :root {
   --bs-body-font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  --ui-surface: #ffffff;
+  --ui-surface-muted: rgba(15, 23, 42, 0.06);
+  --ui-surface-muted-strong: rgba(15, 23, 42, 0.08);
+  --ui-shadow-card: 0 18px 40px rgba(15, 23, 42, 0.12);
+  --ui-shadow-float: 0 20px 60px rgba(15, 76, 129, 0.18);
+  --ui-radius-lg: 16px;
+  --ui-radius-xl: 24px;
+  --ui-card-padding: 1rem;
+  --ui-page-padding-bottom: 160px;
+  --ui-container-wide: 75%;
   --chart-color-x: #9ad9ff;
   --chart-color-y: #0b5d5b;
   --chart-color-z: #2effb3;
@@ -21,7 +31,18 @@ body {
 }
 
 .page-content {
-  padding-bottom: 160px;
+  padding-bottom: var(--ui-page-padding-bottom);
+}
+
+.btn[class*="btn-outline-"]:not(.visual-toggle) {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--bs-btn-border-color);
+  --bs-btn-hover-color: var(--bs-btn-border-color);
+  --bs-btn-hover-bg: transparent;
+  --bs-btn-hover-border-color: var(--bs-btn-border-color);
+  --bs-btn-active-color: var(--bs-btn-border-color);
+  --bs-btn-active-bg: transparent;
+  --bs-btn-active-border-color: var(--bs-btn-border-color);
 }
 
 #processingOverlay {
@@ -29,7 +50,7 @@ body {
 }
 
 .container-wide {
-  max-width: 75%;
+  max-width: var(--ui-container-wide);
 }
 
 @media (max-width: 1200px) {
@@ -38,9 +59,19 @@ body {
   }
 }
 
+.panel-card {
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-xl);
+  box-shadow: var(--ui-shadow-card);
+}
+
+.panel-card .card-body {
+  padding: var(--ui-card-padding);
+}
+
 .frame-preview {
-  background: rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
+  background: var(--ui-surface-muted-strong);
+  border-radius: var(--ui-radius-lg);
   overflow: hidden;
 }
 
@@ -55,15 +86,15 @@ body {
   height: 100%;
   display: block;
   object-fit: contain;
-  background: rgba(15, 23, 42, 0.08);
+  background: var(--ui-surface-muted-strong);
 }
 
 
 .frame-placeholder {
   min-height: 220px;
   padding: 1.5rem;
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.06);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -85,6 +116,17 @@ body {
   display: block;
 }
 
+.image-panel {
+  position: relative;
+}
+
+@media (min-width: 992px) {
+  .image-panel .image-cover {
+    position: absolute;
+    inset: 0;
+  }
+}
+
 .loader-overlay {
   position: fixed;
   inset: 0;
@@ -100,11 +142,11 @@ body {
 }
 
 .loader-card {
-  background: #ffffff;
-  border-radius: 16px;
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-lg);
   padding: 24px 28px;
   text-align: center;
-  box-shadow: 0 20px 60px rgba(15, 76, 129, 0.18);
+  box-shadow: var(--ui-shadow-float);
   min-width: 240px;
 }
 

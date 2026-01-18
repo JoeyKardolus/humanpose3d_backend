@@ -113,10 +113,10 @@
             {{ status_message }}
           </div>
         {% endif %}
-        <div class="row gy-4 align-items-stretch">
-          <div class="col-lg-6 d-flex flex-column">
+        <div class="row g-4 align-items-stretch">
+          <div class="col-lg-6 d-grid gap-4">
 
-            <div class="card panel-card border-0 rounded-4 shadow mb-5">
+            <div class="card panel-card border-0 rounded-4 shadow">
               <div class="card-body">
                 <p class="text-uppercase text-success fw-semibold small mb-2">Before you upload</p>
                 <h2 class="h4 fw-semibold mb-3">Capture checklist for best results</h2>
@@ -130,7 +130,7 @@
               </div>
             </div>
 
-            <div class="card panel-card border-0 rounded-4 shadow flex-grow-1">
+            <div class="card panel-card border-0 rounded-4 shadow">
               <div class="card-body">
                 <p class="text-uppercase text-success fw-semibold small mb-2">Upload</p>
                 <h1 class="h3 fw-semibold">Add a video for analysis</h1>
@@ -146,204 +146,213 @@
           </div>
           <div class="col-lg-6 d-flex">
 
-            <div class="card panel-card border-0 rounded-4 shadow flex-grow-1 overflow-hidden">
+            <div class="card panel-card image-panel border-0 rounded-4 shadow flex-grow-1 overflow-hidden">
               <img src="{% static 'humanpose.png' %}" alt="KinetIQ preview" class="image-cover">
             </div>
 
           </div>
         </div>
+
+        <div class="row g-4 mt-3">
+          <div class="col-12">
+            <div class="card panel-card border-0 rounded-4 shadow">
+              <div class="card-body">
+                <p class="text-uppercase text-success fw-semibold small mb-2">Extra parameters</p>
+                <h2 class="h4 mb-3">Participant details</h2>
+                <div class="row row-cols-1 row-cols-md-2 g-3">
+                  <div class="col">
+                    <label for="sex" class="form-label">Sex</label>
+                    <select class="form-select" id="sex" name="sex">
+                      <option disabled selected value="">Choose...</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  </div>
+                  <div class="col">
+                    <label for="age" class="form-label">Age (years)</label>
+                    <input type="number" class="form-control" id="age" name="age" min="0" step="1" placeholder="e.g. 30">
+                  </div>
+                  <div class="col">
+                    <label for="height" class="form-label">Height (m)</label>
+                    <input type="number" class="form-control" id="height" name="height" min="0" step="0.01" placeholder="e.g. 1.78">
+                  </div>
+                  <div class="col">
+                    <label for="weight" class="form-label">Weight (kg)</label>
+                    <input type="number" class="form-control" id="weight" name="weight" min="0" step="0.1" placeholder="e.g. 75">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="card panel-card border-0 rounded-4 shadow">
+              <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                  <div>
+                    <p class="text-uppercase text-success fw-semibold small mb-1">Pipeline</p>
+                    <h2 class="h4 mb-0">Pipeline settings</h2>
+                    <p class="text-muted small mb-0">Recommended: leave defaults unless you know what you're doing.</p>
+                  </div>
+                  <button class="btn btn-link text-primary p-0" type="button" data-bs-toggle="collapse" data-bs-target="#pipelineOptions" aria-expanded="false" aria-controls="pipelineOptions" data-collapse-toggle data-label-show="Show pipeline settings" data-label-hide="Hide pipeline settings" data-icon-collapsed="bi-chevron-down" data-icon-expanded="bi-chevron-up" aria-label="Show pipeline settings">
+                    <i class="bi bi-chevron-down fs-4" aria-hidden="true" data-collapse-icon></i>
+                    <span class="visually-hidden" data-collapse-label>Show pipeline settings</span>
+                  </button>
+                </div>
+                <div class="collapse mt-3" id="pipelineOptions">
+                  <div class="row row-cols-1 row-cols-md-3 g-3">
+                    <div class="col">
+                      <label for="visibilityMin" class="form-label">Visibility threshold</label>
+                      <input type="number" class="form-control" id="visibilityMin" name="visibility_min" min="0" max="1" step="0.01" value="0.1">
+                    </div>
+                    <div class="col">
+                      <label for="augmentationCycles" class="form-label">Augmentation cycles</label>
+                      <input type="number" class="form-control" id="augmentationCycles" name="augmentation_cycles" min="1" step="1" value="20">
+                    </div>
+                    <div class="col">
+                      <label for="jointAngleSmooth" class="form-label">Joint angle smooth window</label>
+                      <input type="number" class="form-control" id="jointAngleSmooth" name="joint_angle_smooth_window" min="1" step="1" value="9">
+                    </div>
+                  </div>
+                  <div class="row row-cols-1 row-cols-md-2 g-3 mt-2">
+                    <div class="col">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="estimateMissing" name="estimate_missing" checked>
+                        <label class="form-check-label" for="estimateMissing">Estimate missing input markers</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="forceComplete" name="force_complete" checked>
+                        <label class="form-check-label" for="forceComplete">Force-complete augmented markers</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="anatomicalConstraints" name="anatomical_constraints" checked>
+                        <label class="form-check-label" for="anatomicalConstraints">Apply anatomical constraints</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="boneLengthConstraints" name="bone_length_constraints" checked>
+                        <label class="form-check-label" for="boneLengthConstraints">Apply bone length constraints</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="multiConstraint" name="multi_constraint_optimization" checked>
+                        <label class="form-check-label" for="multiConstraint">Multi-constraint optimization</label>
+                      </div>
+                    </div>
+                    <div class="col">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="computeAllAngles" name="compute_all_joint_angles" checked>
+                        <label class="form-check-label" for="computeAllAngles">Compute all joint angles</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="fixHeader" name="fix_header">
+                        <label class="form-check-label" for="fixHeader">Fix TRC header metadata</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="card panel-card border-0 rounded-4 shadow">
+              <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                  <div>
+                    <p class="text-uppercase text-success fw-semibold small mb-1">Advanced</p>
+                    <h2 class="h4 mb-0">Constraint tuning</h2>
+                    <p class="text-muted small mb-0">Recommended: adjust only if you know what you're doing.</p>
+                  </div>
+                  <button class="btn btn-link text-primary p-0" type="button" data-bs-toggle="collapse" data-bs-target="#constraintTuning" aria-expanded="false" aria-controls="constraintTuning" data-collapse-toggle data-label-show="Show constraint tuning" data-label-hide="Hide constraint tuning" data-icon-collapsed="bi-chevron-down" data-icon-expanded="bi-chevron-up" aria-label="Show constraint tuning">
+                    <i class="bi bi-chevron-down fs-4" aria-hidden="true" data-collapse-icon></i>
+                    <span class="visually-hidden" data-collapse-label>Show constraint tuning</span>
+                  </button>
+                </div>
+                <div class="collapse mt-3" id="constraintTuning">
+                  <div class="row row-cols-1 row-cols-md-3 g-3">
+                    <div class="col">
+                      <label for="boneSmoothWindow" class="form-label">Anatomical smooth window</label>
+                      <input type="number" class="form-control" id="boneSmoothWindow" name="bone_smooth_window" min="1" step="1" value="21">
+                    </div>
+                    <div class="col">
+                      <label for="groundPercentile" class="form-label">Ground percentile</label>
+                      <input type="number" class="form-control" id="groundPercentile" name="ground_percentile" min="0" max="100" step="0.1" value="5.0">
+                    </div>
+                    <div class="col">
+                      <label for="groundMargin" class="form-label">Ground margin (m)</label>
+                      <input type="number" class="form-control" id="groundMargin" name="ground_margin" step="0.001" value="0.02">
+                    </div>
+                    <div class="col">
+                      <label for="boneLengthTolerance" class="form-label">Bone length tolerance</label>
+                      <input type="number" class="form-control" id="boneLengthTolerance" name="bone_length_tolerance" min="0" step="0.01" value="0.15">
+                    </div>
+                    <div class="col">
+                      <label for="boneDepthWeight" class="form-label">Bone depth weight</label>
+                      <input type="number" class="form-control" id="boneDepthWeight" name="bone_depth_weight" min="0" max="1" step="0.01" value="0.8">
+                    </div>
+                    <div class="col">
+                      <label for="boneLengthIterations" class="form-label">Bone length iterations</label>
+                      <input type="number" class="form-control" id="boneLengthIterations" name="bone_length_iterations" min="1" step="1" value="3">
+                    </div>
+                    <div class="col">
+                      <label for="multiConstraintIterations" class="form-label">Multi-constraint iterations</label>
+                      <input type="number" class="form-control" id="multiConstraintIterations" name="multi_constraint_iterations" min="1" step="1" value="10">
+                    </div>
+                    <div class="col">
+                      <label for="gaussianSmooth" class="form-label">Gaussian smooth sigma</label>
+                      <input type="number" class="form-control" id="gaussianSmooth" name="gaussian_smooth" min="0" step="0.1" value="0">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mt-3">
+          <div class="col-12">
+            <div class="card panel-card border-0 rounded-4 shadow">
+              <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" value="accepted" id="consent-check" name="consent" required>
+                  <label class="form-check-label" for="consent-check">
+                    The subject in the recorded clip agrees with this analysis
+                  </label>
+                </div>
+                <button class="btn btn-primary" type="submit" id="analyzeBtn">Analyse Video</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="card panel-card border-0 rounded-4 shadow">
+              <div class="card-body">
+                <p class="text-uppercase text-success fw-semibold small mb-2">History</p>
+                <h2 class="h4 mb-3">Open a previous run</h2>
+                <div class="row g-3 align-items-end">
+                  <div class="col-md-8">
+                    <label for="previousRunSelect" class="form-label">Saved results</label>
+                    <div class="form-text text-muted mb-2">Browse previously processed sessions from data/output/pose-3d/.</div>
+                    <select class="form-select" id="previousRunSelect" data-results-template="{% url 'results' run_key='__RUN_KEY__' %}" {% if not previous_runs %}disabled{% endif %}>
+                      <option value="" disabled selected>Select a run...</option>
+                      {% for run in previous_runs %}
+                        <option value="{{ run.run_key }}" data-modified="{{ run.modified_time }}">{{ run.display_name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-md-4 d-flex flex-column align-items-md-end align-items-start gap-2">
+                    <div class="form-text text-muted" id="previousRunTimestamp">Last updated: --</div>
+                    <button class="btn btn-outline-primary w-100" type="button" id="openPreviousRun" {% if not previous_runs %}disabled{% endif %}>Open results</button>
+                  </div>
+                </div>
+                {% if not previous_runs %}
+                  <p class="small text-muted mt-3 mb-0">No previous runs found yet.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
-
-    <section class="py-3">
-      <div class="container container-wide pb-4">
-        <div class="card panel-card border-0 rounded-4 shadow">
-          <div class="card-body">
-            <p class="text-uppercase text-success fw-semibold small mb-2">Output</p>
-            <h2 class="h4 mb-3">Output folder</h2>
-            <label for="outputLocation" class="form-label">Relative output location</label>
-            <div class="input-group">
-              <input type="text" class="form-control" id="outputLocation" name="output_location" placeholder="e.g. sessions/demo">
-            </div>
-            <div class="form-text text-muted">Saved under data/output/pose-3d/ (leave blank for default).</div>
-          </div>
-        </div>
-
-        <div class="card panel-card border-0 rounded-4 shadow mt-4">
-          <div class="card-body">
-            <p class="text-uppercase text-success fw-semibold small mb-2">Extra parameters</p>
-            <h2 class="h4 mb-3">Participant details</h2>
-            <div class="row row-cols-1 row-cols-md-2 g-3">
-              <div class="col">
-                <label for="sex" class="form-label">Sex</label>
-                <select class="form-select" id="sex" name="sex">
-                  <option disabled selected value="">Choose...</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                </select>
-              </div>
-              <div class="col">
-                <label for="age" class="form-label">Age (years)</label>
-                <input type="number" class="form-control" id="age" name="age" min="0" step="1" placeholder="e.g. 30">
-              </div>
-              <div class="col">
-                <label for="height" class="form-label">Height (m)</label>
-                <input type="number" class="form-control" id="height" name="height" min="0" step="0.01" placeholder="e.g. 1.78">
-              </div>
-              <div class="col">
-                <label for="weight" class="form-label">Weight (kg)</label>
-                <input type="number" class="form-control" id="weight" name="weight" min="0" step="0.1" placeholder="e.g. 75">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card panel-card border-0 rounded-4 shadow mt-4">
-          <div class="card-body">
-            <p class="text-uppercase text-success fw-semibold small mb-2">Pipeline</p>
-            <h2 class="h4 mb-3">Pipeline settings</h2>
-            <div class="alert alert-success d-flex gap-2 align-items-start" role="alert">
-              <i class="bi bi-stars mt-1"></i>
-              <div>
-                <strong>Recommended setup</strong>
-                <p class="mb-0 small">These defaults are the recommended pipeline settings.</p>
-              </div>
-            </div>
-            <div class="row row-cols-1 row-cols-md-3 g-3">
-              <div class="col">
-                <label for="visibilityMin" class="form-label">Visibility threshold</label>
-                <input type="number" class="form-control" id="visibilityMin" name="visibility_min" min="0" max="1" step="0.01" value="0.1">
-              </div>
-              <div class="col">
-                <label for="augmentationCycles" class="form-label">Augmentation cycles</label>
-                <input type="number" class="form-control" id="augmentationCycles" name="augmentation_cycles" min="1" step="1" value="20">
-              </div>
-              <div class="col">
-                <label for="jointAngleSmooth" class="form-label">Joint angle smooth window</label>
-                <input type="number" class="form-control" id="jointAngleSmooth" name="joint_angle_smooth_window" min="1" step="1" value="9">
-              </div>
-            </div>
-            <div class="row row-cols-1 row-cols-md-2 g-3 mt-2">
-              <div class="col">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="estimateMissing" name="estimate_missing" checked>
-                  <label class="form-check-label" for="estimateMissing">Estimate missing input markers</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="forceComplete" name="force_complete" checked>
-                  <label class="form-check-label" for="forceComplete">Force-complete augmented markers</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="anatomicalConstraints" name="anatomical_constraints" checked>
-                  <label class="form-check-label" for="anatomicalConstraints">Apply anatomical constraints</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="boneLengthConstraints" name="bone_length_constraints" checked>
-                  <label class="form-check-label" for="boneLengthConstraints">Apply bone length constraints</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="multiConstraint" name="multi_constraint_optimization" checked>
-                  <label class="form-check-label" for="multiConstraint">Multi-constraint optimization</label>
-                </div>
-              </div>
-              <div class="col">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="computeAllAngles" name="compute_all_joint_angles" checked>
-                  <label class="form-check-label" for="computeAllAngles">Compute all joint angles</label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="fixHeader" name="fix_header">
-                  <label class="form-check-label" for="fixHeader">Fix TRC header metadata</label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card panel-card border-0 rounded-4 shadow mt-4">
-          <div class="card-body">
-            <p class="text-uppercase text-success fw-semibold small mb-2">Advanced</p>
-            <h2 class="h4 mb-3">Constraint tuning</h2>
-            <div class="row row-cols-1 row-cols-md-3 g-3">
-              <div class="col">
-                <label for="boneSmoothWindow" class="form-label">Anatomical smooth window</label>
-                <input type="number" class="form-control" id="boneSmoothWindow" name="bone_smooth_window" min="1" step="1" value="21">
-              </div>
-              <div class="col">
-                <label for="groundPercentile" class="form-label">Ground percentile</label>
-                <input type="number" class="form-control" id="groundPercentile" name="ground_percentile" min="0" max="100" step="0.1" value="5.0">
-              </div>
-              <div class="col">
-                <label for="groundMargin" class="form-label">Ground margin (m)</label>
-                <input type="number" class="form-control" id="groundMargin" name="ground_margin" step="0.001" value="0.02">
-              </div>
-              <div class="col">
-                <label for="boneLengthTolerance" class="form-label">Bone length tolerance</label>
-                <input type="number" class="form-control" id="boneLengthTolerance" name="bone_length_tolerance" min="0" step="0.01" value="0.15">
-              </div>
-              <div class="col">
-                <label for="boneDepthWeight" class="form-label">Bone depth weight</label>
-                <input type="number" class="form-control" id="boneDepthWeight" name="bone_depth_weight" min="0" max="1" step="0.01" value="0.8">
-              </div>
-              <div class="col">
-                <label for="boneLengthIterations" class="form-label">Bone length iterations</label>
-                <input type="number" class="form-control" id="boneLengthIterations" name="bone_length_iterations" min="1" step="1" value="3">
-              </div>
-              <div class="col">
-                <label for="multiConstraintIterations" class="form-label">Multi-constraint iterations</label>
-                <input type="number" class="form-control" id="multiConstraintIterations" name="multi_constraint_iterations" min="1" step="1" value="10">
-              </div>
-              <div class="col">
-                <label for="gaussianSmooth" class="form-label">Gaussian smooth sigma</label>
-                <input type="number" class="form-control" id="gaussianSmooth" name="gaussian_smooth" min="0" step="0.1" value="0">
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-      <div class="container container-wide pt-4">
-
-        <div class="card panel-card border-0 rounded-4 shadow mb-4">
-          <div class="card-body">
-            <p class="text-uppercase text-success fw-semibold small mb-2">History</p>
-            <h2 class="h4 mb-3">Open a previous run</h2>
-            <div class="row g-3 align-items-end">
-              <div class="col-md-8">
-                <label for="previousRunSelect" class="form-label">Saved results</label>
-                <div class="form-text text-muted mb-2">Browse previously processed sessions from data/output/pose-3d/.</div>
-                <select class="form-select" id="previousRunSelect" data-results-template="{% url 'results' run_key='__RUN_KEY__' %}" {% if not previous_runs %}disabled{% endif %}>
-                  <option value="" disabled selected>Select a run...</option>
-                  {% for run in previous_runs %}
-                    <option value="{{ run.run_key }}" data-modified="{{ run.modified_time }}">{{ run.display_name }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="col-md-4 d-flex flex-column align-items-md-end align-items-start gap-2">
-                <div class="form-text text-muted" id="previousRunTimestamp">Last updated: --</div>
-                <button class="btn btn-outline-primary w-100" type="button" id="openPreviousRun" {% if not previous_runs %}disabled{% endif %}>Open results</button>
-              </div>
-            </div>
-            {% if not previous_runs %}
-              <p class="small text-muted mt-3 mb-0">No previous runs found yet.</p>
-            {% endif %}
-          </div>
-        </div>
-
-        <div class="card panel-card border-0 rounded-4 shadow">
-          <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
-            <div class="form-check mb-0">
-              <input class="form-check-input" type="checkbox" value="accepted" id="consent-check" name="consent" required>
-              <label class="form-check-label" for="consent-check">
-                The subject in the recorded clip agrees with this analysis
-              </label>
-            </div>
-            <button class="btn btn-primary" type="submit" id="analyzeBtn">Analyse Video</button>
-          </div>
-        </div>
-
-      </div>
-    </section>
     </form>
   </div>
 </body>

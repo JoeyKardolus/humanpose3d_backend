@@ -29,6 +29,7 @@ from src.application.webapp.services.pipeline_result_service import PipelineResu
 from src.application.webapp.services.pipeline_runner import PipelineRunner
 from src.application.webapp.services.progress_service import ProgressService
 from src.application.webapp.services.results_service import ResultsService
+from src.application.webapp.services.results_archive_service import ResultsArchiveService
 from src.application.webapp.services.run_id_factory import RunIdFactory
 from src.application.webapp.services.run_key_service import RunKeyService
 from src.application.webapp.services.statistics_service import StatisticsService
@@ -82,6 +83,7 @@ _RUN_PIPELINE_ASYNC = RunPipelineAsyncUseCase(
 )
 
 _RESULTS_SERVICE = ResultsService()
+_RESULTS_ARCHIVE = ResultsArchiveService()
 _STATISTICS_SERVICE = StatisticsService(_APP_PATHS.upload_root)
 _MEDIA_SERVICE = MediaService(
     _APP_PATHS.output_root,
@@ -229,6 +231,23 @@ class ResultsView(View):
                 "run_key": run_key,
                 "files": files,
             },
+        )
+
+
+class DownloadAllView(View):
+    """Archive download endpoint for run outputs."""
+
+    def get(self, request: HttpRequest, run_key: str) -> HttpResponse:
+        """Download all output files as a zip archive."""
+        run_dir = _PATH_VALIDATOR.resolve_output_dir(_APP_PATHS.output_root, run_key)
+        if not run_dir.exists():
+            raise Http404("Run not found.")
+
+        archive = _RESULTS_ARCHIVE.build_archive(run_dir, run_key)
+        return FileResponse(
+            archive,
+            as_attachment=True,
+            filename=f"{run_key}.zip",
         )
 
 

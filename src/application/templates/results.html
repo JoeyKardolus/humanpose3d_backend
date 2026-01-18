@@ -25,6 +25,11 @@
               <div class="d-flex flex-wrap gap-2">
                 <a class="btn btn-outline-primary" href="{% url 'home' %}">Home</a>
                 <a class="btn btn-primary" href="{% url 'statistics' run_key=run_key %}">Statistics</a>
+                {% if files %}
+                  <a class="btn btn-outline-success" href="{% url 'download_all' run_key=run_key %}">
+                    <i class="bi bi-file-earmark-zip"></i> Download all
+                  </a>
+                {% endif %}
               </div>
             </div>
           </div>

@@ -231,4 +231,34 @@ document.addEventListener("DOMContentLoaded", () => {
         updateTimestamp();
         previousRunSelect.addEventListener("change", updateTimestamp);
     }
+
+    const collapseToggles = document.querySelectorAll("[data-collapse-toggle]");
+    const updateCollapseToggle = (button, isExpanded) => {
+        const showLabel = button.dataset.labelShow || "Show";
+        const hideLabel = button.dataset.labelHide || "Hide";
+        const collapsedIcon = button.dataset.iconCollapsed || "bi-chevron-down";
+        const expandedIcon = button.dataset.iconExpanded || "bi-chevron-up";
+        const label = button.querySelector("[data-collapse-label]");
+        const icon = button.querySelector("[data-collapse-icon]");
+        const nextLabel = isExpanded ? hideLabel : showLabel;
+        button.setAttribute("aria-expanded", String(isExpanded));
+        button.setAttribute("aria-label", nextLabel);
+        if (label) {
+            label.textContent = nextLabel;
+        }
+        if (icon) {
+            icon.classList.remove(collapsedIcon, expandedIcon);
+            icon.classList.add(isExpanded ? expandedIcon : collapsedIcon);
+        }
+    };
+
+    collapseToggles.forEach((button) => {
+        const targetSelector = button.getAttribute("data-bs-target");
+        if (!targetSelector) return;
+        const target = document.querySelector(targetSelector);
+        if (!target) return;
+        updateCollapseToggle(button, target.classList.contains("show"));
+        target.addEventListener("shown.bs.collapse", () => updateCollapseToggle(button, true));
+        target.addEventListener("hidden.bs.collapse", () => updateCollapseToggle(button, false));
+    });
 });
