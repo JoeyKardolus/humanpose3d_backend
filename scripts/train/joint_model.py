@@ -168,6 +168,12 @@ def main():
                         help='Number of transformer layers')
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Limit training samples (for debugging)')
+    parser.add_argument('--ignore-arm-abd-rot', action='store_true',
+                        help='Ignore arm abduction/rotation in loss (unreliable data)')
+    parser.add_argument('--ignore-left-arm', action='store_true',
+                        help='Ignore left arm entirely in loss (data quality issues)')
+    parser.add_argument('--ignore-arms', action='store_true',
+                        help='Ignore both arms entirely in loss')
     args = parser.parse_args()
 
     print("=" * 60)
@@ -178,6 +184,7 @@ def main():
     print(f"Batch size: {args.batch_size}")
     print(f"Learning rate: {args.lr}")
     print(f"FP16: {args.fp16}")
+    print(f"Ignore arms: {args.ignore_arms}")
     print()
 
     # Check data directory
@@ -224,7 +231,16 @@ def main():
         symmetry_weight=0.01,   # Reduced 10x - asymmetric poses are valid in dance
         delta_weight=0.001,     # Reduced 10x - allow larger corrections when needed
         chain_weight=0.1,       # Kinematic chain consistency - connected joints have correlated errors
+        ignore_arm_abd_rot=args.ignore_arm_abd_rot,
+        ignore_left_arm=args.ignore_left_arm,
+        ignore_arms=args.ignore_arms,
     )
+    if args.ignore_arms:
+        print("Ignoring both arms entirely in loss (shoulders + elbows)")
+    elif args.ignore_arm_abd_rot:
+        print("Ignoring arm abduction/rotation in loss (shoulders + elbows)")
+    if args.ignore_left_arm and not args.ignore_arms:
+        print("Ignoring left arm entirely in loss (shoulder_L + elbow_L)")
 
     # Optimizer
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)

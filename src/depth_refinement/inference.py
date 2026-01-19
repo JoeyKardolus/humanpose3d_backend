@@ -79,6 +79,7 @@ class DepthRefiner:
             dropout=config.get('dropout', 0.1),
             output_confidence=config.get('output_confidence', True),
             use_2d_pose=config.get('use_2d_pose', True),
+            use_limb_orientations=config.get('use_limb_orientations', False),
         ).to(self.device)
 
         # Load weights

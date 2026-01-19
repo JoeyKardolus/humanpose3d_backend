@@ -21,7 +21,7 @@ import tempfile
 from collections import defaultdict
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -31,6 +31,26 @@ sys.path.insert(0, str(project_root))
 
 from src.datastream.data_stream import LandmarkRecord, ORDER_22, write_landmark_csv
 from src.markeraugmentation.gpu_config import patch_pose2sim_gpu
+
+# Global depth refiner (initialized per-worker for multiprocessing compatibility)
+_depth_refiner = None
+_depth_model_path = None
+
+
+def get_depth_refiner():
+    """Get or initialize the depth refiner (lazy loading for multiprocessing)."""
+    global _depth_refiner, _depth_model_path
+    if _depth_refiner is None and _depth_model_path is not None:
+        from src.depth_refinement.inference import DepthRefiner
+        _depth_refiner = DepthRefiner(_depth_model_path)
+        print(f"  [Worker] Loaded depth refiner from {_depth_model_path}")
+    return _depth_refiner
+
+
+def init_worker(model_path: Optional[str]):
+    """Initialize worker with depth model path."""
+    global _depth_model_path
+    _depth_model_path = model_path
 
 
 # COCO 17 joint names (matching AIST++ format)
@@ -314,6 +334,150 @@ def run_augmentation(trc_path: Path, output_dir: Path, estimated_height: float =
     return augmented_path
 
 
+def read_trc_markers(trc_path: Path) -> Tuple[List[str], np.ndarray]:
+    """Read TRC file and return marker names and positions.
+
+    Returns:
+        Tuple of (marker_names, positions) where positions is (n_frames, n_markers, 3)
+    """
+    lines = trc_path.read_text(encoding="utf-8").splitlines()
+
+    # Find header line
+    name_line_idx = next(
+        (idx for idx, line in enumerate(lines) if line.startswith("Frame#")), None
+    )
+    if name_line_idx is None:
+        raise ValueError(f"Could not locate marker header in {trc_path}")
+
+    data_start_idx = name_line_idx + 2  # Skip header and axis line
+    while data_start_idx < len(lines) and not lines[data_start_idx].strip():
+        data_start_idx += 1
+
+    # Read marker names from header
+    name_tokens = lines[name_line_idx].split("\t")
+    marker_names = []
+    for idx in range(2, len(name_tokens), 3):
+        label = name_tokens[idx].strip()
+        if label:
+            marker_names.append(label)
+
+    # Determine actual marker count from first data line
+    first_data_line = None
+    for line in lines[data_start_idx:]:
+        if line.strip():
+            first_data_line = line.rstrip("\n").split("\t")
+            break
+
+    if first_data_line is None:
+        raise ValueError(f"No data rows found in {trc_path}")
+
+    data_columns = len(first_data_line) - 2
+    actual_marker_count = data_columns // 3
+
+    # Extend marker names if needed (for augmented markers)
+    augmented_names = [
+        "C7_study", "r_shoulder_study", "L_shoulder_study",
+        "r.ASIS_study", "L.ASIS_study", "r.PSIS_study", "L.PSIS_study",
+        "r_knee_study", "L_knee_study", "r_mknee_study", "L_mknee_study",
+        "r_ankle_study", "L_ankle_study", "r_mankle_study", "L_mankle_study",
+        "r_calc_study", "L_calc_study", "r_toe_study", "L_toe_study",
+        "r_5meta_study", "L_5meta_study",
+        "r_lelbow_study", "L_lelbow_study", "r_melbow_study", "L_melbow_study",
+        "r_lwrist_study", "L_lwrist_study", "r_mwrist_study", "L_mwrist_study",
+        "r_thigh1_study", "r_thigh2_study", "r_thigh3_study",
+        "L_thigh1_study", "L_thigh2_study", "L_thigh3_study",
+        "r_sh1_study", "r_sh2_study", "r_sh3_study",
+        "L_sh1_study", "L_sh2_study", "L_sh3_study",
+        "RHJC_study", "LHJC_study",
+    ]
+    if actual_marker_count > len(marker_names):
+        num_needed = actual_marker_count - len(marker_names)
+        marker_names.extend(augmented_names[:num_needed])
+
+    # Read all frame data
+    frames = []
+    for line in lines[data_start_idx:]:
+        if not line.strip():
+            continue
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) < 2:
+            continue
+        data = parts[2:]
+        coords = []
+        for marker_idx in range(actual_marker_count):
+            base = marker_idx * 3
+            triple = data[base : base + 3] if base + 2 < len(data) else ["", "", ""]
+            if len(triple) < 3:
+                triple = ["", "", ""]
+            try:
+                coords.append([
+                    float(triple[0]) if triple[0] else np.nan,
+                    float(triple[1]) if triple[1] else np.nan,
+                    float(triple[2]) if triple[2] else np.nan,
+                ])
+            except ValueError:
+                coords.append([np.nan, np.nan, np.nan])
+        frames.append(coords)
+
+    return marker_names, np.array(frames, dtype=np.float32)
+
+
+def write_trc_markers(
+    trc_path: Path,
+    marker_names: List[str],
+    positions: np.ndarray,
+    fps: float = 30.0,
+) -> None:
+    """Write marker positions to TRC file.
+
+    Args:
+        trc_path: Output path
+        marker_names: List of marker names
+        positions: (n_frames, n_markers, 3) array
+        fps: Frame rate
+    """
+    n_frames = len(positions)
+    n_markers = len(marker_names)
+
+    lines = []
+    lines.append(f"PathFileType\t4\t(X/Y/Z)\t{trc_path.name}")
+    lines.append(
+        f"DataRate\t{fps:.2f}\tCameraRate\t{fps:.2f}\t"
+        f"NumFrames\t{n_frames}\tNumMarkers\t{n_markers}\tUnits\tm"
+    )
+    lines.append("")  # compatibility spacer
+
+    # Marker name header
+    name_tokens = ["Frame#", "Time"]
+    for marker in marker_names:
+        name_tokens.extend([marker, marker, marker])
+    lines.append("\t".join(name_tokens))
+
+    # Axis header
+    axis_tokens = ["", ""]
+    for _ in marker_names:
+        axis_tokens.extend(["X", "Y", "Z"])
+    lines.append("\t".join(axis_tokens))
+
+    # Data rows
+    for frame_idx, frame_data in enumerate(positions):
+        timestamp = frame_idx / fps
+        row = [str(frame_idx + 1), f"{timestamp:.6f}"]
+        for marker_idx in range(n_markers):
+            if marker_idx < len(frame_data):
+                x, y, z = frame_data[marker_idx]
+                if np.isnan(x) or np.isnan(y) or np.isnan(z):
+                    row.extend(["", "", ""])
+                else:
+                    row.extend([f"{x:.6f}", f"{y:.6f}", f"{z:.6f}"])
+            else:
+                row.extend(["", "", ""])
+        lines.append("\t".join(row))
+
+    trc_path.parent.mkdir(parents=True, exist_ok=True)
+    trc_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def compute_angles_from_trc(trc_path: Path) -> Dict[str, np.ndarray]:
     """Compute joint angles from augmented TRC file.
 
@@ -325,7 +489,7 @@ def compute_angles_from_trc(trc_path: Path) -> Dict[str, np.ndarray]:
     angles = compute_all_joint_angles(
         trc_path,
         smooth_window=5,        # Light smoothing to reduce gimbal lock noise
-        unwrap=True,            # Remove 360° discontinuities (CRITICAL for training!)
+        unwrap=False,           # Keep angles in [-180, 180] naturally; angular_distance loss handles wrapping
         zero_mode='first_frame',
         verbose=False,
     )
@@ -343,7 +507,7 @@ def angles_to_array(angles: Dict[str, np.ndarray], frame_idx: int) -> np.ndarray
 
     Note: DataFrame has columns [time_s, flex, abd, rot], so we skip column 0.
     Elbow only has 1 DOF (flex), so we pad with zeros for abd/rot.
-    Pelvis angles are wrapped to ±180° to prevent unbounded accumulation.
+    Angles stay in [-180, 180] range naturally (no unwrap); angular_distance loss handles wrapping.
     """
     joint_order = [
         'pelvis', 'hip_R', 'hip_L', 'knee_R', 'knee_L',
@@ -365,9 +529,6 @@ def angles_to_array(angles: Dict[str, np.ndarray], frame_idx: int) -> np.ndarray
                 n_dofs = min(len(angle_vals), 3)
                 result[i, :n_dofs] = angle_vals[:n_dofs]
                 # Remaining DOFs stay as zeros (already initialized)
-
-    # Wrap ALL joint angles to ±180° to prevent unbounded accumulation from unwrap
-    result = ((result + 180) % 360) - 180
 
     return result
 
@@ -407,6 +568,32 @@ def process_sequence(args: Tuple[str, List[Tuple[Path, int]], Path]) -> Tuple[in
             frames_gt.append((data['ground_truth'], data['visibility']))
             original_data.append(dict(data))
 
+        # === DEPTH REFINEMENT STEP ===
+        # Apply depth refinement to corrupted poses BEFORE Pose2Sim augmentation.
+        # This makes corrupted poses more similar to GT, reducing LSTM divergence artifacts.
+        refiner = get_depth_refiner()
+        if refiner is not None:
+            # Stack poses for batch refinement
+            corrupted_poses = np.stack([pose for pose, _ in frames_corrupted])  # (N, 17, 3)
+            visibility = np.stack([vis for _, vis in frames_corrupted])  # (N, 17)
+
+            # Get 2D poses if available
+            poses_2d = None
+            if 'pose_2d' in original_data[0]:
+                poses_2d = np.stack([orig['pose_2d'] for orig in original_data])  # (N, 17, 2)
+
+            # Apply depth refinement with bone locking for temporal consistency
+            refined_poses = refiner.refine_sequence_with_bone_locking(
+                corrupted_poses,
+                visibility,
+                poses_2d,
+                batch_size=64,
+                calibration_frames=min(50, len(corrupted_poses))
+            )
+
+            # Replace corrupted frames with refined versions
+            frames_corrupted = [(refined_poses[i], visibility[i]) for i in range(len(refined_poses))]
+
         # Create temp directory
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -415,7 +602,7 @@ def process_sequence(args: Tuple[str, List[Tuple[Path, int]], Path]) -> Tuple[in
             corrupted_height = estimate_height_from_poses(frames_corrupted)
             gt_height = estimate_height_from_poses(frames_gt)
 
-            # Process corrupted sequence
+            # Process corrupted (or refined) sequence
             corrupted_trc = sequence_to_trc(
                 frames_corrupted,
                 temp_path / 'corrupted',
@@ -488,6 +675,11 @@ def main():
                         help='Maximum number of sequences to process')
     parser.add_argument('--workers', type=int, default=1,
                         help='Number of parallel workers')
+    parser.add_argument('--depth-model', type=Path,
+                        default=Path('models/checkpoints/best_depth_model.pth'),
+                        help='Path to depth refinement model')
+    parser.add_argument('--no-depth', action='store_true',
+                        help='Disable depth refinement')
     args = parser.parse_args()
 
     print("=" * 60)
@@ -495,7 +687,19 @@ def main():
     print("=" * 60)
     print(f"Input:  {args.input_dir}")
     print(f"Output: {args.output_dir}")
+
+    # Initialize depth refinement
+    depth_model_path = None
+    if not args.no_depth and args.depth_model and args.depth_model.exists():
+        depth_model_path = str(args.depth_model)
+        print(f"Depth refinement: ENABLED ({args.depth_model})")
+    else:
+        print("Depth refinement: DISABLED")
     print()
+
+    # Initialize global model path for single-worker mode
+    global _depth_model_path
+    _depth_model_path = depth_model_path
 
     # Enable GPU acceleration for Pose2Sim LSTM
     patch_pose2sim_gpu()
@@ -535,7 +739,8 @@ def main():
             total_success += success
             total_failed += failed
     else:
-        with Pool(args.workers) as pool:
+        # Use initializer to pass depth model path to each worker
+        with Pool(args.workers, initializer=init_worker, initargs=(depth_model_path,)) as pool:
             for i, (success, failed) in enumerate(pool.imap_unordered(process_sequence, tasks)):
                 total_success += success
                 total_failed += failed

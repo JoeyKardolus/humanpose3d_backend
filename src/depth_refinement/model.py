@@ -97,8 +97,8 @@ class ElePoseBackbone(nn.Module):
         """
         batch_size = pose_2d.size(0)
 
-        # Flatten 2D pose
-        x = pose_2d.view(batch_size, -1)  # (batch, 2*num_joints)
+        # Flatten 2D pose (use reshape for non-contiguous tensor compatibility)
+        x = pose_2d.reshape(batch_size, -1)  # (batch, 2*num_joints)
 
         # Upscale and process
         x = self.upscale(x)  # (batch, hidden_dim)
@@ -349,7 +349,7 @@ class Pose2DEncoder(nn.Module):
         batch_size = pose_2d.size(0)
 
         # Encode raw coordinates (captures all foreshortening patterns)
-        coord_flat = pose_2d.view(batch_size, -1)  # (batch, 34)
+        coord_flat = pose_2d.reshape(batch_size, -1)  # (batch, 34)
         coord_features = self.coord_encoder(coord_flat)  # (batch, d_model)
 
         # Extract and encode hand-crafted viewpoint features
@@ -484,10 +484,10 @@ class DirectAnglePredictor(nn.Module):
         batch_size = joint_features.size(0)
 
         # === Existing features branch ===
-        # Flatten all features
-        flat_joint = joint_features.view(batch_size, -1)  # (batch, num_joints * d_model)
-        flat_3d = pose_3d.view(batch_size, -1)  # (batch, num_joints * 3)
-        flat_vis = visibility.view(batch_size, -1)  # (batch, num_joints)
+        # Flatten all features (use reshape for non-contiguous tensor compatibility)
+        flat_joint = joint_features.reshape(batch_size, -1)  # (batch, num_joints * d_model)
+        flat_3d = pose_3d.reshape(batch_size, -1)  # (batch, num_joints * 3)
+        flat_vis = visibility.reshape(batch_size, -1)  # (batch, num_joints)
 
         existing_features = [flat_joint, flat_3d, flat_vis]
 
@@ -736,7 +736,7 @@ class LimbOrientationPredictor(nn.Module):
             limb_2d_dir = limb_2d_vec / (limb_2d_length.clamp(min=1e-4))  # (batch, 14, 2)
 
             # Foreshortening ratio (using expected 2D lengths as reference)
-            length_ratio = limb_2d_length / (self.expected_2d_lengths.view(1, -1, 1) + 1e-6)
+            length_ratio = limb_2d_length / (self.expected_2d_lengths.reshape(1, -1, 1) + 1e-6)
 
             # Encode 2D features
             limb_2d_features = torch.cat([limb_2d_dir, limb_2d_length, length_ratio], dim=-1)  # (batch, 14, 4)

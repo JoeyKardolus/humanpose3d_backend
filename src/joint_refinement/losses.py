@@ -131,6 +131,9 @@ class JointRefinementLoss(nn.Module):
         delta_weight: float = 0.01,
         chain_weight: float = 0.1,
         use_visibility_weighting: bool = True,
+        ignore_arm_abd_rot: bool = False,
+        ignore_left_arm: bool = False,
+        ignore_arms: bool = False,
     ):
         super().__init__()
 
@@ -138,6 +141,30 @@ class JointRefinementLoss(nn.Module):
         self.delta_weight = delta_weight
         self.chain_weight = chain_weight
         self.use_visibility_weighting = use_visibility_weighting
+        self.ignore_arm_abd_rot = ignore_arm_abd_rot
+        self.ignore_left_arm = ignore_left_arm
+        self.ignore_arms = ignore_arms
+
+        # Create mask for ignoring certain DOFs
+        # Joint indices: 8=shoulder_R, 9=shoulder_L, 10=elbow_R, 11=elbow_L
+        # DOF indices: 0=flex, 1=abd, 2=rot
+        self._dof_mask = None
+        if ignore_arm_abd_rot or ignore_left_arm or ignore_arms:
+            # Mask: 1 = include in loss, 0 = ignore
+            self.register_buffer('dof_mask', torch.ones(12, 3))
+            if ignore_arms:
+                # Ignore both arms entirely
+                for joint_idx in [8, 9, 10, 11]:  # both shoulders and elbows
+                    self.dof_mask[joint_idx, :] = 0.0
+            else:
+                if ignore_arm_abd_rot:
+                    for joint_idx in [8, 9, 10, 11]:  # shoulders and elbows
+                        self.dof_mask[joint_idx, 1] = 0.0  # abd
+                        self.dof_mask[joint_idx, 2] = 0.0  # rot
+                if ignore_left_arm:
+                    for joint_idx in [9, 11]:  # shoulder_L, elbow_L
+                        self.dof_mask[joint_idx, :] = 0.0  # all DOFs
+            self._dof_mask = True
 
     def forward(
         self,
@@ -171,7 +198,13 @@ class JointRefinementLoss(nn.Module):
         angle_error = angular_distance(refined_angles, ground_truth_angles)
         # Weight by visibility and take mean
         weighted_error = angle_error * vis_weights
-        reconstruction_loss = weighted_error.sum() / (vis_weights.sum() * 3 + 1e-6)
+        # Apply DOF mask if ignoring certain joints/DOFs
+        if self._dof_mask:
+            weighted_error = weighted_error * self.dof_mask.unsqueeze(0)
+            denom = (vis_weights * self.dof_mask.unsqueeze(0)).sum() + 1e-6
+        else:
+            denom = vis_weights.sum() * 3 + 1e-6
+        reconstruction_loss = weighted_error.sum() / denom
         losses['reconstruction'] = reconstruction_loss
 
         # 2. Bilateral symmetry loss
