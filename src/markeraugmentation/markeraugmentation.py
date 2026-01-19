@@ -74,8 +74,6 @@ def run_pose2sim_augment(
     out_dir: Path,
     height: float,
     mass: float,
-    age: int,
-    sex: str,
     augmentation_cycles: int = 1,
 ) -> Path:
     """Invoke Pose2Sim's augment_markers_all with multi-cycle averaging for better results."""
@@ -85,7 +83,7 @@ def run_pose2sim_augment(
     if augmentation_cycles == 1:
         # Single cycle - use original fast path
         return _run_single_augmentation_cycle(
-            trc_path, out_dir, height, mass, age, sex, cycle_num=0
+            trc_path, out_dir, height, mass, cycle_num=0
         )
 
     # Multi-cycle averaging approach
@@ -96,7 +94,7 @@ def run_pose2sim_augment(
         print(f"[augment] cycle {cycle_num + 1}/{augmentation_cycles}")
         try:
             cycle_output = _run_single_augmentation_cycle(
-                trc_path, out_dir, height, mass, age, sex, cycle_num
+                trc_path, out_dir, height, mass, cycle_num
             )
             cycle_results.append(cycle_output)
         except Exception as exc:
@@ -139,8 +137,6 @@ def _run_single_augmentation_cycle(
     out_dir: Path,
     height: float,
     mass: float,
-    age: int,
-    sex: str,
     cycle_num: int,
 ) -> Path:
     """Run a single Pose2Sim augmentation cycle."""

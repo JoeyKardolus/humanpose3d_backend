@@ -32,7 +32,7 @@ from .angle_processing import (
     unwrap_angles_deg,
     zero_angles,
 )
-from .joint_angles_euler import get_marker, read_trc
+from .trc_utils import get_marker, read_trc
 from .segment_coordinate_systems import (
     femur_axes,
     foot_axes,

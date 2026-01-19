@@ -1,5 +1,0 @@
-# Run this on your laptop:
-
-cd ~/ai-test-project/humanpose3d_mediapipe
-wget http://172.18.190.56:8888/training_data.tar.gz -P data/
-cd data && tar -xzvf training_data.tar.gz

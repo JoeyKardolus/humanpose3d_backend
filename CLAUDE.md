@@ -5,28 +5,30 @@
 ## Quick Start
 
 ```bash
-# Full pipeline with joint angles (RECOMMENDED)
+# Full pipeline with neural refinement (RECOMMENDED)
 uv run python main.py \
   --video data/input/joey.mp4 \
   --height 1.78 --mass 75 --age 30 --sex male \
-  --anatomical-constraints --bone-length-constraints \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
-  --multi-constraint-optimization \
-  --compute-all-joint-angles --plot-all-joint-angles \
-  --visibility-min 0.1
+  --plot-all-joint-angles \
+  --visibility-min 0.1 \
+  --main-refiner
 ```
 
-**Results**: ~45s processing, 68% bone length improvement, 59/64 markers, 12 joint groups computed.
+**Results**: ~60s processing, neural depth + joint refinement, 59/64 markers, 12 joint groups computed.
+
+The `--main-refiner` flag enables the full neural refinement pipeline, replacing traditional constraint-based methods with learned models trained on AIST++ motion capture data.
 
 ## Pipeline Steps
 
 1. **MediaPipe extraction** → 33 landmarks → 22 Pose2Sim markers
-2. **TRC conversion** with derived markers (Hip, Neck)
-3. **Pose2Sim augmentation** → 64 markers (43 added via LSTM)
-4. **Multi-constraint optimization** → filters noisy markers, stabilizes bones
+2. **Neural depth refinement** → corrects MediaPipe depth errors (17 COCO joints)
+3. **TRC conversion** with derived markers (Hip, Neck)
+4. **Pose2Sim augmentation** → 64 markers (43 added via LSTM)
 5. **Joint angle computation** → 12 ISB-compliant joint groups
-6. **Automatic cleanup** → organized output structure
+6. **Neural joint refinement** → corrects joint angles using learned constraints
+7. **Automatic cleanup** → organized output structure
 
 ## Output Structure
 
@@ -42,14 +44,21 @@ data/output/pose-3d/<video>/
 
 | Flag | Description |
 |------|-------------|
+| `--main-refiner` | **Recommended**: Full neural pipeline (depth + joint refinement) |
 | `--estimate-missing` | Mirror occluded limbs from visible side |
 | `--force-complete` | Estimate shoulder clusters + hip joint centers |
 | `--augmentation-cycles N` | Multi-cycle averaging (default 20) |
-| `--multi-constraint-optimization` | 3-phase biomechanical refinement |
-| `--compute-all-joint-angles` | All 12 joint groups (pelvis, hip, knee, ankle, trunk, shoulder, elbow) |
 | `--plot-all-joint-angles` | Multi-panel visualization |
-| `--bone-length-constraints` | Temporal bone length consistency |
 | `--visibility-min 0.1` | Landmark confidence threshold (default 0.3, use 0.1 to prevent marker dropout) |
+
+**Legacy flags** (replaced by `--main-refiner`):
+| Flag | Description |
+|------|-------------|
+| `--neural-depth-refinement` | Depth-only neural refinement (subset of main-refiner) |
+| `--joint-constraint-refinement` | Joint-only refinement (subset of main-refiner) |
+| `--multi-constraint-optimization` | Rule-based biomechanical refinement |
+| `--anatomical-constraints` | Rule-based anatomical constraints |
+| `--bone-length-constraints` | Rule-based bone length consistency |
 
 ## Module Structure
 
@@ -59,9 +68,12 @@ data/output/pose-3d/<video>/
 | `posedetector/` | MediaPipe inference, landmark mapping |
 | `datastream/` | CSV/TRC conversion, marker estimation |
 | `markeraugmentation/` | Pose2Sim integration, GPU acceleration |
-| `anatomical/` | Bone constraints, ground plane, multi-constraint optimization |
+| `anatomical/` | Bone constraints, ground plane (legacy) |
 | `kinematics/` | ISB joint angles, Euler decomposition, visualization |
 | `visualizedata/` | 3D plotting, skeleton connections |
+| `depth_refinement/` | Neural depth correction model |
+| `joint_refinement/` | Neural joint constraint model |
+| `main_refinement/` | Fusion model combining depth + joint |
 
 ## GPU Acceleration
 
@@ -84,7 +96,8 @@ Automatic CPU fallback if GPU unavailable.
 |-------|----------|
 | Right arm missing | Use `--estimate-missing` to mirror from left |
 | "No trc files found" | Check Pose2Sim project structure |
-| Scattered markers | Use `--multi-constraint-optimization` |
+| Depth errors / front-back confusion | Use `--main-refiner` (neural depth correction) |
+| Joint angle spikes | Use `--main-refiner` (learned joint constraints) |
 | Markers disappear mid-video | Use `--visibility-min 0.1` (MediaPipe confidence drops below default 0.3 threshold) |
 
 ## Setup
@@ -129,7 +142,7 @@ uv sync                           # Install dependencies
 uv sync --group neural            # Install neural training deps
 uv run pytest                     # Run tests
 uv run python -m black src tests  # Format code
-uv run python visualize_interactive.py [file.trc]  # 3D viewer
+uv run python scripts/viz/visualize_interactive.py [file.trc]  # 3D viewer
 ```
 
 ### Troubleshooting
@@ -333,6 +346,45 @@ uv run python compare_joint_interactive.py
 | `--checkpoint PATH` | Resume from checkpoint |
 
 **Visualization**: Red dashed = raw MediaPipe, Blue solid = refined, Joint colors = correction magnitude (green=small, red=large)
+
+### MainRefiner (Fusion Model)
+
+Combines depth and joint constraint models into a unified two-stage pipeline:
+
+**Stage 1 - Pre-augmentation (17 COCO joints)**:
+- Depth refinement corrects MediaPipe 3D errors
+- Runs before marker augmentation
+
+**Stage 2 - Post-augmentation (64 markers)**:
+- Joint angles computed from augmented markers (ASIS, PSIS, etc.)
+- Joint constraint model refines computed angles
+
+**Model**: 1.2M params (d_model=128, 4 heads, 2 layers)
+- Learns optimal fusion of depth + joint outputs via gating
+- Cross-attention between depth and joint features
+- Per-joint confidence estimation
+
+**Training**:
+```bash
+# Train MainRefiner (requires pre-trained depth + joint models)
+uv run --group neural python scripts/train/main_refiner.py \
+  --data "data/training/aistpp_converted,data/training/mtc_converted" \
+  --depth-checkpoint models/checkpoints/best_depth_model.pth \
+  --joint-checkpoint models/checkpoints/best_joint_model.pth \
+  --epochs 50 --batch-size 256 --workers 8 --bf16
+```
+
+**Inference** (total ~4.8M params, <10ms per frame on CPU):
+```bash
+# Full pipeline with main-refiner
+uv run python main.py --video input.mp4 --main-refiner \
+  --estimate-missing --force-complete --augmentation-cycles 20
+```
+
+The `--main-refiner` flag auto-enables:
+- `--neural-depth-refinement` (early stage)
+- `--compute-all-joint-angles` (required for joint model)
+- `--joint-constraint-refinement` (late stage)
 
 ## Technical Details
 

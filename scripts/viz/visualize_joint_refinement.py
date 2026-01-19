@@ -25,7 +25,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.lines import Line2D
 
 from src.kinematics.comprehensive_joint_angles import compute_all_joint_angles
-from src.kinematics.joint_angles_euler import read_trc
+from src.kinematics.trc_utils import read_trc
 from src.joint_refinement.model import create_model
 
 

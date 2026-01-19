@@ -63,6 +63,32 @@
 - 2026-01-18 13:43:36 UTC | main step3 augment data/output/pose-3d/Jaap-f1792be3/Jaap-f1792be3_LSTM.trc
 - 2026-01-18 13:43:36 UTC | main step3.5 complete data/output/pose-3d/Jaap-f1792be3/Jaap-f1792be3_LSTM_complete.trc
 - 2026-01-18 13:43:37 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/Jaap-f1792be3/Jaap-f1792be3_LSTM_complete_multi_refined.trc
+- 2026-01-18 16:18:18 UTC | main step1.5 neural depth refinement applied
+- 2026-01-18 16:18:19 UTC | main step1 CSV data/output/pose-3d/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-18 16:18:19 UTC | main step2 TRC data/output/pose-3d/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-18 16:18:37 UTC | main step3 augment data/output/pose-3d/joey/joey_LSTM.trc
+- 2026-01-18 16:18:37 UTC | main step3.5 complete data/output/pose-3d/joey/joey_LSTM_complete.trc
+- 2026-01-18 16:18:38 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/joey/joey_LSTM_complete_multi_refined.trc
+- 2026-01-18 16:22:31 UTC | main step1.5 MainRefiner applied
+- 2026-01-18 16:22:31 UTC | main step1 CSV data/output/pose-3d/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-18 16:22:31 UTC | main step2 TRC data/output/pose-3d/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-18 16:22:49 UTC | main step3 augment data/output/pose-3d/joey/joey_LSTM.trc
+- 2026-01-18 16:22:49 UTC | main step3.5 complete data/output/pose-3d/joey/joey_LSTM_complete.trc
+- 2026-01-18 16:25:01 UTC | main step1.5 MainRefiner applied
+- 2026-01-18 16:25:01 UTC | main step1 CSV data/output/pose-3d/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-18 16:25:01 UTC | main step2 TRC data/output/pose-3d/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-18 16:25:20 UTC | main step3 augment data/output/pose-3d/joey/joey_LSTM.trc
+- 2026-01-18 16:25:20 UTC | main step3.5 complete data/output/pose-3d/joey/joey_LSTM_complete.trc
+- 2026-01-18 16:31:02 UTC | main step1.5 neural depth refinement applied
+- 2026-01-18 16:31:02 UTC | main step1 CSV data/output/pose-3d/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-18 16:31:02 UTC | main step2 TRC data/output/pose-3d/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-18 16:31:21 UTC | main step3 augment data/output/pose-3d/joey/joey_LSTM.trc
+- 2026-01-18 16:31:21 UTC | main step3.5 complete data/output/pose-3d/joey/joey_LSTM_complete.trc
+- 2026-01-18 16:35:06 UTC | main step1.5 neural depth refinement applied
+- 2026-01-18 16:35:06 UTC | main step1 CSV data/output/pose-3d/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-18 16:35:06 UTC | main step2 TRC data/output/pose-3d/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-18 16:35:24 UTC | main step3 augment data/output/pose-3d/joey/joey_LSTM.trc
+- 2026-01-18 16:35:24 UTC | main step3.5 complete data/output/pose-3d/joey/joey_LSTM_complete.trc
 - 2026-01-18 16:59:10 UTC | main step1 CSV data/output/pose-3d/Max-ebfba6c2/Max-ebfba6c2.csv (514 frames, 10280 rows)
 - 2026-01-18 16:59:10 UTC | main step2 TRC data/output/pose-3d/Max-ebfba6c2/Max-ebfba6c2.trc (514 frames, 21 markers)
 - 2026-01-18 16:59:29 UTC | main step3 augment data/output/pose-3d/Max-ebfba6c2/Max-ebfba6c2_LSTM.trc
