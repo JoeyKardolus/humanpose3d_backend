@@ -80,6 +80,7 @@ class PipelineCommandBuilder:
             command.append("--multi-constraint-optimization")
         if self._coerce_bool(form_data.get("compute_all_joint_angles")):
             command.append("--compute-all-joint-angles")
+        command.append("--export-preview")
         return command
 
     def _coerce_bool(self, value: str | None) -> bool:

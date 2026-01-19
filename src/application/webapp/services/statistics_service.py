@@ -13,8 +13,7 @@ from src.application.webapp.services.trc_plot_service import TrcPlotService
 class StatisticsService:
     """Prepare joint angle and landmark series for the statistics view."""
 
-    def __init__(self, upload_root: Path) -> None:
-        self._upload_root = upload_root
+    def __init__(self) -> None:
         self._trc_plot_service = TrcPlotService()
         self._landmark_plot_service = LandmarkPlotService()
 
@@ -154,33 +153,32 @@ class StatisticsService:
                 preview_video_type = mimetypes.guess_type(candidate.name)[0]
                 break
 
-        upload_video = None
-        upload_video_type = None
-        safe_run_id = Path(run_key).name
-        upload_dir = self._upload_root / safe_run_id
-        if upload_dir.exists():
-            for candidate in sorted(upload_dir.iterdir()):
+        source_video = None
+        source_video_type = None
+        source_dir = run_dir / "source"
+        if source_dir.exists():
+            for candidate in sorted(source_dir.iterdir()):
                 if candidate.is_file() and candidate.suffix.lower() in {
                     ".mp4",
                     ".mov",
                     ".webm",
                     ".m4v",
                 }:
-                    upload_video = candidate
-                    upload_video_type = mimetypes.guess_type(candidate.name)[0]
+                    source_video = candidate
+                    source_video_type = mimetypes.guess_type(candidate.name)[0]
                     break
 
         video_path = None
         video_type = None
         video_route = None
-        if preview_video:
+        if source_video:
+            video_path = source_video.relative_to(run_dir).as_posix()
+            video_type = source_video_type
+            video_route = "media"
+        elif preview_video:
             video_path = preview_video.relative_to(run_dir).as_posix()
             video_type = preview_video_type
             video_route = "media"
-        elif upload_video:
-            video_path = upload_video.relative_to(upload_dir).as_posix()
-            video_type = upload_video_type
-            video_route = "upload_media"
 
         skeleton_payload = self._landmark_plot_service.build_plot_payload(run_dir)
         augmented_payload = self._trc_plot_service.build_plot_payload(run_dir)

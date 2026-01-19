@@ -13,6 +13,7 @@ from src.application.webapp.services.pipeline_log_service import PipelineLogServ
 from src.application.webapp.services.pipeline_progress_tracker import PipelineProgressTracker
 from src.application.webapp.services.pipeline_result_service import PipelineResultService
 from src.application.webapp.services.pipeline_runner import PipelineRunner
+from src.application.webapp.services.upload_service import UploadService
 
 
 class RunPipelineAsyncUseCase:
@@ -24,6 +25,7 @@ class RunPipelineAsyncUseCase:
         pipeline_runner: PipelineRunner,
         log_service: PipelineLogService,
         result_service: PipelineResultService,
+        upload_service: UploadService,
         status_repo: RunStatusRepository,
         progress_tracker: PipelineProgressTracker,
     ) -> None:
@@ -31,6 +33,7 @@ class RunPipelineAsyncUseCase:
         self._pipeline_runner = pipeline_runner
         self._log_service = log_service
         self._result_service = result_service
+        self._upload_service = upload_service
         self._status_repo = status_repo
         self._progress_tracker = progress_tracker
 
@@ -88,6 +91,7 @@ class RunPipelineAsyncUseCase:
                 ),
             )
         except (OSError, RuntimeError) as exc:
+            self._upload_service.remove_upload(spec.safe_run_id)
             self._status_repo.set_status(
                 spec.run_key,
                 {
@@ -101,6 +105,7 @@ class RunPipelineAsyncUseCase:
         if execution.return_code != 0:
             log_path = spec.pipeline_run_dir / "pipeline_error.log"
             self._log_service.write_log(log_path, execution.stdout_text, execution.stderr_text)
+            self._upload_service.remove_upload(spec.safe_run_id)
             self._status_repo.set_status(
                 spec.run_key,
                 {
@@ -117,6 +122,12 @@ class RunPipelineAsyncUseCase:
         self._result_service.move_output(spec.pipeline_run_dir, spec.output_dir)
         if fix_header:
             self._result_service.apply_header_fix(spec.output_dir, spec.safe_run_id)
+        self._result_service.persist_input_video(
+            spec.upload_path,
+            spec.output_dir,
+            spec.safe_run_id,
+        )
+        self._upload_service.remove_upload(spec.safe_run_id)
 
         self._status_repo.set_status(
             spec.run_key,

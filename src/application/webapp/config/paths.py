@@ -24,8 +24,8 @@ class AppPaths:
                 break
         if repo_root is None:
             repo_root = anchor.resolve().parents[3]
-        output_root = (repo_root / "data" / "output" / "pose-3d").resolve()
-        upload_root = (repo_root / "data" / "input" / "webapp").resolve()
+        output_root = (repo_root / "data" / "output").resolve()
+        upload_root = (repo_root / "data" / "input").resolve()
         return cls(
             repo_root=repo_root,
             output_root=output_root,

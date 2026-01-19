@@ -30,6 +30,7 @@ from src.application.webapp.services.pipeline_runner import PipelineRunner
 from src.application.webapp.services.progress_service import ProgressService
 from src.application.webapp.services.results_service import ResultsService
 from src.application.webapp.services.results_archive_service import ResultsArchiveService
+from src.application.webapp.services.run_cleanup_service import RunCleanupService
 from src.application.webapp.services.run_id_factory import RunIdFactory
 from src.application.webapp.services.run_key_service import RunKeyService
 from src.application.webapp.services.statistics_service import StatisticsService
@@ -59,6 +60,7 @@ _RUN_ID_FACTORY = RunIdFactory()
 _RUN_KEY_SERVICE = RunKeyService(_PATH_VALIDATOR)
 _RUN_VALIDATOR = RunRequestValidator(_PATH_VALIDATOR)
 _OUTPUT_HISTORY = OutputHistoryService(_APP_PATHS.output_root)
+_RUN_CLEANUP = RunCleanupService(_APP_PATHS.output_root, _APP_PATHS.upload_root, _PATH_VALIDATOR)
 
 _PREPARE_PIPELINE = PreparePipelineRunUseCase(
     validator=_RUN_VALIDATOR,
@@ -72,19 +74,21 @@ _RUN_PIPELINE_SYNC = RunPipelineSyncUseCase(
     pipeline_runner=_PIPELINE_RUNNER,
     log_service=_PIPELINE_LOGGER,
     result_service=_PIPELINE_RESULTS,
+    upload_service=_UPLOAD_SERVICE,
 )
 _RUN_PIPELINE_ASYNC = RunPipelineAsyncUseCase(
     command_builder=_PIPELINE_COMMANDS,
     pipeline_runner=_PIPELINE_RUNNER,
     log_service=_PIPELINE_LOGGER,
     result_service=_PIPELINE_RESULTS,
+    upload_service=_UPLOAD_SERVICE,
     status_repo=_STATUS_REPO,
     progress_tracker=_PROGRESS_TRACKER,
 )
 
 _RESULTS_SERVICE = ResultsService()
 _RESULTS_ARCHIVE = ResultsArchiveService()
-_STATISTICS_SERVICE = StatisticsService(_APP_PATHS.upload_root)
+_STATISTICS_SERVICE = StatisticsService()
 _MEDIA_SERVICE = MediaService(
     _APP_PATHS.output_root,
     _APP_PATHS.upload_root,
@@ -224,12 +228,43 @@ class ResultsView(View):
             raise Http404("Run not found.")
 
         files = _RESULTS_SERVICE.list_files(run_dir)
+        preview_video = None
+        preview_video_type = None
+        preview_candidates = sorted(run_dir.rglob("*_preview.*"))
+        for candidate in preview_candidates:
+            if candidate.suffix.lower() in {".mp4", ".webm"} and candidate.stat().st_size > 1024:
+                preview_video = candidate
+                preview_video_type = mimetypes.guess_type(candidate.name)[0]
+                break
+
+        source_video = None
+        source_video_type = None
+        source_dir = run_dir / "source"
+        if source_dir.exists():
+            for candidate in sorted(source_dir.iterdir()):
+                if candidate.is_file() and candidate.suffix.lower() in {
+                    ".mp4",
+                    ".mov",
+                    ".webm",
+                    ".m4v",
+                }:
+                    source_video = candidate
+                    source_video_type = mimetypes.guess_type(candidate.name)[0]
+                    break
         return render(
             request,
             "results.html",
             {
                 "run_key": run_key,
                 "files": files,
+                "source_video_path": source_video.relative_to(run_dir).as_posix()
+                if source_video
+                else None,
+                "source_video_type": source_video_type,
+                "preview_video_path": preview_video.relative_to(run_dir).as_posix()
+                if preview_video
+                else None,
+                "preview_video_type": preview_video_type,
             },
         )
 
@@ -298,3 +333,18 @@ class UploadMediaView(View):
             as_attachment=False,
             content_type=content_type or "application/octet-stream",
         )
+
+
+class DeleteRunView(View):
+    """Delete an output run and uploaded input data."""
+
+    def post(self, request: HttpRequest, run_key: str) -> HttpResponse:
+        """Delete stored results for a run."""
+        deleted = _RUN_CLEANUP.delete_run(run_key)
+        if not deleted:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"error": "Run not found."}, status=404)
+            raise Http404("Run not found.")
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"deleted": True})
+        return redirect("home")

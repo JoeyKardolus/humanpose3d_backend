@@ -25,3 +25,15 @@ class PipelineResultService:
         final_trc = output_dir / f"{safe_run_id}_final.trc"
         if final_trc.exists():
             header_fix_strict(final_trc)
+
+    def persist_input_video(self, upload_path: Path, output_dir: Path, safe_run_id: str) -> None:
+        """Copy the source video into the run output directory."""
+        if not upload_path.exists():
+            return
+        target_dir = output_dir / "source"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / f"{safe_run_id}{upload_path.suffix}"
+        try:
+            shutil.copy2(upload_path, target_path)
+        except OSError:
+            return

@@ -331,7 +331,7 @@
                 <div class="row g-3 align-items-end">
                   <div class="col-md-8">
                     <label for="previousRunSelect" class="form-label">Saved results</label>
-                    <div class="form-text text-muted mb-2">Browse previously processed sessions from data/output/pose-3d/.</div>
+                    <div class="form-text text-muted mb-2">Browse previously processed sessions from data/output/.</div>
                     <select class="form-select" id="previousRunSelect" data-results-template="{% url 'results' run_key='__RUN_KEY__' %}" {% if not previous_runs %}disabled{% endif %}>
                       <option value="" disabled selected>Select a run...</option>
                       {% for run in previous_runs %}
@@ -344,9 +344,7 @@
                     <button class="btn btn-outline-primary w-100" type="button" id="openPreviousRun" {% if not previous_runs %}disabled{% endif %}>Open results</button>
                   </div>
                 </div>
-                {% if not previous_runs %}
-                  <p class="small text-muted mt-3 mb-0">No previous runs found yet.</p>
-                {% endif %}
+                <p class="small text-muted mt-3 mb-0 {% if previous_runs %}d-none{% endif %}" id="previousRunsEmpty">No previous runs found yet.</p>
               </div>
             </div>
           </div>

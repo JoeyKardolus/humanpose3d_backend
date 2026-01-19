@@ -73,3 +73,18 @@
 - 2026-01-18 20:55:58 UTC | main step3 augment data/output/pose-3d/PushUp-71cb7b9f/PushUp-71cb7b9f_LSTM.trc
 - 2026-01-18 20:55:58 UTC | main step3.5 complete data/output/pose-3d/PushUp-71cb7b9f/PushUp-71cb7b9f_LSTM_complete.trc
 - 2026-01-18 20:55:58 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/PushUp-71cb7b9f/PushUp-71cb7b9f_LSTM_complete_multi_refined.trc
+- 2026-01-19 08:12:14 UTC | main step1 CSV data/output/pose-3d/Mama-b0a94a4f/Mama-b0a94a4f.csv (260 frames, 5058 rows)
+- 2026-01-19 08:12:14 UTC | main step2 TRC data/output/pose-3d/Mama-b0a94a4f/Mama-b0a94a4f.trc (260 frames, 21 markers)
+- 2026-01-19 08:12:31 UTC | main step3 augment data/output/pose-3d/Mama-b0a94a4f/Mama-b0a94a4f_LSTM.trc
+- 2026-01-19 08:12:31 UTC | main step3.5 complete data/output/pose-3d/Mama-b0a94a4f/Mama-b0a94a4f_LSTM_complete.trc
+- 2026-01-19 08:12:31 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/Mama-b0a94a4f/Mama-b0a94a4f_LSTM_complete_multi_refined.trc
+- 2026-01-19 08:27:03 UTC | main step1 CSV data/output/Max-0a0ce682/Max-0a0ce682.csv (514 frames, 10280 rows)
+- 2026-01-19 08:27:03 UTC | main step2 TRC data/output/Max-0a0ce682/Max-0a0ce682.trc (514 frames, 21 markers)
+- 2026-01-19 08:27:22 UTC | main step3 augment data/output/Max-0a0ce682/Max-0a0ce682_LSTM.trc
+- 2026-01-19 08:27:22 UTC | main step3.5 complete data/output/Max-0a0ce682/Max-0a0ce682_LSTM_complete.trc
+- 2026-01-19 08:27:22 UTC | main step3.6 multi-constraint optimization data/output/Max-0a0ce682/Max-0a0ce682_LSTM_complete_multi_refined.trc
+- 2026-01-19 08:41:02 UTC | main step1 CSV data/output/Jaap-8e0d9308/Jaap-8e0d9308.csv (710 frames, 14099 rows)
+- 2026-01-19 08:41:02 UTC | main step2 TRC data/output/Jaap-8e0d9308/Jaap-8e0d9308.trc (710 frames, 21 markers)
+- 2026-01-19 08:41:22 UTC | main step3 augment data/output/Jaap-8e0d9308/Jaap-8e0d9308_LSTM.trc
+- 2026-01-19 08:41:22 UTC | main step3.5 complete data/output/Jaap-8e0d9308/Jaap-8e0d9308_LSTM_complete.trc
+- 2026-01-19 08:41:23 UTC | main step3.6 multi-constraint optimization data/output/Jaap-8e0d9308/Jaap-8e0d9308_LSTM_complete_multi_refined.trc

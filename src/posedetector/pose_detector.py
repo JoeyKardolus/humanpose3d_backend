@@ -64,19 +64,29 @@ def extract_world_landmarks(
     records: List[LandmarkRecord] = []
     preview_writer = None
     preview_failed = False
+    wrote_preview = False
 
     def write_preview(frame_rgb: np.ndarray) -> None:
-        nonlocal preview_writer
+        nonlocal preview_writer, preview_failed, wrote_preview
         if preview_output is None:
             return
         if preview_writer is None:
             height, width = frame_rgb.shape[:2]
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
             preview_output.parent.mkdir(parents=True, exist_ok=True)
-            preview_writer = cv2.VideoWriter(
-                str(preview_output), fourcc, fps or 30.0, (width, height)
-            )
+            for codec in ("avc1", "mp4v"):
+                fourcc = cv2.VideoWriter_fourcc(*codec)
+                preview_writer = cv2.VideoWriter(
+                    str(preview_output), fourcc, fps or 30.0, (width, height)
+                )
+                if preview_writer.isOpened():
+                    break
+                preview_writer.release()
+                preview_writer = None
+            if preview_writer is None:
+                preview_failed = True
+                return
         preview_writer.write(cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR))
+        wrote_preview = True
     try:
         for idx, frame in enumerate(video_rgb):
             timestamp = idx / fps
@@ -168,6 +178,11 @@ def extract_world_landmarks(
                 pass
         if preview_writer is not None:
             preview_writer.release()
+        if preview_output is not None and not wrote_preview:
+            try:
+                preview_output.unlink(missing_ok=True)
+            except OSError:
+                pass
         detector.close()
 
     if return_raw_landmarks:

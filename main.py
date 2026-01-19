@@ -51,7 +51,7 @@ from src.mediastream.media_stream import read_video_rgb
 from src.posedetector.pose_detector import extract_world_landmarks
 from src.visualizedata.visualize_data import VisualizeData
 
-OUTPUT_ROOT = Path("data/output/pose-3d")
+OUTPUT_ROOT = Path("data/output")
 
 # Mapping from OpenCap/MediaPipe marker names to COCO 17 joint indices
 # COCO 17: nose, left_eye, right_eye, left_ear, right_ear, left_shoulder, right_shoulder,
@@ -437,6 +437,11 @@ def parse_args() -> argparse.Namespace:
         help="Render an annotated preview video while extracting landmarks",
     )
     parser.add_argument(
+        "--export-preview",
+        action="store_true",
+        help="Save an annotated preview video without opening a display window",
+    )
+    parser.add_argument(
         "--plot-landmarks",
         dest="plot_landmarks",
         action="store_true",
@@ -649,7 +654,7 @@ def main() -> None:
         )
         frames, fps = read_video_rgb(video_path)
         preview_path = None
-        if args.show_video:
+        if args.show_video or args.export_preview:
             preview_path = run_dir / f"{video_path.stem}_preview.mp4"
 
         detection_output = extract_world_landmarks(

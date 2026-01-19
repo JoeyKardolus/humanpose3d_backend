@@ -15,6 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const videoUpload = document.getElementById("videoUpload");
     const ajaxErrors = document.getElementById("ajaxErrors");
     const ajaxErrorsList = document.getElementById("ajaxErrorsList");
+    const deleteRunButton = document.getElementById("deleteRunButton");
+    const deleteRunForm = document.getElementById("deleteRunForm");
     const instructionsKey = "instructionsAccepted";
     const privacyKey = "privacyAccepted";
     const submitLabel = "Analyse Video";
@@ -209,6 +211,16 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             const target = template.replace("__RUN_KEY__", encodeURIComponent(runKey));
             window.location.href = target;
+        });
+    }
+
+    if (deleteRunForm && deleteRunButton) {
+        deleteRunForm.addEventListener("submit", (event) => {
+            const message =
+                deleteRunButton.dataset.confirmMessage || "Remove stored results for this run?";
+            if (!window.confirm(message)) {
+                event.preventDefault();
+            }
         });
     }
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """Service for persisting uploaded videos."""
 
+import shutil
 from pathlib import Path
 
 from django.core.files.uploadedfile import UploadedFile
@@ -22,3 +23,13 @@ class UploadService:
             for chunk in uploaded.chunks():
                 handle.write(chunk)
         return upload_path
+
+    def remove_upload(self, safe_run_id: str) -> None:
+        """Remove persisted uploads for a run if they exist."""
+        upload_dir = self._upload_root / safe_run_id
+        if not upload_dir.exists():
+            return
+        try:
+            shutil.rmtree(upload_dir)
+        except OSError:
+            return
