@@ -35,4 +35,4 @@ wget-log
 # External repos
 external/
 
-docs/build_log.md
+docs/BUILD_log.md
