@@ -68,3 +68,8 @@
 - 2026-01-18 16:59:29 UTC | main step3 augment data/output/pose-3d/Max-ebfba6c2/Max-ebfba6c2_LSTM.trc
 - 2026-01-18 16:59:29 UTC | main step3.5 complete data/output/pose-3d/Max-ebfba6c2/Max-ebfba6c2_LSTM_complete.trc
 - 2026-01-18 16:59:29 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/Max-ebfba6c2/Max-ebfba6c2_LSTM_complete_multi_refined.trc
+- 2026-01-18 20:55:41 UTC | main step1 CSV data/output/pose-3d/PushUp-71cb7b9f/PushUp-71cb7b9f.csv (358 frames, 6977 rows)
+- 2026-01-18 20:55:41 UTC | main step2 TRC data/output/pose-3d/PushUp-71cb7b9f/PushUp-71cb7b9f.trc (358 frames, 21 markers)
+- 2026-01-18 20:55:58 UTC | main step3 augment data/output/pose-3d/PushUp-71cb7b9f/PushUp-71cb7b9f_LSTM.trc
+- 2026-01-18 20:55:58 UTC | main step3.5 complete data/output/pose-3d/PushUp-71cb7b9f/PushUp-71cb7b9f_LSTM_complete.trc
+- 2026-01-18 20:55:58 UTC | main step3.6 multi-constraint optimization data/output/pose-3d/PushUp-71cb7b9f/PushUp-71cb7b9f_LSTM_complete_multi_refined.trc
