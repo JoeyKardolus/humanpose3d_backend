@@ -8,7 +8,7 @@
 # Full pipeline with neural refinement (RECOMMENDED)
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 --age 30 --sex male \
+  --height 1.78 --mass 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
   --plot-all-joint-angles \
@@ -51,14 +51,7 @@ data/output/pose-3d/<video>/
 | `--plot-all-joint-angles` | Multi-panel visualization |
 | `--visibility-min 0.1` | Landmark confidence threshold (default 0.3, use 0.1 to prevent marker dropout) |
 
-**Legacy flags** (replaced by `--main-refiner`):
-| Flag | Description |
-|------|-------------|
-| `--neural-depth-refinement` | Depth-only neural refinement (subset of main-refiner) |
-| `--joint-constraint-refinement` | Joint-only refinement (subset of main-refiner) |
-| `--multi-constraint-optimization` | Rule-based biomechanical refinement |
-| `--anatomical-constraints` | Rule-based anatomical constraints |
-| `--bone-length-constraints` | Rule-based bone length consistency |
+**Note**: Legacy flags (`--neural-depth-refinement`, `--joint-constraint-refinement`, `--multi-constraint-optimization`, `--anatomical-constraints`, `--bone-length-constraints`, `--age`, `--sex`) have been removed. Use `--main-refiner` for the recommended neural pipeline.
 
 ## Module Structure
 
@@ -68,12 +61,13 @@ data/output/pose-3d/<video>/
 | `posedetector/` | MediaPipe inference, landmark mapping |
 | `datastream/` | CSV/TRC conversion, marker estimation |
 | `markeraugmentation/` | Pose2Sim integration, GPU acceleration |
-| `anatomical/` | Bone constraints, ground plane (legacy) |
 | `kinematics/` | ISB joint angles, Euler decomposition, visualization |
 | `visualizedata/` | 3D plotting, skeleton connections |
 | `depth_refinement/` | Neural depth correction model |
 | `joint_refinement/` | Neural joint constraint model |
 | `main_refinement/` | Fusion model combining depth + joint |
+| `pipeline/` | Orchestration (refinement, cleanup) |
+| `application/` | Django web interface |
 
 ## GPU Acceleration
 
@@ -111,7 +105,7 @@ source ~/.local/bin/env  # or restart shell
 
 # Clone and install
 git clone <repo-url>
-cd humanpose3d_backend
+cd humanpose3d_mediapipe
 uv sync
 ```
 

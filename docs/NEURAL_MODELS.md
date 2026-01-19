@@ -1,6 +1,38 @@
-# Neural Models - Progress Tracker
+# Neural Models
 
-## Session: 2026-01-13 - Joint Constraint Refinement Model
+## MainRefiner (Recommended)
+
+The **MainRefiner** is a unified neural pipeline that combines depth and joint constraint refinement:
+
+```bash
+# Full pipeline with neural refinement
+uv run python main.py \
+  --video data/input/joey.mp4 \
+  --height 1.78 --mass 75 \
+  --estimate-missing --force-complete \
+  --augmentation-cycles 20 \
+  --main-refiner \
+  --plot-all-joint-angles
+```
+
+**How it works:**
+1. **Stage 1 (Pre-augmentation)**: Depth refinement corrects MediaPipe 3D errors on 17 COCO joints
+2. **Stage 2 (Post-augmentation)**: Joint constraint refinement applies learned soft constraints to computed angles
+
+**Training:**
+```bash
+uv run --group neural python scripts/train/main_refiner.py \
+  --data "data/training/aistpp_converted,data/training/mtc_converted" \
+  --depth-checkpoint models/checkpoints/best_depth_model.pth \
+  --joint-checkpoint models/checkpoints/best_joint_model.pth \
+  --epochs 50 --batch-size 256 --workers 8 --bf16
+```
+
+**Model specs**: 1.2M params (d_model=128, 4 heads, 2 layers), <10ms inference per frame
+
+---
+
+## Joint Constraint Refinement Model
 
 ### Overview
 
@@ -114,25 +146,23 @@ Save to aistpp_joint_angles/
 
 **Generate Training Data:**
 ```bash
-uv run python scripts/generate_joint_angle_training.py --max-sequences 3000 --workers 4
+uv run python scripts/data/generate_joint_angles.py --max-sequences 3000 --workers 4
 ```
 
 **Train:**
 ```bash
-uv run python scripts/train_joint_model.py --epochs 100 --batch-size 64 --fp16
+uv run --group neural python scripts/train/joint_model.py --epochs 100 --batch-size 64 --fp16
 ```
 
-**Run with Main Pipeline:**
+**Run with Main Pipeline (recommended):**
 ```bash
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 --age 30 --sex male \
-  --anatomical-constraints --bone-length-constraints \
+  --height 1.78 --mass 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
-  --multi-constraint-optimization \
-  --compute-all-joint-angles \
-  --joint-constraint-refinement
+  --main-refiner \
+  --plot-all-joint-angles
 ```
 
 **Standalone Inference:**
@@ -294,18 +324,14 @@ HAND-CRAFTED FEATURES (15 total):
 
 **Training:**
 ```bash
-uv run --group neural python scripts/train_depth_model.py \
-  --epochs 50 \
-  --batch-size 64 \
-  --fp16
+uv run --group neural python scripts/train/depth_model.py \
+  --data "data/training/aistpp_converted,data/training/mtc_converted" \
+  --epochs 50 --batch-size 256 --workers 8 --bf16 \
+  --use-limb-orientations --limb-orientation-weight 0.5 \
+  --d-model 128 --num-layers 6 --num-heads 8
 ```
 
-**Quick Test:**
-```bash
-uv run python scripts/test_depth_model.py
-```
-
-**Inference:**
+**Inference (standalone):**
 ```python
 from src.depth_refinement.inference import DepthRefiner
 
@@ -313,31 +339,31 @@ refiner = DepthRefiner('models/checkpoints/best_depth_model.pth')
 refined_pose = refiner.refine(pose, visibility)  # Auto-computes view angle
 ```
 
+**Recommended usage via main pipeline:** Use `--main-refiner` flag (see MainRefiner section above).
+
 ### Files
 
 ```
 src/depth_refinement/
 ├── __init__.py               # Module exports
-├── model.py                  # PoseAwareDepthRefiner (655K params)
+├── model.py                  # Depth refinement model (~3M params)
 ├── losses.py                 # Depth + biomechanical losses
 ├── dataset.py                # AIST++ dataset loader
 └── inference.py              # DepthRefiner class
 
 scripts/
-├── convert_aistpp_to_training.py   # Data converter
-├── test_depth_model.py             # Quick validation
-├── visualize_aistpp_training.py    # Visualization
-└── train_depth_model.py            # Training script
+├── data/convert_aistpp.py          # AIST++ data converter
+├── data/convert_cmu_mtc.py         # CMU MTC data converter
+└── train/depth_model.py            # Training script
 
 models/
 └── checkpoints/
-    └── best_depth_model.pth         # Trained model (655K params)
+    └── best_depth_model.pth        # Trained model
 
 data/
 ├── AIST++/
 │   ├── annotations/keypoints3d/    # 1,408 sequences
-│   ├── videos/                     # 3,119 videos available
-│   └── api/                        # Dataset API
+│   └── videos/                     # Dance videos
 └── training/aistpp_converted/      # Training pairs (NPZ)
 ```
 

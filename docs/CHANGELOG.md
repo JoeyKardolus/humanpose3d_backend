@@ -2,6 +2,22 @@
 
 Development history for HumanPose3D MediaPipe pipeline.
 
+## 2026-01-19 - Documentation Overhaul
+
+### Cleanup After Codebase Refactor
+- Removed ~11,700 lines of legacy code (anatomical/, multi-constraint optimization, etc.)
+- Updated all documentation to reflect current codebase state
+- Consolidated `CLAUDE_EXTENDED.md` into `CLAUDE.md`
+- Archived obsolete docs: `MULTI_CONSTRAINT_OPTIMIZATION.md`, `HYBRID_ELEPOSE_FUSION.md`
+
+### Documentation Updates
+- **CLAUDE.md**: Removed outdated flags (`--age`, `--sex`, `--anatomical-constraints`, etc.), updated module structure
+- **README.md**: Updated Quick Start, features list, pipeline overview
+- **ARCHITECTURE.md**: Complete rewrite with accurate module list and pipeline flow
+- **NEURAL_MODELS.md**: Added MainRefiner section
+- **AGENTS.md**: Updated build commands and pipeline flags
+- **OUTPUT_ORGANIZATION.md**: Fixed example commands
+
 ## 2026-01-13 - Neural Refinement Systems
 
 ### Joint Constraint Refinement
@@ -73,7 +89,6 @@ Development history for HumanPose3D MediaPipe pipeline.
 
 ### Architecture
 - `src/kinematics/` - Joint angle computation
-- `src/anatomical/` - Biomechanical constraints
 - Comprehensive visualization tools
 
 ## 2025-11-29 - Initial Pipeline

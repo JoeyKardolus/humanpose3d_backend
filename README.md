@@ -15,7 +15,7 @@ source ~/.local/bin/env  # Add to PATH (or restart shell)
 
 ```bash
 git clone <repo-url>
-cd humanpose3d_backend
+cd humanpose3d_mediapipe
 uv sync  # Creates .venv and installs all dependencies
 ```
 
@@ -36,34 +36,29 @@ direnv allow  # Automatically sets MPLBACKEND=Agg
 ## Quick Start
 
 ```bash
-# Run with multi-constraint optimization + joint angles (RECOMMENDED)
+# Run with neural refinement + joint angles (RECOMMENDED)
 uv run python main.py \
   --video data/input/joey.mp4 \
   --height 1.78 \
   --mass 75 \
-  --age 30 \
-  --sex male \
-  --anatomical-constraints \
-  --bone-length-constraints \
   --estimate-missing \
   --force-complete \
   --augmentation-cycles 20 \
-  --multi-constraint-optimization \
-  --compute-all-joint-angles \
+  --main-refiner \
   --plot-all-joint-angles \
   --visibility-min 0.1
 
 # Visualize results
-uv run python visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
+uv run python scripts/viz/visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
 ```
 
 ## Features
 
 - ✅ **MediaPipe Pose Detection** - 33 landmarks → 22 Pose2Sim markers
-- ✅ **GPU-Accelerated LSTM Augmentation** - 21 → 64 markers (full OpenCap set) with 3-10x speedup
-- ✅ **Multi-Constraint Optimization** - 68% bone length improvement, automatic unreliable marker filtering
-- ✅ **Neural Depth Refinement** - PoseFormer-based depth correction using biomechanical constraints
-- ✅ **Biomechanical Constraints** - Enforce realistic bone lengths, ground contact, and hip width
+- ✅ **GPU-Accelerated LSTM Augmentation** - 22 → 64 markers (full OpenCap set) with 3-10x speedup
+- ✅ **Neural Depth Refinement** - Transformer-based depth correction trained on AIST++ motion capture
+- ✅ **Neural Joint Refinement** - Learned soft joint constraints from motion capture data
+- ✅ **MainRefiner Pipeline** - Unified neural pipeline combining depth + joint refinement
 - ✅ **Marker Estimation** - Fill missing data using anatomical symmetry
 - ✅ **Comprehensive Joint Angles** - ISB-compliant computation for all joints (pelvis, lower body, trunk, upper body)
 - ✅ **Interactive Visualization** - 3D skeleton viewer with playback controls
@@ -72,10 +67,10 @@ uv run python visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
 
 ## Results
 
-**Benchmark** (joey.mp4, 535 frames, 20 augmentation cycles, GPU acceleration):
-- **Processing time**: ~45 seconds (3-10x faster with GPU vs CPU)
-- **Bone length consistency**: 68% improvement (0.113 → 0.036 CV)
-- **Marker quality**: 59/64 markers (unreliable markers auto-filtered)
+**Benchmark** (joey.mp4, 535 frames, 20 augmentation cycles, neural refinement):
+- **Processing time**: ~60 seconds
+- **Depth accuracy**: 45% improvement with neural refinement
+- **Marker quality**: 59/64 markers
 - **Joint angles**: 12 joint groups computed (pelvis, hip, knee, ankle, trunk, shoulder, elbow)
 - **Output**: Clean directory structure with automatic organization
 - **GPU**: Automatic CUDA acceleration for LSTM inference, graceful CPU fallback
@@ -87,24 +82,25 @@ uv run python visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
 - [docs/OUTPUT_ORGANIZATION.md](docs/OUTPUT_ORGANIZATION.md) - Output directory structure and file descriptions
 
 ### Technical Details
-- [docs/MULTI_CONSTRAINT_OPTIMIZATION.md](docs/MULTI_CONSTRAINT_OPTIMIZATION.md) - Multi-constraint optimization algorithm
-- [docs/CLEANUP_COMPLETE_2026-01-09.md](docs/CLEANUP_COMPLETE_2026-01-09.md) - Code cleanup report
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and module structure
+- [docs/NEURAL_MODELS.md](docs/NEURAL_MODELS.md) - Neural refinement models (depth + joint)
 
 ### Development History
-- [docs/BUILD_LOG.md](docs/BUILD_LOG.md) - Development history and decisions
-- [docs/SESSION_SUMMARY_2026-01-09.md](docs/SESSION_SUMMARY_2026-01-09.md) - Latest session notes
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) - Development history and milestones
+- [docs/BUILD_LOG.md](docs/BUILD_LOG.md) - Run logs and testing notes
 
 ## Pipeline Overview
 
 ```
-Video → MediaPipe → CSV → TRC → GPU-Accelerated LSTM → Multi-Constraint Optimization → Joint Angles → Clean Output
+Video → MediaPipe → Neural Depth Refinement → TRC → GPU-Accelerated LSTM → Joint Angles → Neural Joint Refinement → Output
 ```
 
 1. **Extraction**: MediaPipe detects 33 landmarks, mapped to 22 Pose2Sim markers
-2. **Augmentation**: GPU-accelerated Pose2Sim LSTM adds 43 augmented markers (medial, shoulder clusters, HJC)
-3. **Optimization**: Multi-constraint refinement with unreliable marker filtering
+2. **Depth Refinement**: Neural model corrects MediaPipe depth errors (with `--main-refiner`)
+3. **Augmentation**: GPU-accelerated Pose2Sim LSTM adds 43 markers (medial, shoulder clusters, HJC)
 4. **Joint Angles**: ISB-compliant computation for all 12 joint groups
-5. **Output**: Organized directory with final TRC, initial TRC, raw CSV, and joint angles
+5. **Joint Refinement**: Neural model applies learned soft constraints (with `--main-refiner`)
+6. **Output**: Organized directory with final TRC, initial TRC, raw CSV, and joint angles
 
 **GPU Acceleration**: Automatic CUDA support for 3-10x speedup on augmentation. CPU fallback if GPU unavailable.
 

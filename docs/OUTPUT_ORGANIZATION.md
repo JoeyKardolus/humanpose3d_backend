@@ -37,21 +37,17 @@ data/output/pose-3d/<video_name>/
 ### Primary Outputs
 
 **`<video>_final.trc`**
-- Final biomechanically optimized skeleton
-- 65 markers (22 MediaPipe + 43 augmented)
-- Multi-constraint optimization applied:
-  - Bone length consistency (phase 1)
-  - Ground plane constraints (phase 2)
-  - Hip width anthropometric constraint (phase 2)
-  - Augmented marker parent-child constraints (automatic)
-- Unreliable markers filtered (temporal variance > 0.05)
+- Final optimized skeleton
+- 59-64 markers (22 MediaPipe + augmented, some filtered)
+- Neural refinement applied if `--main-refiner` used:
+  - Depth correction (pre-augmentation)
+  - Joint constraint refinement (post-augmentation)
 - Ready for biomechanical analysis, inverse dynamics, or visualization
 
 **`<video>_initial.trc`**
 - Initial TRC from MediaPipe pose detection
 - 22 markers: Neck, RShoulder, LShoulder, RHip, LHip, RKnee, LKnee, RAnkle, LAnkle, RHeel, LHeel, RSmallToe, LSmallToe, RBigToe, LBigToe, RElbow, LElbow, RWrist, LWrist, Hip, Head, Nose
 - Pre-augmentation estimation applied if `--estimate-missing` used
-- Anatomical constraints applied if `--anatomical-constraints` used
 
 **`<video>_raw_landmarks.csv`**
 - Raw MediaPipe pose landmarks
@@ -116,11 +112,10 @@ The cleanup happens **after** the main pipeline completes:
 ```bash
 uv run python main.py \
   --video data/input/<video>.mp4 \
-  --height 1.78 --mass 75 --age 30 --sex male \
+  --height 1.78 --mass 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
-  --multi-constraint-optimization \
-  --compute-all-joint-angles \
+  --main-refiner \
   --plot-all-joint-angles
 
 # Output automatically organized:
@@ -164,6 +159,6 @@ mv *_angles_*.csv *_all_joint_angles.png joint_angles/
 
 - Joint angles require `--force-complete` flag (ensures hip joint centers are estimated)
 - Right-side data may have fewer frames due to marker visibility (check CSV for NaN)
-- Multi-constraint optimization filters unreliable augmented markers (typical: 4-6 markers removed)
+- Some unreliable augmented markers may be filtered (typical: 4-6 markers removed)
 - Old runs are preserved for 1 session, then manually cleaned
 

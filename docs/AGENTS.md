@@ -115,17 +115,18 @@ Application = core
 
 ## Build, Test, and Development Commands
 - `uv sync` installs the Python 3.12 toolchain
-- `uv run python main.py --video data/input/<name>.mp4 --height <m> --mass <kg> --age <years> --sex <male|female>`
+- `uv run python main.py --video data/input/<name>.mp4 --height <m> --mass <kg> --main-refiner`
 - `uv run pytest`
 - `uv run jupyter lab notebooks/`
 
 ---
 
 ## Pipeline Flags & Visualization
+- `--main-refiner` enables neural depth + joint refinement (recommended)
 - `--show-video` renders MediaPipe preview and exports preview video
 - `--plot-landmarks` replays extracted CSV landmarks
 - `--plot-augmented` visualizes Pose2Sim augmented TRC
-- `--fix-header` rewrites TRC metadata for downstream tools
+- `--plot-all-joint-angles` generates comprehensive joint angle visualization
 
 ---
 
