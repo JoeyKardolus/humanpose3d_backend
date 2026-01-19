@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from src.application.webapp.dto.pipeline_preparation_result import (
+from src.application.dto.pipeline_preparation_result import (
     PipelinePreparationResult,
 )
-from src.application.webapp.dto.pipeline_request import PipelineRequestData
-from src.application.webapp.dto.pipeline_run_spec import PipelineRunSpec
-from src.application.webapp.services.output_directory_service import (
+from src.application.dto.pipeline_request import PipelineRequestData
+from src.application.dto.pipeline_run_spec import PipelineRunSpec
+from src.application.services.output_directory_service import (
     OutputDirectoryService,
 )
-from src.application.webapp.services.run_id_factory import RunIdFactory
-from src.application.webapp.services.run_key_service import RunKeyService
-from src.application.webapp.services.upload_service import UploadService
-from src.application.webapp.validators.run_request_validator import RunRequestValidator
+from src.application.services.run_id_factory import RunIdFactory
+from src.application.services.run_key_service import RunKeyService
+from src.application.services.upload_service import UploadService
+from src.application.validators.run_request_validator import RunRequestValidator
 
 
 class PreparePipelineRunUseCase:

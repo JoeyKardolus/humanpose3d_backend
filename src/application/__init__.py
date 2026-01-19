@@ -1,1 +1,1 @@
-"""Application package root for the Django project."""
+"""Webapp Django application package."""

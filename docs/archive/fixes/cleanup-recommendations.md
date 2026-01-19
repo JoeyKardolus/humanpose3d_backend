@@ -236,7 +236,7 @@ joint_angles:
 # NEW SIMPLIFIED COMMAND (22 flags total, 12 used)
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 --age 30 --sex male \
+  --height 1.78 --weight 75 --age 30 --sex male \
   --estimate-missing \
   --force-complete \
   --augmentation-cycles 20 \
@@ -246,7 +246,7 @@ uv run python main.py \
 ```
 
 **Available Flags After Cleanup**:
-1. Core: `--video`, `--height`, `--mass`, `--age`, `--sex` (5)
+1. Core: `--video`, `--height`, `--weight`, `--age`, `--sex` (5)
 2. Pipeline: `--estimate-missing`, `--force-complete`, `--augmentation-cycles` (3)
 3. Optimization: `--multi-constraint-optimization`, `--multi-constraint-iterations` (2)
 4. Joint Angles: `--compute-all-joint-angles`, `--plot-all-joint-angles`, `--save-angle-comparison`, `--check-joint-constraints` (4)
@@ -267,7 +267,7 @@ uv run pytest -v
 # Test recommended workflow
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 --age 30 --sex male \
+  --height 1.78 --weight 75 --age 30 --sex male \
   --estimate-missing --force-complete \
   --augmentation-cycles 1 \
   --multi-constraint-optimization \

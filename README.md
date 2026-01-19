@@ -54,7 +54,7 @@ Run with neural refinement + joint angles (recommended):
 uv run python manage.py run_pipeline \
   --video PATH/TO/VIDEO.mp4 \
   --height 1.78 \
-  --mass 75 \
+  --weight 75 \
   --estimate-missing \
   --force-complete \
   --augmentation-cycles 20 \
@@ -87,7 +87,7 @@ Start a run asynchronously (multipart form upload):
 ```bash
 curl -F "video=@data/input/joey.mp4" \
   -F "height=1.78" \
-  -F "mass=75" \
+  -F "weight=75" \
   -F "consent=accepted" \
   -F "estimate_missing=on" \
   -F "force_complete=on" \

@@ -10,8 +10,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from src.application.webapp.services.landmark_plot_service import LandmarkPlotService
-from src.application.webapp.services.trc_plot_service import TrcPlotService
+from src.application.services.landmark_plot_service import LandmarkPlotService
+from src.application.services.trc_plot_service import TrcPlotService
 
 
 class StatisticsService:

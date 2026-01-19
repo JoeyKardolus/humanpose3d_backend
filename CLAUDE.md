@@ -85,15 +85,14 @@ Django principles:
 
 ```
 src/
-├── application/          # Django web interface (all app logic here)
-│   ├── webapp/
-│   │   ├── controllers/  # View functions (thin)
-│   │   ├── services/     # Business logic
-│   │   ├── use_cases/    # Orchestration
-│   │   ├── repositories/ # Data access
-│   │   ├── validators/   # Validation
-│   │   ├── dto/          # Data transfer objects
-│   │   └── config/       # Configuration
+├── application/          # Django app - web interface (all UI logic here)
+│   ├── controllers/      # View functions (thin entry points)
+│   ├── services/         # Business logic
+│   ├── use_cases/        # Orchestration (coordinates services)
+│   ├── repositories/     # Data access
+│   ├── validators/       # Validation logic
+│   ├── dto/              # Data transfer objects
+│   ├── config/           # Configuration
 │   ├── static/           # CSS, JS
 │   └── templates/        # HTML
 ├── cli/                  # Management commands
@@ -134,7 +133,7 @@ src/
 # CLI (recommended for development)
 uv run python manage.py run_pipeline \
   --video data/input/video.mp4 \
-  --height 1.78 --mass 75 \
+  --height 1.78 --weight 75 \
   --main-refiner \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \

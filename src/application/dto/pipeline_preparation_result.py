@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.application.webapp.dto.pipeline_run_spec import PipelineRunSpec
+from src.application.dto.pipeline_run_spec import PipelineRunSpec
 
 
 @dataclass(frozen=True)

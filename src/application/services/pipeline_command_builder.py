@@ -37,7 +37,7 @@ class PipelineCommandBuilder:
             command.extend([name, value])
 
         _add_flag("--height", form_data.get("height"), default="1.78")
-        _add_flag("--mass", form_data.get("mass"), default="75.0")
+        _add_flag("--weight", form_data.get("weight"), default="75.0")
         _add_flag("--visibility-min", form_data.get("visibility_min"), default="0.1")
         _add_flag("--depth-model-path", form_data.get("depth_model_path"))
         _add_flag("--joint-model-path", form_data.get("joint_model_path"))

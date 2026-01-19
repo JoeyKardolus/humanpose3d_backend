@@ -123,7 +123,7 @@ def cleanup_output_directory(run_dir: Path, video_stem: str) -> None:
 ```bash
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 --age 30 --sex male \
+  --height 1.78 --weight 75 --age 30 --sex male \
   --anatomical-constraints --bone-length-constraints \
   --estimate-missing --force-complete \
   --augmentation-cycles 1 \
@@ -186,7 +186,7 @@ data/output/pose-3d/joey/
 # Best Quality - Multi-Constraint Optimization
 uv run python main.py \
   --video data/input/<video>.mp4 \
-  --height <meters> --mass <kg> --age <years> --sex <male|female> \
+  --height <meters> --weight <kg> --age <years> --sex <male|female> \
   --anatomical-constraints \
   --bone-length-constraints \
   --estimate-missing \
@@ -219,7 +219,7 @@ uv run python main.py \
    - Reduces CLI clutter further
 
 3. **Target: ~22 essential flags**
-   - Core: 5 flags (video, height, mass, age, sex)
+   - Core: 5 flags (video, height, weight, age, sex)
    - Pipeline: 5 flags (estimation, augmentation, optimization)
    - Joint Angles: 2 flags (compute, plot)
    - Visualization: 3 flags (show, plot landmarks, plot augmented)

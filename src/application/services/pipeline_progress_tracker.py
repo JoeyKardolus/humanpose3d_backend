@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import time
 
-from src.application.webapp.repositories.run_status_repository import (
+from src.application.repositories.run_status_repository import (
     RunStatusRepository,
 )
 

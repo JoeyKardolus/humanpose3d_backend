@@ -6,7 +6,7 @@ from pathlib import Path
 
 from django.http import Http404
 
-from src.application.webapp.validators.path_validator import PathValidator
+from src.application.validators.path_validator import PathValidator
 
 
 class MediaService:

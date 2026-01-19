@@ -127,7 +127,7 @@ The issue is **video quality**, not code:
 ```bash
 uv run python main.py \
   --video data/input/hardloop.mp4 \
-  --height 1.78 --mass 75 --age 30 --sex male \
+  --height 1.78 --weight 75 --age 30 --sex male \
   --anatomical-constraints --bone-length-constraints \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \

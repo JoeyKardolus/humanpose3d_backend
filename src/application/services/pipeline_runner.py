@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 from typing import Callable, TextIO
 
-from src.application.webapp.dto.pipeline_execution_result import PipelineExecutionResult
+from src.application.dto.pipeline_execution_result import PipelineExecutionResult
 
 
 class PipelineRunner:

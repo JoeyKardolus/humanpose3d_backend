@@ -141,7 +141,7 @@ data/output/pose-3d/<video_name>/
 ```bash
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 --age 30 --sex male \
+  --height 1.78 --weight 75 --age 30 --sex male \
   --anatomical-constraints --bone-length-constraints \
   --estimate-missing --force-complete \
   --augmentation-cycles 1 \
@@ -207,7 +207,7 @@ uv run python main.py \
    - Reduces CLI help clutter
 
 3. **Final Goal**: ~22 essential flags
-   - Core: `--video`, `--height`, `--mass`, `--age`, `--sex` (5)
+   - Core: `--video`, `--height`, `--weight`, `--age`, `--sex` (5)
    - Pipeline: `--estimate-missing`, `--force-complete`, `--augmentation-cycles` (3)
    - Optimization: `--multi-constraint-optimization` (1)
    - Joint Angles: `--compute-all-joint-angles`, `--plot-all-joint-angles` (2)

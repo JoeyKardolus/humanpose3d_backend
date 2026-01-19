@@ -1,6 +1,6 @@
 """Public view exports for Django URL routing."""
 
-from src.application.webapp.controllers.pipeline_views import (
+from src.application.controllers.pipeline_views import (
     DeleteRunView,
     DownloadAllView,
     DownloadView,

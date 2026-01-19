@@ -8,7 +8,7 @@ The **MainRefiner** is a unified neural pipeline that combines depth and joint c
 # Full pipeline with neural refinement
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 \
+  --height 1.78 --weight 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
   --main-refiner \
@@ -158,7 +158,7 @@ uv run --group neural python scripts/train/joint_model.py --epochs 100 --batch-s
 ```bash
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 \
+  --height 1.78 --weight 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
   --main-refiner \

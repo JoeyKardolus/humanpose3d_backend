@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import time
 
-from src.application.webapp.dto.progress_payload import ProgressPayload
-from src.application.webapp.repositories.run_status_repository import (
+from src.application.dto.progress_payload import ProgressPayload
+from src.application.repositories.run_status_repository import (
     RunStatusRepository,
 )
 

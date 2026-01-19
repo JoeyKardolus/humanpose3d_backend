@@ -114,7 +114,7 @@ Application = core
 
 ## Build, Test, and Development Commands
 - `uv sync` installs the Python 3.12 toolchain
-- `uv run python main.py --video data/input/<name>.mp4 --height <m> --mass <kg> --main-refiner`
+- `uv run python main.py --video data/input/<name>.mp4 --height <m> --weight <kg> --main-refiner`
 - `uv run pytest`
 
 ---

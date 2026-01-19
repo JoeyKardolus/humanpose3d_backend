@@ -171,7 +171,7 @@ This document summarizes ALL changes and features built from initial MediaPipe-o
 #### Core Flags
 - `--video PATH` - Input video file (required)
 - `--height METERS` - Subject height
-- `--mass KG` - Subject mass
+- `--weight KG` - Subject weight
 - `--age YEARS` - Subject age
 - `--sex {male,female}` - Subject sex
 
@@ -314,7 +314,7 @@ self.model = keras.models.load_model(model_path, custom_objects=custom_objects)
 ```bash
 uv run python main.py \
   --video data/input/video.mp4 \
-  --height 1.78 --mass 75.0 --age 30 --sex male \
+  --height 1.78 --weight 75.0 --age 30 --sex male \
   --estimate-missing
 ```
 **Output**: 65-marker augmented TRC in ~30-45 seconds
@@ -323,7 +323,7 @@ uv run python main.py \
 ```bash
 uv run python main.py \
   --video data/input/video.mp4 \
-  --height 1.78 --mass 75.0 --age 30 --sex male \
+  --height 1.78 --weight 75.0 --age 30 --sex male \
   --gaussian-smooth 2.5 \
   --flk-filter \
   --flk-passes 2 \
@@ -336,7 +336,7 @@ uv run python main.py \
 ```bash
 uv run python main.py \
   --video data/input/video.mp4 \
-  --height 1.78 --mass 75.0 --age 30 --sex male \
+  --height 1.78 --weight 75.0 --age 30 --sex male \
   --gaussian-smooth 3.0 \
   --flk-filter \
   --flk-passes 3 \

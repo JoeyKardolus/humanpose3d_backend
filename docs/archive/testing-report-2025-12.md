@@ -461,7 +461,7 @@ Current tests don't include `--ground-plane-refinement`. Based on theory:
 ```bash
 uv run python main.py \
   --video data/input/video.mp4 \
-  --height <meters> --mass <kg> --age <years> --sex <male|female> \
+  --height <meters> --weight <kg> --age <years> --sex <male|female> \
   --anatomical-constraints \
   --bone-length-constraints \
   --estimate-missing \
@@ -729,7 +729,7 @@ The statistical analysis reveals that most features have marginal impact compare
 # NEW BEST - 90.9% depth improvement
 uv run python main.py \
   --video data/input/video.mp4 \
-  --height <meters> --mass <kg> --age <years> --sex <male|female> \
+  --height <meters> --weight <kg> --age <years> --sex <male|female> \
   --anatomical-constraints \
   --bone-length-constraints \
   --estimate-missing \
@@ -742,7 +742,7 @@ uv run python main.py \
 # Slightly faster, marginally lower quality
 uv run python main.py \
   --video data/input/video.mp4 \
-  --height <meters> --mass <kg> --age <years> --sex <male|female> \
+  --height <meters> --weight <kg> --age <years> --sex <male|female> \
   --anatomical-constraints \
   --bone-length-constraints \
   --estimate-missing \
@@ -755,7 +755,7 @@ uv run python main.py \
 # (LSTM typically achieves 81%, force-complete fills remaining 19%)
 uv run python main.py \
   --video data/input/video.mp4 \
-  --height <meters> --mass <kg> --age <years> --sex <male|female> \
+  --height <meters> --weight <kg> --age <years> --sex <male|female> \
   --anatomical-constraints \
   --bone-length-constraints \
   --estimate-missing \

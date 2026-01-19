@@ -23,7 +23,7 @@ DJANGO_APPS = [
 ]
 
 LOCAL_APPS = [
-    "src.application.webapp.apps.WebappConfig",
+    "src.application.apps.ApplicationConfig",
     "src.api.apps.ApiConfig",
     "src.cli.apps.CliConfig",
     "src.datastream.apps.DatastreamConfig",

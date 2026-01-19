@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import mimetypes
+import tempfile
+import zipfile
 from pathlib import Path
 
 from django.http import (
@@ -16,44 +18,39 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
-from src.application.webapp.config.paths import AppPaths
-from src.application.webapp.dto.pipeline_request import PipelineRequestData
-from src.application.webapp.repositories.run_status_repository import (
+from src.application.config.paths import AppPaths
+from src.application.dto.pipeline_request import PipelineRequestData
+from src.application.repositories.run_status_repository import (
     RunStatusRepository,
 )
-from src.application.webapp.services.media_service import MediaService
-from src.application.webapp.services.output_directory_service import (
+from src.application.services.media_service import MediaService
+from src.application.services.output_directory_service import (
     OutputDirectoryService,
 )
-from src.application.webapp.services.output_history_service import OutputHistoryService
-from src.application.webapp.services.pipeline_command_builder import (
+from src.application.services.output_history_service import OutputHistoryService
+from src.application.services.pipeline_command_builder import (
     PipelineCommandBuilder,
 )
-from src.application.webapp.services.pipeline_log_service import PipelineLogService
-from src.application.webapp.services.pipeline_progress_tracker import (
+from src.application.services.pipeline_progress_tracker import (
     PipelineProgressTracker,
 )
-from src.application.webapp.services.pipeline_result_service import (
+from src.application.services.pipeline_result_service import (
     PipelineResultService,
 )
-from src.application.webapp.services.pipeline_runner import PipelineRunner
-from src.application.webapp.services.progress_service import ProgressService
-from src.application.webapp.services.results_service import ResultsService
-from src.application.webapp.services.results_archive_service import (
-    ResultsArchiveService,
-)
-from src.application.webapp.services.run_cleanup_service import RunCleanupService
-from src.application.webapp.services.run_id_factory import RunIdFactory
-from src.application.webapp.services.run_key_service import RunKeyService
-from src.application.webapp.services.statistics_service import StatisticsService
-from src.application.webapp.services.upload_service import UploadService
-from src.application.webapp.use_cases.prepare_pipeline_run import (
+from src.application.services.pipeline_runner import PipelineRunner
+from src.application.services.progress_service import ProgressService
+from src.application.services.run_cleanup_service import RunCleanupService
+from src.application.services.run_id_factory import RunIdFactory
+from src.application.services.run_key_service import RunKeyService
+from src.application.services.statistics_service import StatisticsService
+from src.application.services.upload_service import UploadService
+from src.application.use_cases.prepare_pipeline_run import (
     PreparePipelineRunUseCase,
 )
-from src.application.webapp.use_cases.run_pipeline_async import RunPipelineAsyncUseCase
-from src.application.webapp.use_cases.run_pipeline_sync import RunPipelineSyncUseCase
-from src.application.webapp.validators.path_validator import PathValidator
-from src.application.webapp.validators.run_request_validator import RunRequestValidator
+from src.application.use_cases.run_pipeline_async import RunPipelineAsyncUseCase
+from src.application.use_cases.run_pipeline_sync import RunPipelineSyncUseCase
+from src.application.validators.path_validator import PathValidator
+from src.application.validators.run_request_validator import RunRequestValidator
 
 
 # Module-level wiring keeps view classes thin and testable.
@@ -62,7 +59,6 @@ _PATH_VALIDATOR = PathValidator()
 _STATUS_REPO = RunStatusRepository()
 
 _PIPELINE_RUNNER = PipelineRunner(_APP_PATHS.repo_root)
-_PIPELINE_LOGGER = PipelineLogService()
 _PIPELINE_RESULTS = PipelineResultService(_APP_PATHS.repo_root)
 _PIPELINE_COMMANDS = PipelineCommandBuilder(_APP_PATHS.repo_root)
 _PROGRESS_TRACKER = PipelineProgressTracker(_STATUS_REPO)
@@ -88,22 +84,18 @@ _PREPARE_PIPELINE = PreparePipelineRunUseCase(
 _RUN_PIPELINE_SYNC = RunPipelineSyncUseCase(
     command_builder=_PIPELINE_COMMANDS,
     pipeline_runner=_PIPELINE_RUNNER,
-    log_service=_PIPELINE_LOGGER,
     result_service=_PIPELINE_RESULTS,
     upload_service=_UPLOAD_SERVICE,
 )
 _RUN_PIPELINE_ASYNC = RunPipelineAsyncUseCase(
     command_builder=_PIPELINE_COMMANDS,
     pipeline_runner=_PIPELINE_RUNNER,
-    log_service=_PIPELINE_LOGGER,
     result_service=_PIPELINE_RESULTS,
     upload_service=_UPLOAD_SERVICE,
     status_repo=_STATUS_REPO,
     progress_tracker=_PROGRESS_TRACKER,
 )
 
-_RESULTS_SERVICE = ResultsService()
-_RESULTS_ARCHIVE = ResultsArchiveService()
 _STATISTICS_SERVICE = StatisticsService()
 _MEDIA_SERVICE = MediaService(
     _APP_PATHS.output_root,
@@ -165,9 +157,6 @@ class HomeView(View):
                     ]
                 ),
             )
-
-        if request.POST.get("fix_header") is not None:
-            _RUN_PIPELINE_SYNC.apply_header_fix(spec)
 
         return redirect("results", run_key=spec.run_key)
 
@@ -243,7 +232,16 @@ class ResultsView(View):
         if not run_dir.exists():
             raise Http404("Run not found.")
 
-        files = _RESULTS_SERVICE.list_files(run_dir)
+        # List all files in run directory
+        files = [
+            {
+                "name": path.name,
+                "relative_path": path.relative_to(run_dir).as_posix(),
+                "size_kb": max(path.stat().st_size // 1024, 1),
+            }
+            for path in sorted(run_dir.rglob("*"))
+            if path.is_file()
+        ]
         preview_video = None
         preview_video_type = None
         preview_candidates = sorted(run_dir.rglob("*_preview.*"))
@@ -297,7 +295,14 @@ class DownloadAllView(View):
         if not run_dir.exists():
             raise Http404("Run not found.")
 
-        archive = _RESULTS_ARCHIVE.build_archive(run_dir, run_key)
+        # Create zip archive
+        archive = tempfile.NamedTemporaryFile(suffix=f"_{run_key}.zip")
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zip_file:
+            for path in sorted(run_dir.rglob("*")):
+                if path.is_file():
+                    zip_file.write(path, arcname=path.relative_to(run_dir).as_posix())
+        archive.seek(0)
+
         return FileResponse(
             archive,
             as_attachment=True,

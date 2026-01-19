@@ -3,7 +3,7 @@
 from django.apps import AppConfig
 
 
-class WebappConfig(AppConfig):
+class ApplicationConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "src.application.webapp"
-    verbose_name = "HumanPose3D Webapp"
+    name = "src.application"
+    verbose_name = "HumanPose3D Application"

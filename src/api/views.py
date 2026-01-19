@@ -16,44 +16,43 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
-from src.application.webapp.config.paths import AppPaths
-from src.application.webapp.dto.pipeline_request import PipelineRequestData
-from src.application.webapp.repositories.run_status_repository import (
+from src.application.config.paths import AppPaths
+from src.application.dto.pipeline_request import PipelineRequestData
+from src.application.repositories.run_status_repository import (
     RunStatusRepository,
 )
-from src.application.webapp.services.media_service import MediaService
-from src.application.webapp.services.output_directory_service import (
+from src.application.services.media_service import MediaService
+from src.application.services.output_directory_service import (
     OutputDirectoryService,
 )
-from src.application.webapp.services.output_history_service import OutputHistoryService
-from src.application.webapp.services.pipeline_command_builder import (
+from src.application.services.output_history_service import OutputHistoryService
+from src.application.services.pipeline_command_builder import (
     PipelineCommandBuilder,
 )
-from src.application.webapp.services.pipeline_log_service import PipelineLogService
-from src.application.webapp.services.pipeline_progress_tracker import (
+from src.application.services.pipeline_progress_tracker import (
     PipelineProgressTracker,
 )
-from src.application.webapp.services.pipeline_result_service import (
+from src.application.services.pipeline_result_service import (
     PipelineResultService,
 )
-from src.application.webapp.services.pipeline_runner import PipelineRunner
-from src.application.webapp.services.progress_service import ProgressService
-from src.application.webapp.services.results_archive_service import (
+from src.application.services.pipeline_runner import PipelineRunner
+from src.application.services.progress_service import ProgressService
+from src.application.services.results_archive_service import (
     ResultsArchiveService,
 )
-from src.application.webapp.services.results_service import ResultsService
-from src.application.webapp.services.run_cleanup_service import RunCleanupService
-from src.application.webapp.services.run_id_factory import RunIdFactory
-from src.application.webapp.services.run_key_service import RunKeyService
-from src.application.webapp.services.statistics_service import StatisticsService
-from src.application.webapp.services.upload_service import UploadService
-from src.application.webapp.use_cases.prepare_pipeline_run import (
+from src.application.services.results_service import ResultsService
+from src.application.services.run_cleanup_service import RunCleanupService
+from src.application.services.run_id_factory import RunIdFactory
+from src.application.services.run_key_service import RunKeyService
+from src.application.services.statistics_service import StatisticsService
+from src.application.services.upload_service import UploadService
+from src.application.use_cases.prepare_pipeline_run import (
     PreparePipelineRunUseCase,
 )
-from src.application.webapp.use_cases.run_pipeline_async import RunPipelineAsyncUseCase
-from src.application.webapp.use_cases.run_pipeline_sync import RunPipelineSyncUseCase
-from src.application.webapp.validators.path_validator import PathValidator
-from src.application.webapp.validators.run_request_validator import RunRequestValidator
+from src.application.use_cases.run_pipeline_async import RunPipelineAsyncUseCase
+from src.application.use_cases.run_pipeline_sync import RunPipelineSyncUseCase
+from src.application.validators.path_validator import PathValidator
+from src.application.validators.run_request_validator import RunRequestValidator
 
 
 _APP_PATHS = AppPaths.from_anchor(Path(__file__))
@@ -61,7 +60,6 @@ _PATH_VALIDATOR = PathValidator()
 _STATUS_REPO = RunStatusRepository()
 
 _PIPELINE_RUNNER = PipelineRunner(_APP_PATHS.repo_root)
-_PIPELINE_LOGGER = PipelineLogService()
 _PIPELINE_RESULTS = PipelineResultService(_APP_PATHS.repo_root)
 _PIPELINE_COMMANDS = PipelineCommandBuilder(_APP_PATHS.repo_root)
 _PROGRESS_TRACKER = PipelineProgressTracker(_STATUS_REPO)
@@ -87,14 +85,12 @@ _PREPARE_PIPELINE = PreparePipelineRunUseCase(
 _RUN_PIPELINE_SYNC = RunPipelineSyncUseCase(
     command_builder=_PIPELINE_COMMANDS,
     pipeline_runner=_PIPELINE_RUNNER,
-    log_service=_PIPELINE_LOGGER,
     result_service=_PIPELINE_RESULTS,
     upload_service=_UPLOAD_SERVICE,
 )
 _RUN_PIPELINE_ASYNC = RunPipelineAsyncUseCase(
     command_builder=_PIPELINE_COMMANDS,
     pipeline_runner=_PIPELINE_RUNNER,
-    log_service=_PIPELINE_LOGGER,
     result_service=_PIPELINE_RESULTS,
     upload_service=_UPLOAD_SERVICE,
     status_repo=_STATUS_REPO,

@@ -222,3 +222,7 @@
 - 2026-01-19 16:13:46 UTC | main step2 TRC data/output/Jaap-d83921b8/Jaap-d83921b8.trc (710 frames, 21 markers)
 - 2026-01-19 16:14:06 UTC | main step3 augment data/output/Jaap-d83921b8/Jaap-d83921b8_LSTM.trc
 - 2026-01-19 16:14:06 UTC | main step3.5 complete data/output/Jaap-d83921b8/Jaap-d83921b8_LSTM_complete.trc
+- main step1 CSV data/output/Max-c56fa9ab/Max-c56fa9ab.csv (514 frames, 10280 rows) (2026-01-19 19:27:04Z)
+- main step2 TRC data/output/Max-c56fa9ab/Max-c56fa9ab.trc (514 frames, 21 markers) (2026-01-19 19:27:04Z)
+- main step3 augment data/output/Max-c56fa9ab/Max-c56fa9ab_LSTM.trc (2026-01-19 19:27:23Z)
+- main step3.5 complete data/output/Max-c56fa9ab/Max-c56fa9ab_LSTM_complete.trc (2026-01-19 19:27:24Z)

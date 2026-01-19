@@ -318,14 +318,14 @@ def run_augmentation(trc_path: Path, output_dir: Path, estimated_height: float =
     """
     from src.markeraugmentation.markeraugmentation import run_pose2sim_augment
 
-    # Mass estimation from height (BMI ~22 assumption)
-    estimated_mass = 22.0 * (estimated_height ** 2)
+    # Weight estimation from height (BMI ~22 assumption)
+    estimated_weight = 22.0 * (estimated_height ** 2)
 
     augmented_path = run_pose2sim_augment(
         trc_path=trc_path,
         out_dir=output_dir,
         height=estimated_height,
-        mass=estimated_mass,
+        weight=estimated_weight,
         age=25,
         sex='male',
         augmentation_cycles=5,

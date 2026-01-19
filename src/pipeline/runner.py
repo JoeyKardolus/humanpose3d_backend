@@ -38,7 +38,7 @@ def add_pipeline_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--video", required=True, help="Input video file")
 
     parser.add_argument("--height", type=float, default=1.78, help="Subject height in meters")
-    parser.add_argument("--mass", type=float, default=75.0, help="Subject mass in kg")
+    parser.add_argument("--weight", type=float, default=75.0, help="Subject weight in kg")
 
     parser.add_argument(
         "--visibility-min",
@@ -228,7 +228,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             trc_path,
             run_dir,
             height=args.height,
-            mass=args.mass,
+            weight=args.weight,
             augmentation_cycles=args.augmentation_cycles,
         )
         append_build_log(f"main step3 augment {lstm_path}")

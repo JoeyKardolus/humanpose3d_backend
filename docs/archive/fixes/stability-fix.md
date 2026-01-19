@@ -193,7 +193,7 @@ Previous Z-only smoothing left X/Y artifacts visible, especially at stride extre
 uv run python main.py \
   --video data/input/joey.mp4 \
   --height 1.78 \
-  --mass 75 \
+  --weight 75 \
   --age 30 \
   --sex male \
   --anatomical-constraints \

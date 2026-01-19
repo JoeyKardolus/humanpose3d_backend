@@ -5,16 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from src.application.webapp.dto.pipeline_run_spec import PipelineRunSpec
-from src.application.webapp.services.pipeline_command_builder import (
+from src.application.dto.pipeline_run_spec import PipelineRunSpec
+from src.application.services.pipeline_command_builder import (
     PipelineCommandBuilder,
 )
-from src.application.webapp.services.pipeline_log_service import PipelineLogService
-from src.application.webapp.services.pipeline_result_service import (
+from src.application.services.pipeline_result_service import (
     PipelineResultService,
 )
-from src.application.webapp.services.pipeline_runner import PipelineRunner
-from src.application.webapp.services.upload_service import UploadService
+from src.application.services.pipeline_runner import PipelineRunner
+from src.application.services.upload_service import UploadService
 
 
 @dataclass(frozen=True)
@@ -33,13 +32,11 @@ class RunPipelineSyncUseCase:
         self,
         command_builder: PipelineCommandBuilder,
         pipeline_runner: PipelineRunner,
-        log_service: PipelineLogService,
         result_service: PipelineResultService,
         upload_service: UploadService,
     ) -> None:
         self._command_builder = command_builder
         self._pipeline_runner = pipeline_runner
-        self._log_service = log_service
         self._result_service = result_service
         self._upload_service = upload_service
 
@@ -55,8 +52,15 @@ class RunPipelineSyncUseCase:
             raise
         if execution.return_code != 0:
             log_path = spec.pipeline_run_dir / "pipeline_error.log"
-            self._log_service.write_log(
-                log_path, execution.stdout_text, execution.stderr_text
+            log_path.write_text(
+                "\n".join([
+                    "[stdout]",
+                    execution.stdout_text.strip(),
+                    "",
+                    "[stderr]",
+                    execution.stderr_text.strip(),
+                ]) + "\n",
+                encoding="utf-8",
             )
             self._upload_service.remove_upload(spec.safe_run_id)
             return PipelineSyncResult(
@@ -66,8 +70,15 @@ class RunPipelineSyncUseCase:
             )
 
         log_path = spec.pipeline_run_dir / "pipeline.log"
-        self._log_service.write_log(
-            log_path, execution.stdout_text, execution.stderr_text
+        log_path.write_text(
+            "\n".join([
+                "[stdout]",
+                execution.stdout_text.strip(),
+                "",
+                "[stderr]",
+                execution.stderr_text.strip(),
+            ]) + "\n",
+            encoding="utf-8",
         )
         self._result_service.move_output(spec.pipeline_run_dir, spec.output_dir)
         self._result_service.persist_input_video(
@@ -82,6 +93,3 @@ class RunPipelineSyncUseCase:
             stderr_text=execution.stderr_text,
         )
 
-    def apply_header_fix(self, spec: PipelineRunSpec) -> None:
-        """Apply the TRC header fix if requested."""
-        self._result_service.apply_header_fix(spec.output_dir, spec.safe_run_id)

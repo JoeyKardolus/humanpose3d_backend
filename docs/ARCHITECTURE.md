@@ -70,7 +70,7 @@ Following **strict separation of concerns** per AGENTS.md principles:
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           INPUT                                         │
-│  Video (.mp4) + Subject params (height, mass)                           │
+│  Video (.mp4) + Subject params (height, weight)                         │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼

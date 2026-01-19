@@ -112,7 +112,7 @@ The cleanup happens **after** the main pipeline completes:
 ```bash
 uv run python main.py \
   --video data/input/<video>.mp4 \
-  --height 1.78 --mass 75 \
+  --height 1.78 --weight 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
   --main-refiner \
@@ -161,4 +161,3 @@ mv *_angles_*.csv *_all_joint_angles.png joint_angles/
 - Right-side data may have fewer frames due to marker visibility (check CSV for NaN)
 - Some unreliable augmented markers may be filtered (typical: 4-6 markers removed)
 - Old runs are preserved for 1 session, then manually cleaned
-

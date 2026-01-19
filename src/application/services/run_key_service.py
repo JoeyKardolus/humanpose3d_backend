@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from src.application.webapp.validators.path_validator import PathValidator
+from src.application.validators.path_validator import PathValidator
 
 
 class RunKeyService:

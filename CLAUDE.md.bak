@@ -8,7 +8,7 @@
 # Full pipeline with neural refinement (RECOMMENDED)
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 \
+  --height 1.78 --weight 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
   --plot-all-joint-angles \

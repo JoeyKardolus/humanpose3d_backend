@@ -162,7 +162,7 @@ MediaPipe Pose provides world landmarks for 3D pose estimation, but the **z-axis
 ```bash
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75.0 --age 30 --sex male \
+  --height 1.78 --weight 75.0 --age 30 --sex male \
   --gaussian-smooth 2.5 \
   --flk-filter --flk-passes 2 \
   --anatomical-constraints \
@@ -182,7 +182,7 @@ uv run python main.py \
 ```bash
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75.0 --age 30 --sex male \
+  --height 1.78 --weight 75.0 --age 30 --sex male \
   --bone-length-constraints \
   --ground-plane-refinement \
   --estimate-missing \
@@ -198,7 +198,7 @@ uv run python main.py \
 ```bash
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75.0 --age 30 --sex male \
+  --height 1.78 --weight 75.0 --age 30 --sex male \
   --bone-length-constraints \
   --estimate-missing \
   --augmentation-cycles 20
