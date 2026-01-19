@@ -164,3 +164,53 @@
 - 2026-01-19 09:57:37 UTC | main step3 augment data/output/Jaap-84a68e57/Jaap-84a68e57_LSTM.trc
 - 2026-01-19 09:57:37 UTC | main step3.5 complete data/output/Jaap-84a68e57/Jaap-84a68e57_LSTM_complete.trc
 - 2026-01-19 09:57:38 UTC | main step3.6 multi-constraint optimization data/output/Jaap-84a68e57/Jaap-84a68e57_LSTM_complete_multi_refined.trc
+- 2026-01-19 13:41:50 UTC | main step1.5 depth refinement applied
+- 2026-01-19 13:41:50 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 13:41:50 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 13:42:03 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 13:46:08 UTC | main step1.5 depth refinement applied
+- 2026-01-19 13:46:08 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 13:46:08 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 13:46:21 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 13:50:00 UTC | main step1.5 depth refinement applied
+- 2026-01-19 13:50:00 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 13:50:00 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 13:50:15 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 13:50:15 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-19 13:53:02 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 13:53:02 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 13:53:16 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 13:53:16 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-19 14:00:22 UTC | main step1.5 depth refinement applied
+- 2026-01-19 14:00:22 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 14:00:22 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 14:00:35 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 14:00:35 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-19 14:09:13 UTC | main step1.5 depth refinement applied
+- 2026-01-19 14:09:13 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 14:09:13 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 14:09:26 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 14:09:26 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-19 14:13:40 UTC | main step1.5 depth refinement applied
+- 2026-01-19 14:13:40 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 14:13:40 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 14:16:07 UTC | main step1.5 depth refinement applied
+- 2026-01-19 14:16:07 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 14:16:07 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 14:16:21 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 14:16:21 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-19 14:26:35 UTC | main step1.5 depth refinement applied
+- 2026-01-19 14:26:35 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 14:26:35 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 14:26:49 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 14:26:49 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-19 14:32:57 UTC | main step1.5 depth refinement applied
+- 2026-01-19 14:32:57 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 14:32:57 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 14:33:10 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 14:33:10 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-19 14:37:38 UTC | main step1.5 depth refinement applied
+- 2026-01-19 14:37:38 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 14:37:38 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 14:37:52 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 14:37:52 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
