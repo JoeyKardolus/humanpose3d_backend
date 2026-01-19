@@ -252,7 +252,6 @@ See `docs/TESTING_REPORT.md` for detailed test protocol with:
 
 ### Phase 3: Production Deployment
 - [ ] Update CLAUDE.md with recommended defaults
-- [ ] Create example notebooks
 - [ ] Document known limitations
 - [ ] Add visualization comparisons
 

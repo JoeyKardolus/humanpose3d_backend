@@ -17,7 +17,6 @@ class PipelineCommandBuilder:
         self,
         upload_path: Path,
         form_data: Mapping[str, str],
-        sex_raw: str,
     ) -> list[str]:
         """Translate form data into a pipeline CLI invocation."""
         manage_path = self._repo_root / "manage.py"
@@ -38,8 +37,11 @@ class PipelineCommandBuilder:
             command.extend([name, value])
 
         _add_flag("--height", form_data.get("height"), default="1.78")
-        _add_flag("--mass", form_data.get("weight"), default="75.0")
+        _add_flag("--mass", form_data.get("mass"), default="75.0")
         _add_flag("--visibility-min", form_data.get("visibility_min"), default="0.1")
+        _add_flag("--depth-model-path", form_data.get("depth_model_path"))
+        _add_flag("--joint-model-path", form_data.get("joint_model_path"))
+        _add_flag("--main-refiner-path", form_data.get("main_refiner_path"))
         _add_flag(
             "--augmentation-cycles", form_data.get("augmentation_cycles"), default="20"
         )
@@ -48,7 +50,7 @@ class PipelineCommandBuilder:
             form_data.get("joint_angle_smooth_window"),
             default="9",
         )
-        _add_flag("--temporal-smoothing", form_data.get("gaussian_smooth"))
+        _add_flag("--temporal-smoothing", form_data.get("temporal_smoothing"))
 
         if self._coerce_bool(form_data.get("estimate_missing")):
             command.append("--estimate-missing")
@@ -64,7 +66,14 @@ class PipelineCommandBuilder:
             command.append("--save-angle-comparison")
         if self._coerce_bool(form_data.get("show_all_markers")):
             command.append("--show-all-markers")
-        command.append("--export-preview")
+        if self._coerce_bool(form_data.get("show_video")):
+            command.append("--show-video")
+        if self._coerce_bool(form_data.get("export_preview")):
+            command.append("--export-preview")
+        if self._coerce_bool(form_data.get("plot_landmarks")):
+            command.append("--plot-landmarks")
+        if self._coerce_bool(form_data.get("plot_augmented")):
+            command.append("--plot-augmented")
         return command
 
     def _coerce_bool(self, value: str | None) -> bool:

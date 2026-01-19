@@ -14,8 +14,10 @@ source ~/.local/bin/env  # Add to PATH (or restart shell)
 ### 2. Clone and setup
 
 ```bash
-git clone <repo-url>
-cd humanpose3d_mediapipe
+git clone git@github.com:JoeyKardolus/humanpose3d_backend.git
+cd humanpose3d_backend
+
+uv python install 3.12  # Installs Python version 3.12
 uv sync  # Creates .venv and installs all dependencies
 ```
 
@@ -50,7 +52,7 @@ direnv allow  # Automatically sets MPLBACKEND=Agg
 Run with neural refinement + joint angles (recommended):
 ```bash
 uv run python manage.py run_pipeline \
-  --video data/input/joey.mp4 \
+  --video PATH/TO/VIDEO.mp4 \
   --height 1.78 \
   --mass 75 \
   --estimate-missing \
@@ -61,6 +63,19 @@ uv run python manage.py run_pipeline \
   --visibility-min 0.1
 ```
 
+#### Key CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `--main-refiner` | **Recommended**: Full neural pipeline (depth + joint refinement) |
+| `--estimate-missing` | Mirror occluded limbs from visible side |
+| `--force-complete` | Estimate shoulder clusters + hip joint centers |
+| `--augmentation-cycles N` | Multi-cycle averaging (default 20) |
+| `--plot-all-joint-angles` | Multi-panel visualization |
+| `--visibility-min 0.1` | Landmark confidence threshold (default 0.3, use 0.1 to prevent marker dropout) |
+| `--show-video` | Display MediaPipe preview during processing |
+| `--export-preview` | Save preview video with landmarks overlay |
+
 Visualize results:
 ```bash
 uv run python scripts/viz/visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
@@ -68,17 +83,28 @@ uv run python scripts/viz/visualize_interactive.py data/output/pose-3d/joey/joey
 
 ### API (cURL)
 
-Start a run asynchronously:
+Start a run asynchronously (multipart form upload):
 ```bash
 curl -F "video=@data/input/joey.mp4" \
   -F "height=1.78" \
-  -F "weight=75" \
+  -F "mass=75" \
+  -F "consent=accepted" \
   -F "estimate_missing=on" \
   -F "force_complete=on" \
   -F "augmentation_cycles=20" \
   -F "main_refiner=on" \
   -F "plot_all_joint_angles=on" \
+  -F "save_angle_comparison=on" \
+  -F "show_all_markers=on" \
+  -F "show_video=on" \
+  -F "export_preview=on" \
+  -F "plot_landmarks=on" \
+  -F "plot_augmented=on" \
   -F "visibility_min=0.1" \
+  -F "temporal_smoothing=3" \
+  -F "depth_model_path=models/checkpoints/best_depth_model.pth" \
+  -F "joint_model_path=models/checkpoints/best_joint_model.pth" \
+  -F "main_refiner_path=models/checkpoints/best_main_refiner.pth" \
   http://127.0.0.1:8000/api/runs/
 ```
 
@@ -118,14 +144,15 @@ curl http://127.0.0.1:8000/api/runs/<run_key>/
 ## Documentation
 
 ### User Guides
-- [CLAUDE.md](CLAUDE.md) - Full pipeline documentation and usage guide
 - [docs/OUTPUT_ORGANIZATION.md](docs/OUTPUT_ORGANIZATION.md) - Output directory structure and file descriptions
 
 ### Technical Details
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and module structure
 - [docs/NEURAL_MODELS.md](docs/NEURAL_MODELS.md) - Neural refinement models (depth + joint)
 
-### Development History
+### Development
+- [CLAUDE.md](CLAUDE.md) - AI assistant instructions and codebase guidelines
+- [docs/AGENTS.md](docs/AGENTS.md) - Development principles and architectural guidelines
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) - Development history and milestones
 - [docs/BUILD_LOG.md](docs/BUILD_LOG.md) - Run logs and testing notes
 
@@ -135,12 +162,20 @@ curl http://127.0.0.1:8000/api/runs/<run_key>/
 Video → MediaPipe → Neural Depth Refinement → TRC → GPU-Accelerated LSTM → Joint Angles → Neural Joint Refinement → Output
 ```
 
-1. **Extraction**: MediaPipe detects 33 landmarks, mapped to 22 Pose2Sim markers
-2. **Depth Refinement**: Neural model corrects MediaPipe depth errors (with `--main-refiner`)
-3. **Augmentation**: GPU-accelerated Pose2Sim LSTM adds 43 markers (medial, shoulder clusters, HJC)
-4. **Joint Angles**: ISB-compliant computation for all 12 joint groups
-5. **Joint Refinement**: Neural model applies learned soft constraints (with `--main-refiner`)
-6. **Output**: Organized directory with final TRC, initial TRC, raw CSV, and joint angles
+### Processing Steps
+
+1. **MediaPipe extraction** → 33 landmarks → 22 Pose2Sim markers
+2. **Neural depth refinement** → corrects MediaPipe depth errors (17 COCO joints)
+3. **TRC conversion** with derived markers (Hip, Neck)
+4. **Pose2Sim augmentation** → 64 markers (43 added via LSTM)
+5. **Joint angle computation** → 12 ISB-compliant joint groups
+6. **Neural joint refinement** → corrects joint angles using learned constraints
+7. **Automatic cleanup** → organized output structure
+
+**Neural Refinement Pipeline** (`--main-refiner` flag):
+- **Stage 1 (Pre-augmentation)**: Depth refinement corrects MediaPipe 3D errors on 17 COCO joints
+- **Stage 2 (Post-augmentation)**: Joint constraint model refines computed angles on 64 markers
+- **Performance**: ~60s processing, 45% depth improvement, <10ms per frame on CPU
 
 **GPU Acceleration**: Automatic CUDA support for 3-10x speedup on augmentation. CPU fallback if GPU unavailable.
 
@@ -290,6 +325,16 @@ uv run python -c "import onnxruntime as ort; print(ort.get_available_providers()
 # Should see: ['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider']
 ```
 
+## Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Right arm missing | Use `--estimate-missing` to mirror from left |
+| "No trc files found" | Check Pose2Sim project structure |
+| Depth errors / front-back confusion | Use `--main-refiner` (neural depth correction) |
+| Joint angle spikes | Use `--main-refiner` (learned joint constraints) |
+| Markers disappear mid-video | Use `--visibility-min 0.1` (MediaPipe confidence drops below default 0.3 threshold) |
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -299,6 +344,7 @@ uv run python -c "import onnxruntime as ort; print(ort.get_available_providers()
 | TensorFlow CUDA warnings | Safe to ignore - TF/ONNX conflict, doesn't affect functionality |
 | `CUDA not available` | Install CUDA toolkit or use CPU (automatic fallback) |
 | Permission denied on video | Check file path and permissions |
+| `Pose2Sim` import fails | Use `from Pose2Sim import Pose2Sim` (capitalized) |
 
 ## Citation
 

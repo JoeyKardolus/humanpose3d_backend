@@ -161,24 +161,12 @@
                 <h2 class="h4 mb-3">Participant details</h2>
                 <div class="row row-cols-1 row-cols-md-2 g-3">
                   <div class="col">
-                    <label for="sex" class="form-label">Sex</label>
-                    <select class="form-select" id="sex" name="sex">
-                      <option disabled selected value="">Choose...</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                    </select>
-                  </div>
-                  <div class="col">
-                    <label for="age" class="form-label">Age (years)</label>
-                    <input type="number" class="form-control" id="age" name="age" min="0" step="1" placeholder="e.g. 30">
-                  </div>
-                  <div class="col">
                     <label for="height" class="form-label">Height (m)</label>
                     <input type="number" class="form-control" id="height" name="height" min="0" step="0.01" placeholder="e.g. 1.78">
                   </div>
                   <div class="col">
-                    <label for="weight" class="form-label">Weight (kg)</label>
-                    <input type="number" class="form-control" id="weight" name="weight" min="0" step="0.1" placeholder="e.g. 75">
+                    <label for="mass" class="form-label">Mass (kg)</label>
+                    <input type="number" class="form-control" id="mass" name="mass" min="0" step="0.1" placeholder="e.g. 75">
                   </div>
                 </div>
               </div>
@@ -200,7 +188,7 @@
                   </button>
                 </div>
                 <div class="collapse mt-3" id="pipelineOptions">
-                  <div class="row row-cols-1 row-cols-md-3 g-3">
+                  <div class="row row-cols-1 row-cols-md-4 g-3">
                     <div class="col">
                       <label for="visibilityMin" class="form-label">Visibility threshold</label>
                       <input type="number" class="form-control" id="visibilityMin" name="visibility_min" min="0" max="1" step="0.01" value="0.1">
@@ -212,6 +200,10 @@
                     <div class="col">
                       <label for="jointAngleSmooth" class="form-label">Joint angle smooth window</label>
                       <input type="number" class="form-control" id="jointAngleSmooth" name="joint_angle_smooth_window" min="1" step="1" value="9">
+                    </div>
+                    <div class="col">
+                      <label for="temporalSmoothing" class="form-label">Temporal smoothing window — Experimental Feature</label>
+                      <input type="number" class="form-control" id="temporalSmoothing" name="temporal_smoothing" min="0" step="1" value="3">
                     </div>
                   </div>
                   <div class="row row-cols-1 row-cols-md-2 g-3 mt-2">
@@ -225,22 +217,42 @@
                         <label class="form-check-label" for="forceComplete">Force-complete augmented markers</label>
                       </div>
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="anatomicalConstraints" name="anatomical_constraints" checked>
-                        <label class="form-check-label" for="anatomicalConstraints">Apply anatomical constraints</label>
+                        <input class="form-check-input" type="checkbox" id="mainRefiner" name="main_refiner">
+                        <label class="form-check-label" for="mainRefiner">Enable MainRefiner (depth + joint refinement) — Experimental Feature</label>
                       </div>
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="boneLengthConstraints" name="bone_length_constraints" checked>
-                        <label class="form-check-label" for="boneLengthConstraints">Apply bone length constraints</label>
+                        <input class="form-check-input" type="checkbox" id="computeAllAngles" name="compute_all_joint_angles" checked>
+                        <label class="form-check-label" for="computeAllAngles">Compute all joint angles</label>
                       </div>
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="multiConstraint" name="multi_constraint_optimization" checked>
-                        <label class="form-check-label" for="multiConstraint">Multi-constraint optimization</label>
+                        <input class="form-check-input" type="checkbox" id="plotAllAngles" name="plot_all_joint_angles">
+                        <label class="form-check-label" for="plotAllAngles">Plot all joint angles</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="saveAngleComparison" name="save_angle_comparison">
+                        <label class="form-check-label" for="saveAngleComparison">Save left/right angle comparison</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showAllMarkers" name="show_all_markers">
+                        <label class="form-check-label" for="showAllMarkers">Show low-visibility markers</label>
                       </div>
                     </div>
                     <div class="col">
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="computeAllAngles" name="compute_all_joint_angles" checked>
-                        <label class="form-check-label" for="computeAllAngles">Compute all joint angles</label>
+                        <input class="form-check-input" type="checkbox" id="showVideo" name="show_video">
+                        <label class="form-check-label" for="showVideo">Show video preview while processing</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="exportPreview" name="export_preview" checked>
+                        <label class="form-check-label" for="exportPreview">Export preview video</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="plotLandmarks" name="plot_landmarks">
+                        <label class="form-check-label" for="plotLandmarks">Plot raw landmarks</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="plotAugmented" name="plot_augmented">
+                        <label class="form-check-label" for="plotAugmented">Plot augmented TRC output</label>
                       </div>
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="fixHeader" name="fix_header">
@@ -259,8 +271,8 @@
                 <div class="d-flex align-items-center justify-content-between gap-3">
                   <div>
                     <p class="text-uppercase text-success fw-semibold small mb-1">Advanced</p>
-                    <h2 class="h4 mb-0">Constraint tuning</h2>
-                    <p class="text-muted small mb-0">Recommended: adjust only if you know what you're doing.</p>
+                    <h2 class="h4 mb-0">Model paths</h2>
+                    <p class="text-muted small mb-0">Override model checkpoints if needed.</p>
                   </div>
                   <button class="btn btn-link text-primary p-0" type="button" data-bs-toggle="collapse" data-bs-target="#constraintTuning" aria-expanded="false" aria-controls="constraintTuning" data-collapse-toggle data-label-show="Show constraint tuning" data-label-hide="Hide constraint tuning" data-icon-collapsed="bi-chevron-down" data-icon-expanded="bi-chevron-up" aria-label="Show constraint tuning">
                     <i class="bi bi-chevron-down fs-4" aria-hidden="true" data-collapse-icon></i>
@@ -270,36 +282,16 @@
                 <div class="collapse mt-3" id="constraintTuning">
                   <div class="row row-cols-1 row-cols-md-3 g-3">
                     <div class="col">
-                      <label for="boneSmoothWindow" class="form-label">Anatomical smooth window</label>
-                      <input type="number" class="form-control" id="boneSmoothWindow" name="bone_smooth_window" min="1" step="1" value="21">
+                      <label for="depthModelPath" class="form-label">Depth model path</label>
+                      <input type="text" class="form-control" id="depthModelPath" name="depth_model_path" placeholder="models/checkpoints/best_depth_model.pth">
                     </div>
                     <div class="col">
-                      <label for="groundPercentile" class="form-label">Ground percentile</label>
-                      <input type="number" class="form-control" id="groundPercentile" name="ground_percentile" min="0" max="100" step="0.1" value="5.0">
+                      <label for="jointModelPath" class="form-label">Joint model path</label>
+                      <input type="text" class="form-control" id="jointModelPath" name="joint_model_path" placeholder="models/checkpoints/best_joint_model.pth">
                     </div>
                     <div class="col">
-                      <label for="groundMargin" class="form-label">Ground margin (m)</label>
-                      <input type="number" class="form-control" id="groundMargin" name="ground_margin" step="0.001" value="0.02">
-                    </div>
-                    <div class="col">
-                      <label for="boneLengthTolerance" class="form-label">Bone length tolerance</label>
-                      <input type="number" class="form-control" id="boneLengthTolerance" name="bone_length_tolerance" min="0" step="0.01" value="0.15">
-                    </div>
-                    <div class="col">
-                      <label for="boneDepthWeight" class="form-label">Bone depth weight</label>
-                      <input type="number" class="form-control" id="boneDepthWeight" name="bone_depth_weight" min="0" max="1" step="0.01" value="0.8">
-                    </div>
-                    <div class="col">
-                      <label for="boneLengthIterations" class="form-label">Bone length iterations</label>
-                      <input type="number" class="form-control" id="boneLengthIterations" name="bone_length_iterations" min="1" step="1" value="3">
-                    </div>
-                    <div class="col">
-                      <label for="multiConstraintIterations" class="form-label">Multi-constraint iterations</label>
-                      <input type="number" class="form-control" id="multiConstraintIterations" name="multi_constraint_iterations" min="1" step="1" value="10">
-                    </div>
-                    <div class="col">
-                      <label for="gaussianSmooth" class="form-label">Gaussian smooth sigma</label>
-                      <input type="number" class="form-control" id="gaussianSmooth" name="gaussian_smooth" min="0" step="0.1" value="0">
+                      <label for="mainRefinerPath" class="form-label">Main refiner path</label>
+                      <input type="text" class="form-control" id="mainRefinerPath" name="main_refiner_path" placeholder="models/checkpoints/best_main_refiner.pth">
                     </div>
                   </div>
                 </div>

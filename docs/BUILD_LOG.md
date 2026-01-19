@@ -214,3 +214,11 @@
 - 2026-01-19 14:37:38 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
 - 2026-01-19 14:37:52 UTC | main step3 augment data/output/joey/joey_LSTM.trc
 - 2026-01-19 14:37:52 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-19 15:59:12 UTC | main step1 CSV data/output/Max-c66ef8a1/Max-c66ef8a1.csv (514 frames, 10280 rows)
+- 2026-01-19 15:59:12 UTC | main step2 TRC data/output/Max-c66ef8a1/Max-c66ef8a1.trc (514 frames, 21 markers)
+- 2026-01-19 15:59:32 UTC | main step3 augment data/output/Max-c66ef8a1/Max-c66ef8a1_LSTM.trc
+- 2026-01-19 15:59:32 UTC | main step3.5 complete data/output/Max-c66ef8a1/Max-c66ef8a1_LSTM_complete.trc
+- 2026-01-19 16:13:46 UTC | main step1 CSV data/output/Jaap-d83921b8/Jaap-d83921b8.csv (710 frames, 14099 rows)
+- 2026-01-19 16:13:46 UTC | main step2 TRC data/output/Jaap-d83921b8/Jaap-d83921b8.trc (710 frames, 21 markers)
+- 2026-01-19 16:14:06 UTC | main step3 augment data/output/Jaap-d83921b8/Jaap-d83921b8_LSTM.trc
+- 2026-01-19 16:14:06 UTC | main step3.5 complete data/output/Jaap-d83921b8/Jaap-d83921b8_LSTM_complete.trc

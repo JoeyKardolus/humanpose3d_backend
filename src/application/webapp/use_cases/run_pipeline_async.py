@@ -89,7 +89,7 @@ class RunPipelineAsyncUseCase:
             },
         )
 
-        command = self._command_builder.build(spec.upload_path, form_data, spec.sex_raw)
+        command = self._command_builder.build(spec.upload_path, form_data)
 
         try:
             execution = self._pipeline_runner.run(

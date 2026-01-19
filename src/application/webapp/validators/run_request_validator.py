@@ -17,7 +17,7 @@ class RunRequestValidator:
         self,
         form_data: Mapping[str, str],
         has_upload: bool,
-    ) -> tuple[list[str], str, str | None]:
+    ) -> tuple[list[str], str | None]:
         """Validate incoming form data and return errors and normalized values."""
         errors: list[str] = []
         if not has_upload:
@@ -33,8 +33,4 @@ class RunRequestValidator:
         if output_location and not output_path:
             errors.append("Output location must be a relative path (no .. segments).")
 
-        sex_raw = form_data.get("sex", "").strip().lower()
-        if sex_raw and sex_raw not in {"male", "female"}:
-            errors.append("Sex must be Male or Female for the current pipeline.")
-
-        return errors, sex_raw, output_location or None
+        return errors, output_location or None

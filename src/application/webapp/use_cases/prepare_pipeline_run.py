@@ -36,7 +36,7 @@ class PreparePipelineRunUseCase:
     def execute(self, request_data: PipelineRequestData) -> PipelinePreparationResult:
         """Prepare a pipeline run or return validation errors."""
         uploaded = request_data.files.get("video")
-        errors, sex_raw, output_location = self._validator.validate(
+        errors, output_location = self._validator.validate(
             request_data.form_data,
             has_upload=uploaded is not None,
         )
@@ -60,7 +60,6 @@ class PreparePipelineRunUseCase:
             return PipelinePreparationResult(errors=output_errors, prepared=None)
 
         spec = PipelineRunSpec(
-            sex_raw=sex_raw,
             run_key=run_key,
             safe_run_id=safe_run_id,
             upload_path=upload_path,

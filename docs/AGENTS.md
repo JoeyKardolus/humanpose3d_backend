@@ -1,4 +1,4 @@
-## Application Guidelines
+follow## Application Guidelines
 
 ### General Principles
 - Keep it simple and readable.
@@ -107,7 +107,6 @@ Application = core
 - `main.py` wires modules together; keep it thin and orchestration-only
 - `data/input/` and `data/output/` store raw videos and generated artifacts
 - `models/` ships with `pose_landmarker_heavy.task`
-- Exploratory work belongs in `notebooks/`
 - Tests live under `tests/` and mirror the structure of `src/`
 - The project uses **UV** for running and packaging
 
@@ -117,7 +116,6 @@ Application = core
 - `uv sync` installs the Python 3.12 toolchain
 - `uv run python main.py --video data/input/<name>.mp4 --height <m> --mass <kg> --main-refiner`
 - `uv run pytest`
-- `uv run jupyter lab notebooks/`
 
 ---
 

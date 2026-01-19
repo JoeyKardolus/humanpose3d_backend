@@ -10,7 +10,6 @@ from pathlib import Path
 class PipelineRunSpec:
     """Immutable specification for a pipeline run."""
 
-    sex_raw: str
     run_key: str
     safe_run_id: str
     upload_path: Path
