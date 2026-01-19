@@ -214,10 +214,10 @@ def apply_neural_depth_refinement(
     # Transform to training coordinates
     pose_centered, pelvis = _transform_to_training_coords(pose_3d)
 
-    # Apply refinement with proper 2D image coordinates (if available)
-    # The model uses 2D pose for camera angle prediction
+    # Apply refinement with bone locking for temporal consistency
+    # Bone locking computes median bone lengths from first N frames and projects all frames to match
     try:
-        refined_centered = refiner.refine_sequence(
+        refined_centered = refiner.refine_sequence_with_bone_locking(
             pose_centered, visibility, poses_2d=pose_2d if landmarks_2d else None
         )
     except Exception as e:

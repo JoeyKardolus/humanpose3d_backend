@@ -30,6 +30,7 @@ from src.pipeline.refinement import (
     apply_neural_joint_refinement,
 )
 from src.pipeline.cleanup import cleanup_output_directory
+from src.postprocessing.temporal_smoothing import smooth_trc, hide_markers_in_trc
 
 OUTPUT_ROOT = Path("data/output")
 
@@ -117,6 +118,20 @@ def parse_args() -> argparse.Namespace:
         "--save-angle-comparison",
         action="store_true",
         help="Save side-by-side right vs left comparison plot",
+    )
+
+    # Post-processing
+    parser.add_argument(
+        "--temporal-smoothing",
+        type=int,
+        default=0,
+        metavar="WINDOW",
+        help="Apply temporal smoothing with given window size (0=disabled, recommended: 3 or 5)",
+    )
+    parser.add_argument(
+        "--show-all-markers",
+        action="store_true",
+        help="Show all markers including low-visibility ones (by default, markers with avg visibility <0.5 are hidden)",
     )
 
     # Visualization
@@ -311,6 +326,56 @@ def main() -> None:
         final_trc = run_dir / f"{video_path.stem}_final.trc"
         if final_trc.exists():
             final_output = final_trc
+
+        # Apply temporal smoothing if requested
+        if args.temporal_smoothing > 0:
+            final_output = smooth_trc(final_output, final_output, window=args.temporal_smoothing)
+
+        # Hide low-visibility markers by default (unless --show-all-markers)
+        if not args.show_all_markers:
+            # Marker hierarchy: parent -> children (hiding parent hides all descendants)
+            MARKER_CHILDREN = {
+                'RShoulder': ['RElbow'],
+                'RElbow': ['RWrist'],
+                'LShoulder': ['LElbow'],
+                'LElbow': ['LWrist'],
+                'RKnee': ['RAnkle'],
+                'RAnkle': ['RHeel', 'RBigToe', 'RSmallToe'],
+                'LKnee': ['LAnkle'],
+                'LAnkle': ['LHeel', 'LBigToe', 'LSmallToe'],
+            }
+
+            def get_all_descendants(marker):
+                """Get marker and all its descendants."""
+                result = [marker]
+                if marker in MARKER_CHILDREN:
+                    for child in MARKER_CHILDREN[marker]:
+                        result.extend(get_all_descendants(child))
+                return result
+
+            # Compute average visibility per marker from detection records
+            from collections import defaultdict
+            vis_sums = defaultdict(float)
+            vis_counts = defaultdict(int)
+            for rec in records:
+                vis_sums[rec.landmark] += rec.visibility
+                vis_counts[rec.landmark] += 1
+
+            # Find markers with avg visibility < 0.5
+            low_vis_markers = set()
+            for marker, total in vis_sums.items():
+                avg_vis = total / vis_counts[marker] if vis_counts[marker] > 0 else 0
+                if avg_vis < 0.5:
+                    # Add this marker and all its descendants
+                    descendants = get_all_descendants(marker)
+                    for m in descendants:
+                        if m not in low_vis_markers:
+                            low_vis_markers.add(m)
+                            desc_vis = vis_sums.get(m, 0) / vis_counts.get(m, 1) if vis_counts.get(m, 0) > 0 else 0
+                            print(f"[main] Hiding marker: {m} (avg_vis={desc_vis:.2f})")
+
+            if low_vis_markers:
+                hide_markers_in_trc(final_output, list(low_vis_markers))
 
         print(f"[main] finished pipeline. Output: {final_output}")
 
