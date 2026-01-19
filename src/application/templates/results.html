@@ -26,11 +26,6 @@
               <div class="d-flex flex-wrap gap-2">
                 <a class="btn btn-outline-primary" href="{% url 'home' %}">Home</a>
                 <a class="btn btn-primary" href="{% url 'statistics' run_key=run_key %}">Statistics</a>
-                {% if files %}
-                  <a class="btn btn-outline-success" href="{% url 'download_all' run_key=run_key %}">
-                    <i class="bi bi-file-earmark-zip"></i> Download all
-                  </a>
-                {% endif %}
               </div>
             </div>
           </div>
@@ -74,9 +69,29 @@
             {% if files %}
               <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                 <div class="text-muted small">Showing {{ files|length }} files</div>
-                <span class="badge text-bg-success">Ready for download</span>
+                <div class="d-flex align-items-center gap-3">
+                  <a class="btn btn-outline-success btn-sm" href="{% url 'download_all' run_key=run_key %}">
+                    <i class="bi bi-file-earmark-zip"></i> Download all
+                  </a>
+                  <button
+                    class="btn btn-link text-primary p-0"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#resultsFileList"
+                    data-collapse-toggle
+                    data-label-show="Show files"
+                    data-label-hide="Hide files"
+                    data-icon-collapsed="bi-chevron-down"
+                    data-icon-expanded="bi-chevron-up"
+                    aria-expanded="false"
+                    aria-controls="resultsFileList"
+                    aria-label="Show files">
+                    <i class="bi bi-chevron-down fs-4" aria-hidden="true" data-collapse-icon></i>
+                    <span class="visually-hidden" data-collapse-label>Show files</span>
+                  </button>
+                </div>
               </div>
-              <div class="border rounded overflow-hidden">
+              <div class="border rounded overflow-hidden collapse" id="resultsFileList">
                 <div class="table-responsive overflow-auto">
                   <table class="table table-striped align-middle mb-0">
                   <thead>

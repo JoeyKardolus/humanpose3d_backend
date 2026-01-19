@@ -906,7 +906,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (plotRotateReset) {
     plotRotateReset.addEventListener("click", () => {
-      plotState.cameraByMode[plotState.mode] = null;
+      plotState.cameraByMode.skeleton = null;
+      plotState.cameraByMode.augmented = null;
       if (plotState.ready && plotContainer && window.Plotly) {
         window.Plotly.relayout(plotContainer, { "scene.camera": defaultPlotCamera });
       }

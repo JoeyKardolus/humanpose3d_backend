@@ -3,7 +3,11 @@ from __future__ import annotations
 """Service that assembles statistics context from run outputs."""
 
 import csv
+import json
+import math
 import mimetypes
+import shutil
+import subprocess
 from pathlib import Path
 
 from src.application.webapp.services.landmark_plot_service import LandmarkPlotService
@@ -180,8 +184,14 @@ class StatisticsService:
             video_type = preview_video_type
             video_route = "media"
 
+        rotation_degrees, _ = self._resolve_rotation(source_video, run_dir)
         skeleton_payload = self._landmark_plot_service.build_plot_payload(run_dir)
         augmented_payload = self._trc_plot_service.build_plot_payload(run_dir)
+        if rotation_degrees:
+            if skeleton_payload is not None:
+                skeleton_payload = self._rotate_plot_payload(skeleton_payload, rotation_degrees)
+            if augmented_payload is not None:
+                augmented_payload = self._rotate_plot_payload(augmented_payload, rotation_degrees)
         plot_skeleton_data = skeleton_payload.__dict__ if skeleton_payload else None
         plot_augmented_data = augmented_payload.__dict__ if augmented_payload else None
 
@@ -196,3 +206,117 @@ class StatisticsService:
             "plot_skeleton_data": plot_skeleton_data,
             "plot_augmented_data": plot_augmented_data,
         }
+
+    def _resolve_rotation(self, source_video: Path | None, run_dir: Path) -> tuple[int, bool]:
+        metadata_path = run_dir / "source" / "video_metadata.json"
+        if metadata_path.exists():
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return 0, True
+            rotation = metadata.get("rotation_degrees")
+            rotation_applied = metadata.get("rotation_applied")
+            if isinstance(rotation, int) and rotation in {0, 90, 180, 270}:
+                return rotation, bool(rotation_applied)
+            return 0, True
+
+        if source_video is None:
+            return 0, True
+        rotation = self._probe_video_rotation(source_video)
+        if rotation == 0:
+            return 0, True
+        return rotation, False
+
+    @staticmethod
+    def _probe_video_rotation(video_path: Path) -> int:
+        """Return rotation in degrees (0/90/180/270) if metadata is available."""
+        ffprobe = shutil.which("ffprobe")
+        if not ffprobe:
+            return 0
+        command = [
+            ffprobe,
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream_tags=rotate",
+            "-of",
+            "default=nk=1:nw=1",
+            str(video_path),
+        ]
+        try:
+            output = subprocess.check_output(command, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.CalledProcessError):
+            return 0
+        try:
+            rotation = int(output.decode("utf-8").strip())
+        except ValueError:
+            return 0
+        rotation = rotation % 360
+        if rotation in {0, 90, 180, 270}:
+            return rotation
+        return 0
+
+    def _rotate_plot_payload(self, payload, rotation: int):
+        rotated_frames = [
+            [self._rotate_point(point, rotation) for point in frame]
+            for frame in payload.frames
+        ]
+        bounds = self._compute_bounds(rotated_frames)
+        return payload.__class__(
+            markers=payload.markers,
+            frames=rotated_frames,
+            times=payload.times,
+            connections=payload.connections,
+            bounds=bounds,
+        )
+
+    @staticmethod
+    def _rotate_point(point: list[float | None], rotation: int) -> list[float | None]:
+        if len(point) != 3:
+            return point
+        x, y, z = point
+        if x is None or y is None:
+            return [x, y, z]
+        if rotation == 90:
+            return [-y, x, z]
+        if rotation == 180:
+            return [-x, -y, z]
+        if rotation == 270:
+            return [y, -x, z]
+        return [x, y, z]
+
+    @staticmethod
+    def _compute_bounds(frames: list[list[list[float | None]]]) -> dict[str, list[float]]:
+        xs: list[float] = []
+        ys: list[float] = []
+        zs: list[float] = []
+        for frame in frames:
+            for point in frame:
+                if len(point) != 3:
+                    continue
+                x, y, z = point
+                if StatisticsService._is_valid_number(x):
+                    xs.append(float(x))
+                if StatisticsService._is_valid_number(y):
+                    ys.append(float(y))
+                if StatisticsService._is_valid_number(z):
+                    zs.append(float(z))
+        if not xs or not ys or not zs:
+            return {"x": [-1.0, 1.0], "y": [-1.0, 1.0], "z": [-1.0, 1.0]}
+        padding = 0.05
+        return {
+            "x": [min(xs) - padding, max(xs) + padding],
+            "y": [min(ys) - padding, max(ys) + padding],
+            "z": [min(zs) - padding, max(zs) + padding],
+        }
+
+    @staticmethod
+    def _is_valid_number(value: float | None) -> bool:
+        if value is None:
+            return False
+        try:
+            return math.isfinite(float(value))
+        except (TypeError, ValueError):
+            return False

@@ -300,6 +300,7 @@ body {
   object-fit: contain;
 }
 
+
 @media (max-width: 576px) {
   .timeline-dock {
     width: calc(100% - 1.5rem);

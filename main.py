@@ -47,7 +47,7 @@ from src.markeraugmentation.markeraugmentation import run_pose2sim_augment
 from src.markeraugmentation.gpu_config import patch_pose2sim_gpu, get_gpu_info
 from src.depth_refinement.inference import DepthRefiner
 from src.joint_refinement.inference import JointRefiner
-from src.mediastream.media_stream import read_video_rgb
+from src.mediastream.media_stream import probe_video_rotation, read_video_rgb
 from src.posedetector.pose_detector import extract_world_landmarks
 from src.visualizedata.visualize_data import VisualizeData
 
@@ -653,6 +653,7 @@ def main() -> None:
             VisualizeData() if args.plot_landmarks or args.plot_augmented else None
         )
         frames, fps = read_video_rgb(video_path)
+        preview_rotation = probe_video_rotation(video_path)
         preview_path = None
         if args.show_video or args.export_preview:
             preview_path = run_dir / f"{video_path.stem}_preview.mp4"
@@ -665,6 +666,7 @@ def main() -> None:
             display=args.show_video,
             return_raw_landmarks=args.plot_landmarks,
             preview_output=preview_path,
+            preview_rotation_degrees=preview_rotation,
         )
         if args.plot_landmarks:
             records, raw_landmarks = detection_output

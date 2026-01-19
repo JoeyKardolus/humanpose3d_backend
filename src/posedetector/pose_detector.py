@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Dict, List
 
 import cv2
@@ -40,6 +42,7 @@ def extract_world_landmarks(
     display: bool = False,
     return_raw_landmarks: bool = False,
     preview_output: Path | None = None,
+    preview_rotation_degrees: int = 0,
 ) -> List[LandmarkRecord] | tuple[List[LandmarkRecord], List[List[landmark_pb2.NormalizedLandmark]]]:
     """Run MediaPipe Pose world landmarks and optionally preview detections."""
     if video_rgb.size == 0:
@@ -56,7 +59,7 @@ def extract_world_landmarks(
 
     draw_connections = None
     landmark_style = None
-    if display:
+    if display or preview_output is not None:
         draw_connections = mp.solutions.pose.POSE_CONNECTIONS
         landmark_style = mp.solutions.drawing_styles.get_default_pose_landmarks_style()
 
@@ -178,13 +181,72 @@ def extract_world_landmarks(
                 pass
         if preview_writer is not None:
             preview_writer.release()
-        if preview_output is not None and not wrote_preview:
-            try:
-                preview_output.unlink(missing_ok=True)
-            except OSError:
-                pass
+        if preview_output is not None:
+            if wrote_preview:
+                _transcode_preview(preview_output, preview_rotation_degrees)
+            else:
+                try:
+                    preview_output.unlink(missing_ok=True)
+                except OSError:
+                    pass
         detector.close()
 
     if return_raw_landmarks:
         return records, raw_frames
     return records
+
+
+def _transcode_preview(preview_output: Path, rotation_degrees: int) -> None:
+    """Transcode preview video to a browser-friendly H.264 MP4 when possible."""
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg or not preview_output.exists():
+        return
+    temp_path = preview_output.with_suffix(".h264.mp4")
+    command = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(preview_output),
+    ]
+    filter_chain = _rotation_filter(rotation_degrees)
+    if filter_chain:
+        command += ["-vf", filter_chain]
+    command += [
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(temp_path),
+    ]
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return
+    try:
+        temp_path.replace(preview_output)
+    except OSError:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _rotation_filter(rotation_degrees: int) -> str | None:
+    if rotation_degrees == 90:
+        return "transpose=1"
+    if rotation_degrees == 180:
+        return "transpose=1,transpose=1"
+    if rotation_degrees == 270:
+        return "transpose=2"
+    return None

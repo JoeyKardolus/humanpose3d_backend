@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Tuple
 
 import cv2 as cv
@@ -32,6 +34,39 @@ def read_video_rgb(video_path: Path) -> Tuple[np.ndarray, float]:
 
     stack = np.stack(frames)
     return stack, float(fps or 0.0)
+
+
+def probe_video_rotation(video_path: Path) -> int:
+    """Return rotation in degrees (0/90/180/270) if metadata is available."""
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return 0
+    command = [
+        ffprobe,
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream_tags=rotate",
+        "-of",
+        "default=nk=1:nw=1",
+        str(video_path),
+    ]
+    try:
+        output = subprocess.check_output(command, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.CalledProcessError):
+        return 0
+    try:
+        rotation = int(output.decode("utf-8").strip())
+    except ValueError:
+        return 0
+    rotation = rotation % 360
+    if rotation in {0, 90, 180, 270}:
+        return rotation
+    return 0
+
+
 
 
 class MediaStream:

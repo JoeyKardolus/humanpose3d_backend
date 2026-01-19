@@ -22,54 +22,54 @@ document.addEventListener("DOMContentLoaded", () => {
     const submitLabel = "Analyse Video";
     const submittingLabel = "Submitting...";
 
-    if (!instructionsModalEl || !noticeModalEl || !window.bootstrap) return;
+    if (instructionsModalEl && noticeModalEl && window.bootstrap) {
+        const instructionsModal = new bootstrap.Modal(instructionsModalEl, {
+            backdrop: "static",
+            keyboard: false,
+        });
+        const noticeModal = new bootstrap.Modal(noticeModalEl, {
+            backdrop: "static",
+            keyboard: false,
+        });
 
-    const instructionsModal = new bootstrap.Modal(instructionsModalEl, {
-        backdrop: "static",
-        keyboard: false,
-    });
-    const noticeModal = new bootstrap.Modal(noticeModalEl, {
-        backdrop: "static",
-        keyboard: false,
-    });
-
-    // Enforce required acknowledgements before continuing.
-    const requireCheck = (inputEl) => {
-        if (!inputEl) return false;
-        if (inputEl.checked) {
-            inputEl.classList.remove("is-invalid");
-            return true;
-        }
-        inputEl.classList.add("is-invalid");
-        inputEl.focus();
-        return false;
-    };
-
-    const instructionsAccepted = sessionStorage.getItem(instructionsKey) === "true";
-    const privacyAccepted = sessionStorage.getItem(privacyKey) === "true";
-
-    if (!instructionsAccepted) {
-        instructionsModal.show();
-    } else if (!privacyAccepted) {
-        noticeModal.show();
-    }
-
-    instructionsModalEl.querySelector("[data-next]")?.addEventListener("click", () => {
-        if (requireCheck(instructionCheck)) {
-            sessionStorage.setItem(instructionsKey, "true");
-            instructionsModal.hide();
-            if (!privacyAccepted) {
-                noticeModal.show();
+        // Enforce required acknowledgements before continuing.
+        const requireCheck = (inputEl) => {
+            if (!inputEl) return false;
+            if (inputEl.checked) {
+                inputEl.classList.remove("is-invalid");
+                return true;
             }
-        }
-    });
+            inputEl.classList.add("is-invalid");
+            inputEl.focus();
+            return false;
+        };
 
-    noticeModalEl.querySelector("[data-close]")?.addEventListener("click", () => {
-        if (requireCheck(privacyCheck)) {
-            sessionStorage.setItem(privacyKey, "true");
-            noticeModal.hide();
+        const instructionsAccepted = sessionStorage.getItem(instructionsKey) === "true";
+        const privacyAccepted = sessionStorage.getItem(privacyKey) === "true";
+
+        if (!instructionsAccepted) {
+            instructionsModal.show();
+        } else if (!privacyAccepted) {
+            noticeModal.show();
         }
-    });
+
+        instructionsModalEl.querySelector("[data-next]")?.addEventListener("click", () => {
+            if (requireCheck(instructionCheck)) {
+                sessionStorage.setItem(instructionsKey, "true");
+                instructionsModal.hide();
+                if (!privacyAccepted) {
+                    noticeModal.show();
+                }
+            }
+        });
+
+        noticeModalEl.querySelector("[data-close]")?.addEventListener("click", () => {
+            if (requireCheck(privacyCheck)) {
+                sessionStorage.setItem(privacyKey, "true");
+                noticeModal.hide();
+            }
+        });
+    }
 
     // Lightweight CSRF helper for Django-style cookies.
     const getCookie = (name) => {
