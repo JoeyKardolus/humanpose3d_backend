@@ -174,15 +174,22 @@ def main() -> None:
             args.visibility_min,
             display=args.show_video,
             return_raw_landmarks=args.plot_landmarks,
+            return_2d_landmarks=args.main_refiner,  # Need 2D coords for depth refinement
             preview_output=preview_path,
             preview_rotation_degrees=preview_rotation,
         )
 
-        if args.plot_landmarks:
+        # Unpack detection output based on flags
+        landmarks_2d = {}
+        raw_landmarks = []
+        if args.plot_landmarks and args.main_refiner:
+            records, raw_landmarks, landmarks_2d = detection_output
+        elif args.plot_landmarks:
             records, raw_landmarks = detection_output
+        elif args.main_refiner:
+            records, landmarks_2d = detection_output
         else:
             records = detection_output
-            raw_landmarks = []
 
         # Estimate missing markers using symmetry
         if args.estimate_missing:
@@ -193,7 +200,7 @@ def main() -> None:
 
         # Step 1.5: Apply neural depth refinement (pre-augmentation, COCO-17)
         if args.main_refiner:
-            records = apply_neural_depth_refinement(records, args.depth_model_path)
+            records = apply_neural_depth_refinement(records, args.depth_model_path, landmarks_2d)
             append_build_log("main step1.5 depth refinement applied")
 
         # Step 1: Write CSV

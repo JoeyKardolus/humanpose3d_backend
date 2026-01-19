@@ -19,7 +19,7 @@ from pathlib import Path
 from collections import defaultdict
 
 # Add project root to path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.datastream.data_stream import LandmarkRecord
@@ -310,7 +310,7 @@ def main():
         video_name = 'joey'
 
     # Paths
-    csv_path = Path(f'data/output/pose-3d/{video_name}/{video_name}_raw_landmarks.csv')
+    csv_path = Path(f'data/output/{video_name}/{video_name}_raw_landmarks.csv')
     model_path = Path('models/checkpoints/best_depth_model.pth')
 
     if not csv_path.exists():

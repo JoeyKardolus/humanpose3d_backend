@@ -41,10 +41,16 @@ def extract_world_landmarks(
     visibility_min: float,
     display: bool = False,
     return_raw_landmarks: bool = False,
+    return_2d_landmarks: bool = False,
     preview_output: Path | None = None,
     preview_rotation_degrees: int = 0,
-) -> List[LandmarkRecord] | tuple[List[LandmarkRecord], List[List[landmark_pb2.NormalizedLandmark]]]:
-    """Run MediaPipe Pose world landmarks and optionally preview detections."""
+) -> List[LandmarkRecord] | tuple:
+    """Run MediaPipe Pose world landmarks and optionally preview detections.
+
+    Args:
+        return_2d_landmarks: If True, also returns dict of 2D normalized image coordinates
+                            for depth refinement. Format: {(timestamp, landmark): (x, y)}
+    """
     if video_rgb.size == 0:
         raise ValueError("Video contains no frames")
 
@@ -65,6 +71,7 @@ def extract_world_landmarks(
 
     raw_frames: List[List[landmark_pb2.NormalizedLandmark]] = []
     records: List[LandmarkRecord] = []
+    landmarks_2d: Dict[tuple, tuple] = {}  # {(timestamp, landmark_name): (x, y)}
     preview_writer = None
     preview_failed = False
     wrote_preview = False
@@ -139,6 +146,10 @@ def extract_world_landmarks(
                         visibility=float(visibility),
                     )
                 )
+                # Store 2D normalized image coordinates for depth refinement
+                if return_2d_landmarks and vis:
+                    lm_2d = vis[lm_idx]
+                    landmarks_2d[(timestamp, mapped_name)] = (float(lm_2d.x), float(lm_2d.y))
 
             need_annotation = display or preview_output is not None
             annotated = frame.copy() if need_annotation else None
@@ -191,8 +202,13 @@ def extract_world_landmarks(
                     pass
         detector.close()
 
-    if return_raw_landmarks:
+    # Return based on flags
+    if return_raw_landmarks and return_2d_landmarks:
+        return records, raw_frames, landmarks_2d
+    elif return_raw_landmarks:
         return records, raw_frames
+    elif return_2d_landmarks:
+        return records, landmarks_2d
     return records
 
 

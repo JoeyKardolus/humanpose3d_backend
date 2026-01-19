@@ -40,14 +40,19 @@ LEFT_FOOT_MARKERS = {'LHeel', 'LBigToe', 'LSmallToe'}
 RIGHT_FOOT_MARKERS = {'RHeel', 'RBigToe', 'RSmallToe'}
 
 
-def _records_to_coco_arrays(records: list) -> tuple:
+def _records_to_coco_arrays(records: list, landmarks_2d: dict = None) -> tuple:
     """Convert landmark records to COCO format arrays.
+
+    Args:
+        records: List of LandmarkRecord
+        landmarks_2d: Optional dict of 2D normalized image coords {(timestamp, name): (x, y)}
+                     If provided, used for pose_2d instead of world coords
 
     Returns:
         timestamps: Sorted list of timestamps
         pose_3d: (n_frames, 17, 3) array
         visibility: (n_frames, 17) array
-        pose_2d: (n_frames, 17, 2) array
+        pose_2d: (n_frames, 17, 2) array - normalized image coords if landmarks_2d provided
         frames_data: Dict mapping timestamp -> landmark -> (x, y, z, vis)
     """
     frames_data = defaultdict(dict)
@@ -70,7 +75,11 @@ def _records_to_coco_arrays(records: list) -> tuple:
                 x, y, z, vis = frame_landmarks[name]
                 pose_3d[fi, coco_idx] = [x, y, z]
                 visibility[fi, coco_idx] = vis
-                pose_2d[fi, coco_idx] = [x, y]
+                # Use actual 2D image coords if available, otherwise fall back to world X,Y
+                if landmarks_2d and (ts, name) in landmarks_2d:
+                    pose_2d[fi, coco_idx] = landmarks_2d[(ts, name)]
+                else:
+                    pose_2d[fi, coco_idx] = [x, y]
 
     return timestamps, pose_3d, visibility, pose_2d, frames_data
 
@@ -171,6 +180,7 @@ def _report_corrections(corrections: np.ndarray, visibility: np.ndarray, label: 
 def apply_neural_depth_refinement(
     records: list,
     model_path: str | Path,
+    landmarks_2d: dict = None,
 ) -> list:
     """Apply neural 3D pose refinement to landmark records.
 
@@ -180,6 +190,8 @@ def apply_neural_depth_refinement(
     Args:
         records: List of LandmarkRecord named tuples
         model_path: Path to trained pose refinement model
+        landmarks_2d: Optional dict of 2D normalized image coords from MediaPipe
+                     {(timestamp, landmark_name): (x, y)} where x,y are 0-1 normalized
 
     Returns:
         Updated records with refined x, y, z coordinates
@@ -195,17 +207,18 @@ def apply_neural_depth_refinement(
         print(f"[depth] WARNING: Failed to load model: {e}")
         return records
 
-    timestamps, pose_3d, visibility, pose_2d, _ = _records_to_coco_arrays(records)
+    timestamps, pose_3d, visibility, pose_2d, _ = _records_to_coco_arrays(records, landmarks_2d)
     if not timestamps:
         return records
 
     # Transform to training coordinates
     pose_centered, pelvis = _transform_to_training_coords(pose_3d)
 
-    # Apply refinement with bone locking for temporal consistency
+    # Apply refinement with proper 2D image coordinates (if available)
+    # The model uses 2D pose for camera angle prediction
     try:
-        refined_centered = refiner.refine_sequence_with_bone_locking(
-            pose_centered, visibility, pose_2d, calibration_frames=50
+        refined_centered = refiner.refine_sequence(
+            pose_centered, visibility, poses_2d=pose_2d if landmarks_2d else None
         )
     except Exception as e:
         print(f"[depth] WARNING: Refinement failed: {e}")
