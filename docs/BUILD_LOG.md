@@ -88,3 +88,53 @@
 - 2026-01-19 08:41:22 UTC | main step3 augment data/output/Jaap-8e0d9308/Jaap-8e0d9308_LSTM.trc
 - 2026-01-19 08:41:22 UTC | main step3.5 complete data/output/Jaap-8e0d9308/Jaap-8e0d9308_LSTM_complete.trc
 - 2026-01-19 08:41:23 UTC | main step3.6 multi-constraint optimization data/output/Jaap-8e0d9308/Jaap-8e0d9308_LSTM_complete_multi_refined.trc
+- 2026-01-19 08:54:41 UTC | main step1 CSV data/output/Jaap-30092957/Jaap-30092957.csv (710 frames, 14099 rows)
+- 2026-01-19 08:54:41 UTC | main step2 TRC data/output/Jaap-30092957/Jaap-30092957.trc (710 frames, 21 markers)
+- 2026-01-19 08:55:01 UTC | main step3 augment data/output/Jaap-30092957/Jaap-30092957_LSTM.trc
+- 2026-01-19 08:55:01 UTC | main step3.5 complete data/output/Jaap-30092957/Jaap-30092957_LSTM_complete.trc
+- 2026-01-19 08:55:01 UTC | main step3.6 multi-constraint optimization data/output/Jaap-30092957/Jaap-30092957_LSTM_complete_multi_refined.trc
+- 2026-01-19 09:00:55 UTC | main step1 CSV data/output/Jaap-9f1abdf5/Jaap-9f1abdf5.csv (710 frames, 14099 rows)
+- 2026-01-19 09:00:55 UTC | main step2 TRC data/output/Jaap-9f1abdf5/Jaap-9f1abdf5.trc (710 frames, 21 markers)
+- 2026-01-19 09:01:14 UTC | main step3 augment data/output/Jaap-9f1abdf5/Jaap-9f1abdf5_LSTM.trc
+- 2026-01-19 09:01:14 UTC | main step3.5 complete data/output/Jaap-9f1abdf5/Jaap-9f1abdf5_LSTM_complete.trc
+- 2026-01-19 09:01:15 UTC | main step3.6 multi-constraint optimization data/output/Jaap-9f1abdf5/Jaap-9f1abdf5_LSTM_complete_multi_refined.trc
+- 2026-01-19 09:04:04 UTC | main step1 CSV data/output/Max-8d83d928/Max-8d83d928.csv (514 frames, 10280 rows)
+- 2026-01-19 09:04:04 UTC | main step2 TRC data/output/Max-8d83d928/Max-8d83d928.trc (514 frames, 21 markers)
+- 2026-01-19 09:04:22 UTC | main step3 augment data/output/Max-8d83d928/Max-8d83d928_LSTM.trc
+- 2026-01-19 09:04:22 UTC | main step3.5 complete data/output/Max-8d83d928/Max-8d83d928_LSTM_complete.trc
+- 2026-01-19 09:04:23 UTC | main step3.6 multi-constraint optimization data/output/Max-8d83d928/Max-8d83d928_LSTM_complete_multi_refined.trc
+- 2026-01-19 09:06:08 UTC | main step1 CSV data/output/Mama-075d3527/Mama-075d3527.csv (260 frames, 5058 rows)
+- 2026-01-19 09:06:08 UTC | main step2 TRC data/output/Mama-075d3527/Mama-075d3527.trc (260 frames, 21 markers)
+- 2026-01-19 09:06:24 UTC | main step3 augment data/output/Mama-075d3527/Mama-075d3527_LSTM.trc
+- 2026-01-19 09:06:24 UTC | main step3.5 complete data/output/Mama-075d3527/Mama-075d3527_LSTM_complete.trc
+- 2026-01-19 09:06:24 UTC | main step3.6 multi-constraint optimization data/output/Mama-075d3527/Mama-075d3527_LSTM_complete_multi_refined.trc
+- 2026-01-19 09:12:36 UTC | main step1 CSV data/output/Jaap-ae605044/Jaap-ae605044.csv (710 frames, 14099 rows)
+- 2026-01-19 09:12:36 UTC | main step2 TRC data/output/Jaap-ae605044/Jaap-ae605044.trc (710 frames, 21 markers)
+- 2026-01-19 09:12:56 UTC | main step3 augment data/output/Jaap-ae605044/Jaap-ae605044_LSTM.trc
+- 2026-01-19 09:12:56 UTC | main step3.5 complete data/output/Jaap-ae605044/Jaap-ae605044_LSTM_complete.trc
+- 2026-01-19 09:12:56 UTC | main step3.6 multi-constraint optimization data/output/Jaap-ae605044/Jaap-ae605044_LSTM_complete_multi_refined.trc
+- 2026-01-19 09:15:45 UTC | main step1 CSV data/output/Jaap-8f174183/Jaap-8f174183.csv (710 frames, 14099 rows)
+- 2026-01-19 09:15:45 UTC | main step2 TRC data/output/Jaap-8f174183/Jaap-8f174183.trc (710 frames, 21 markers)
+- 2026-01-19 09:16:05 UTC | main step3 augment data/output/Jaap-8f174183/Jaap-8f174183_LSTM.trc
+- 2026-01-19 09:16:05 UTC | main step3.5 complete data/output/Jaap-8f174183/Jaap-8f174183_LSTM_complete.trc
+- 2026-01-19 09:16:05 UTC | main step3.6 multi-constraint optimization data/output/Jaap-8f174183/Jaap-8f174183_LSTM_complete_multi_refined.trc
+- 2026-01-19 09:20:32 UTC | main step1 CSV data/output/Jaap-9549a457/Jaap-9549a457.csv (710 frames, 14099 rows)
+- 2026-01-19 09:20:32 UTC | main step2 TRC data/output/Jaap-9549a457/Jaap-9549a457.trc (710 frames, 21 markers)
+- 2026-01-19 09:20:51 UTC | main step3 augment data/output/Jaap-9549a457/Jaap-9549a457_LSTM.trc
+- 2026-01-19 09:20:52 UTC | main step3.5 complete data/output/Jaap-9549a457/Jaap-9549a457_LSTM_complete.trc
+- 2026-01-19 09:20:52 UTC | main step3.6 multi-constraint optimization data/output/Jaap-9549a457/Jaap-9549a457_LSTM_complete_multi_refined.trc
+- 2026-01-19 09:27:59 UTC | main step1 CSV data/output/Jaap-b3adfa34/Jaap-b3adfa34.csv (710 frames, 14099 rows)
+- 2026-01-19 09:27:59 UTC | main step2 TRC data/output/Jaap-b3adfa34/Jaap-b3adfa34.trc (710 frames, 21 markers)
+- 2026-01-19 09:28:19 UTC | main step3 augment data/output/Jaap-b3adfa34/Jaap-b3adfa34_LSTM.trc
+- 2026-01-19 09:28:19 UTC | main step3.5 complete data/output/Jaap-b3adfa34/Jaap-b3adfa34_LSTM_complete.trc
+- 2026-01-19 09:28:20 UTC | main step3.6 multi-constraint optimization data/output/Jaap-b3adfa34/Jaap-b3adfa34_LSTM_complete_multi_refined.trc
+- 2026-01-19 09:42:30 UTC | main step1 CSV data/output/Jaap-48f8ddb4/Jaap-48f8ddb4.csv (710 frames, 14099 rows)
+- 2026-01-19 09:42:30 UTC | main step2 TRC data/output/Jaap-48f8ddb4/Jaap-48f8ddb4.trc (710 frames, 21 markers)
+- 2026-01-19 09:42:50 UTC | main step3 augment data/output/Jaap-48f8ddb4/Jaap-48f8ddb4_LSTM.trc
+- 2026-01-19 09:42:50 UTC | main step3.5 complete data/output/Jaap-48f8ddb4/Jaap-48f8ddb4_LSTM_complete.trc
+- 2026-01-19 09:42:50 UTC | main step3.6 multi-constraint optimization data/output/Jaap-48f8ddb4/Jaap-48f8ddb4_LSTM_complete_multi_refined.trc
+- 2026-01-19 09:57:17 UTC | main step1 CSV data/output/Jaap-84a68e57/Jaap-84a68e57.csv (710 frames, 14099 rows)
+- 2026-01-19 09:57:17 UTC | main step2 TRC data/output/Jaap-84a68e57/Jaap-84a68e57.trc (710 frames, 21 markers)
+- 2026-01-19 09:57:37 UTC | main step3 augment data/output/Jaap-84a68e57/Jaap-84a68e57_LSTM.trc
+- 2026-01-19 09:57:37 UTC | main step3.5 complete data/output/Jaap-84a68e57/Jaap-84a68e57_LSTM_complete.trc
+- 2026-01-19 09:57:38 UTC | main step3.6 multi-constraint optimization data/output/Jaap-84a68e57/Jaap-84a68e57_LSTM_complete_multi_refined.trc
