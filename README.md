@@ -33,11 +33,23 @@ Or use the included `.envrc` with [direnv](https://direnv.net/):
 direnv allow  # Automatically sets MPLBACKEND=Agg
 ```
 
-## Quick Start
+## Usage
 
+### GUI (Web App)
+
+1. Start the server:
+   ```bash
+   uv run python manage.py runserver
+   ```
+2. Open `http://127.0.0.1:8000/`.
+3. Upload a video, set subject details, and run the pipeline.
+4. View results, download outputs, and inspect statistics from the results page.
+
+### CLI (Management Command)
+
+Run with neural refinement + joint angles (recommended):
 ```bash
-# Run with neural refinement + joint angles (RECOMMENDED)
-uv run python main.py \
+uv run python manage.py run_pipeline \
   --video data/input/joey.mp4 \
   --height 1.78 \
   --mass 75 \
@@ -47,9 +59,37 @@ uv run python main.py \
   --main-refiner \
   --plot-all-joint-angles \
   --visibility-min 0.1
+```
 
-# Visualize results
+Visualize results:
+```bash
 uv run python scripts/viz/visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
+```
+
+### API (cURL)
+
+Start a run asynchronously:
+```bash
+curl -F "video=@data/input/joey.mp4" \
+  -F "height=1.78" \
+  -F "weight=75" \
+  -F "estimate_missing=on" \
+  -F "force_complete=on" \
+  -F "augmentation_cycles=20" \
+  -F "main_refiner=on" \
+  -F "plot_all_joint_angles=on" \
+  -F "visibility_min=0.1" \
+  http://127.0.0.1:8000/api/runs/
+```
+
+Poll progress:
+```bash
+curl http://127.0.0.1:8000/api/runs/<run_key>/progress/
+```
+
+Fetch results list:
+```bash
+curl http://127.0.0.1:8000/api/runs/<run_key>/
 ```
 
 ## Features
