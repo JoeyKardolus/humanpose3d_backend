@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for preparing TRC-based 3D plot data for the statistics view."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 import math

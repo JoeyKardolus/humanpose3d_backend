@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """DTO for pipeline preparation outcomes."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 

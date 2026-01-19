@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for constructing the CLI command used to run the pipeline."""
+
+from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -50,17 +50,25 @@ class PipelineCommandBuilder:
             form_data.get("joint_angle_smooth_window"),
             default="9",
         )
-        _add_flag("--bone-smooth-window", form_data.get("bone_smooth_window"), default="21")
-        _add_flag("--ground-percentile", form_data.get("ground_percentile"), default="5.0")
+        _add_flag(
+            "--bone-smooth-window", form_data.get("bone_smooth_window"), default="21"
+        )
+        _add_flag(
+            "--ground-percentile", form_data.get("ground_percentile"), default="5.0"
+        )
         _add_flag("--ground-margin", form_data.get("ground_margin"), default="0.02")
         _add_flag(
             "--bone-length-tolerance",
             form_data.get("bone_length_tolerance"),
             default="0.15",
         )
-        _add_flag("--bone-depth-weight", form_data.get("bone_depth_weight"), default="0.8")
         _add_flag(
-            "--bone-length-iterations", form_data.get("bone_length_iterations"), default="3"
+            "--bone-depth-weight", form_data.get("bone_depth_weight"), default="0.8"
+        )
+        _add_flag(
+            "--bone-length-iterations",
+            form_data.get("bone_length_iterations"),
+            default="3",
         )
         _add_flag(
             "--multi-constraint-iterations",

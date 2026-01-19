@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for preparing landmark-based skeleton plot data."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 import math
@@ -174,7 +174,9 @@ class LandmarkPlotService:
         time_list: list[float | None] = []
         for timestamp in times:
             row = frames[timestamp]
-            frame_list.append([row.get(marker, [None, None, None]) for marker in markers])
+            frame_list.append(
+                [row.get(marker, [None, None, None]) for marker in markers]
+            )
             time_list.append(timestamp)
 
         filled_frames = self._fill_missing_markers(frame_list)
@@ -230,7 +232,7 @@ class LandmarkPlotService:
 
     @staticmethod
     def _fill_missing_markers(
-        frames: list[list[list[float | None]]]
+        frames: list[list[list[float | None]]],
     ) -> list[list[list[float | None]]]:
         """Forward/backward fill missing marker positions."""
         if not frames:

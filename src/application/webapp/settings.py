@@ -4,6 +4,7 @@ Django settings for the lightweight project scaffolding.
 This configuration is intentionally minimal so you can focus on editing the
 template and CSS in ``templates`` and ``static``.
 """
+
 import os
 from pathlib import Path
 
@@ -64,7 +65,9 @@ DATABASES = {
 }
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},

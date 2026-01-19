@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """DTO that defines a prepared pipeline run."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path

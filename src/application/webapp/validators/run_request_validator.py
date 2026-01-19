@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Validation rules for pipeline run requests."""
+
+from __future__ import annotations
 
 from typing import Mapping
 
@@ -24,7 +24,9 @@ class RunRequestValidator:
             errors.append("Please upload a video file before submitting.")
 
         if form_data.get("consent") != "accepted":
-            errors.append("You must confirm participant consent before running an analysis.")
+            errors.append(
+                "You must confirm participant consent before running an analysis."
+            )
 
         output_location = form_data.get("output_location", "").strip()
         output_path = self._path_validator.safe_relative_path(output_location)

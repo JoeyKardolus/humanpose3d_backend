@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """DTO for normalized pipeline request data."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Mapping

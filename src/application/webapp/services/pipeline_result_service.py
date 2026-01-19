@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for post-processing pipeline output."""
+
+from __future__ import annotations
 
 import json
 import shutil
@@ -28,7 +28,9 @@ class PipelineResultService:
         if final_trc.exists():
             header_fix_strict(final_trc)
 
-    def persist_input_video(self, upload_path: Path, output_dir: Path, safe_run_id: str) -> None:
+    def persist_input_video(
+        self, upload_path: Path, output_dir: Path, safe_run_id: str
+    ) -> None:
         """Copy the source video into the run output directory."""
         if not upload_path.exists():
             return

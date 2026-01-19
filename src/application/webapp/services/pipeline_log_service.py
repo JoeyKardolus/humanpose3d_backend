@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for writing pipeline execution logs."""
+
+from __future__ import annotations
 
 from pathlib import Path
 

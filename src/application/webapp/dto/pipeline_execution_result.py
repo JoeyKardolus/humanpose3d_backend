@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """DTO capturing pipeline execution output."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 

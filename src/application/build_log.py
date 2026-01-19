@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Build log helper for recording build events."""
+
+from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path

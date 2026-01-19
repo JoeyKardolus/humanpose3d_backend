@@ -1,11 +1,13 @@
-from __future__ import annotations
-
 """Service that derives progress updates from pipeline output."""
+
+from __future__ import annotations
 
 import re
 import time
 
-from src.application.webapp.repositories.run_status_repository import RunStatusRepository
+from src.application.webapp.repositories.run_status_repository import (
+    RunStatusRepository,
+)
 
 
 class PipelineProgressTracker:

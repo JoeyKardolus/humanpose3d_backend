@@ -1,14 +1,18 @@
-from __future__ import annotations
-
 """Use case for synchronous pipeline execution."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Mapping
 
 from src.application.webapp.dto.pipeline_run_spec import PipelineRunSpec
-from src.application.webapp.services.pipeline_command_builder import PipelineCommandBuilder
+from src.application.webapp.services.pipeline_command_builder import (
+    PipelineCommandBuilder,
+)
 from src.application.webapp.services.pipeline_log_service import PipelineLogService
-from src.application.webapp.services.pipeline_result_service import PipelineResultService
+from src.application.webapp.services.pipeline_result_service import (
+    PipelineResultService,
+)
 from src.application.webapp.services.pipeline_runner import PipelineRunner
 from src.application.webapp.services.upload_service import UploadService
 
@@ -39,7 +43,9 @@ class RunPipelineSyncUseCase:
         self._result_service = result_service
         self._upload_service = upload_service
 
-    def execute(self, spec: PipelineRunSpec, form_data: Mapping[str, str]) -> PipelineSyncResult:
+    def execute(
+        self, spec: PipelineRunSpec, form_data: Mapping[str, str]
+    ) -> PipelineSyncResult:
         """Execute the pipeline and record logs/results."""
         command = self._command_builder.build(spec.upload_path, form_data, spec.sex_raw)
         try:
@@ -49,7 +55,9 @@ class RunPipelineSyncUseCase:
             raise
         if execution.return_code != 0:
             log_path = spec.pipeline_run_dir / "pipeline_error.log"
-            self._log_service.write_log(log_path, execution.stdout_text, execution.stderr_text)
+            self._log_service.write_log(
+                log_path, execution.stdout_text, execution.stderr_text
+            )
             self._upload_service.remove_upload(spec.safe_run_id)
             return PipelineSyncResult(
                 return_code=execution.return_code,
@@ -58,7 +66,9 @@ class RunPipelineSyncUseCase:
             )
 
         log_path = spec.pipeline_run_dir / "pipeline.log"
-        self._log_service.write_log(log_path, execution.stdout_text, execution.stderr_text)
+        self._log_service.write_log(
+            log_path, execution.stdout_text, execution.stderr_text
+        )
         self._result_service.move_output(spec.pipeline_run_dir, spec.output_dir)
         self._result_service.persist_input_video(
             spec.upload_path,

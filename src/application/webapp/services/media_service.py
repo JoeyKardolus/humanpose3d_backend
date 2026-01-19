@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for resolving media file paths."""
+
+from __future__ import annotations
 
 from pathlib import Path
 
@@ -12,7 +12,9 @@ from src.application.webapp.validators.path_validator import PathValidator
 class MediaService:
     """Resolve and validate file paths for downloads and previews."""
 
-    def __init__(self, output_root: Path, upload_root: Path, path_validator: PathValidator) -> None:
+    def __init__(
+        self, output_root: Path, upload_root: Path, path_validator: PathValidator
+    ) -> None:
         self._output_root = output_root
         self._upload_root = upload_root
         self._path_validator = path_validator

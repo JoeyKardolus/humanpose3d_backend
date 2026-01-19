@@ -19,6 +19,9 @@ dependencies = [
 ]
 
 [dependency-groups]
+dev = [
+    "ruff>=0.14.13",
+]
 neural = [
     "einops>=0.8.1",
     "ezc3d>=1.5.0",

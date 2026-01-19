@@ -1,11 +1,13 @@
-from __future__ import annotations
-
 """Service for composing progress response payloads."""
+
+from __future__ import annotations
 
 import time
 
 from src.application.webapp.dto.progress_payload import ProgressPayload
-from src.application.webapp.repositories.run_status_repository import RunStatusRepository
+from src.application.webapp.repositories.run_status_repository import (
+    RunStatusRepository,
+)
 
 
 class ProgressService:
@@ -32,7 +34,10 @@ class ProgressService:
             return payload
 
         started_at = status.get("started_at")
-        if isinstance(started_at, (int, float)) and payload.progress < self._progress_init_cap:
+        if (
+            isinstance(started_at, (int, float))
+            and payload.progress < self._progress_init_cap
+        ):
             elapsed = max(time.monotonic() - started_at, 0.0)
             warm_progress = min(self._progress_init_cap, elapsed * 0.4)
             if warm_progress > payload.progress:

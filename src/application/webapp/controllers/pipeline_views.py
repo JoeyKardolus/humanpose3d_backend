@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Django views for the webapp pipeline experience."""
+
+from __future__ import annotations
 
 import mimetypes
 from pathlib import Path
@@ -18,24 +18,38 @@ from django.views import View
 
 from src.application.webapp.config.paths import AppPaths
 from src.application.webapp.dto.pipeline_request import PipelineRequestData
-from src.application.webapp.repositories.run_status_repository import RunStatusRepository
+from src.application.webapp.repositories.run_status_repository import (
+    RunStatusRepository,
+)
 from src.application.webapp.services.media_service import MediaService
-from src.application.webapp.services.output_directory_service import OutputDirectoryService
+from src.application.webapp.services.output_directory_service import (
+    OutputDirectoryService,
+)
 from src.application.webapp.services.output_history_service import OutputHistoryService
-from src.application.webapp.services.pipeline_command_builder import PipelineCommandBuilder
+from src.application.webapp.services.pipeline_command_builder import (
+    PipelineCommandBuilder,
+)
 from src.application.webapp.services.pipeline_log_service import PipelineLogService
-from src.application.webapp.services.pipeline_progress_tracker import PipelineProgressTracker
-from src.application.webapp.services.pipeline_result_service import PipelineResultService
+from src.application.webapp.services.pipeline_progress_tracker import (
+    PipelineProgressTracker,
+)
+from src.application.webapp.services.pipeline_result_service import (
+    PipelineResultService,
+)
 from src.application.webapp.services.pipeline_runner import PipelineRunner
 from src.application.webapp.services.progress_service import ProgressService
 from src.application.webapp.services.results_service import ResultsService
-from src.application.webapp.services.results_archive_service import ResultsArchiveService
+from src.application.webapp.services.results_archive_service import (
+    ResultsArchiveService,
+)
 from src.application.webapp.services.run_cleanup_service import RunCleanupService
 from src.application.webapp.services.run_id_factory import RunIdFactory
 from src.application.webapp.services.run_key_service import RunKeyService
 from src.application.webapp.services.statistics_service import StatisticsService
 from src.application.webapp.services.upload_service import UploadService
-from src.application.webapp.use_cases.prepare_pipeline_run import PreparePipelineRunUseCase
+from src.application.webapp.use_cases.prepare_pipeline_run import (
+    PreparePipelineRunUseCase,
+)
 from src.application.webapp.use_cases.run_pipeline_async import RunPipelineAsyncUseCase
 from src.application.webapp.use_cases.run_pipeline_sync import RunPipelineSyncUseCase
 from src.application.webapp.validators.path_validator import PathValidator
@@ -60,7 +74,9 @@ _RUN_ID_FACTORY = RunIdFactory()
 _RUN_KEY_SERVICE = RunKeyService(_PATH_VALIDATOR)
 _RUN_VALIDATOR = RunRequestValidator(_PATH_VALIDATOR)
 _OUTPUT_HISTORY = OutputHistoryService(_APP_PATHS.output_root)
-_RUN_CLEANUP = RunCleanupService(_APP_PATHS.output_root, _APP_PATHS.upload_root, _PATH_VALIDATOR)
+_RUN_CLEANUP = RunCleanupService(
+    _APP_PATHS.output_root, _APP_PATHS.upload_root, _PATH_VALIDATOR
+)
 
 _PREPARE_PIPELINE = PreparePipelineRunUseCase(
     validator=_RUN_VALIDATOR,
@@ -232,7 +248,10 @@ class ResultsView(View):
         preview_video_type = None
         preview_candidates = sorted(run_dir.rglob("*_preview.*"))
         for candidate in preview_candidates:
-            if candidate.suffix.lower() in {".mp4", ".webm"} and candidate.stat().st_size > 1024:
+            if (
+                candidate.suffix.lower() in {".mp4", ".webm"}
+                and candidate.stat().st_size > 1024
+            ):
                 preview_video = candidate
                 preview_video_type = mimetypes.guess_type(candidate.name)[0]
                 break
@@ -324,6 +343,7 @@ class MediaView(View):
 
 class UploadMediaView(View):
     """Media streaming endpoint for uploaded source files."""
+
     def get(self, request: HttpRequest, run_key: str, file_path: str) -> HttpResponse:
         """Stream an uploaded source file."""
         target = _MEDIA_SERVICE.resolve_upload_file(run_key, file_path)

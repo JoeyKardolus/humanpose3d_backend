@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 """Service for building pipeline run keys."""
 
-from pathlib import Path
+from __future__ import annotations
+
 
 from src.application.webapp.validators.path_validator import PathValidator
 

@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for enumerating pipeline output files."""
+
+from __future__ import annotations
 
 from pathlib import Path
 

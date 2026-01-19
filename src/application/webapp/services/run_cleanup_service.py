@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for removing stored pipeline data."""
+
+from __future__ import annotations
 
 import shutil
 from pathlib import Path
@@ -32,7 +32,10 @@ class RunCleanupService:
             deleted = True
 
         upload_dir = (self._upload_root / run_dir.name).resolve()
-        if self._upload_root not in upload_dir.parents and upload_dir != self._upload_root:
+        if (
+            self._upload_root not in upload_dir.parents
+            and upload_dir != self._upload_root
+        ):
             raise Http404("Invalid upload path.")
         if upload_dir.exists():
             shutil.rmtree(upload_dir)

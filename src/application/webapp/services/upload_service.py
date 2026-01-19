@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for persisting uploaded videos."""
+
+from __future__ import annotations
 
 import shutil
 from pathlib import Path

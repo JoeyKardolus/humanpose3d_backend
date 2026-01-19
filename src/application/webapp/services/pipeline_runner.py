@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service for executing the pipeline subprocess."""
+
+from __future__ import annotations
 
 import subprocess
 import sys

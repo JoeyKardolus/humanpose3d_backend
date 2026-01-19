@@ -1,11 +1,15 @@
-from __future__ import annotations
-
 """Use case for preparing a pipeline run from request input."""
 
-from src.application.webapp.dto.pipeline_preparation_result import PipelinePreparationResult
+from __future__ import annotations
+
+from src.application.webapp.dto.pipeline_preparation_result import (
+    PipelinePreparationResult,
+)
 from src.application.webapp.dto.pipeline_request import PipelineRequestData
 from src.application.webapp.dto.pipeline_run_spec import PipelineRunSpec
-from src.application.webapp.services.output_directory_service import OutputDirectoryService
+from src.application.webapp.services.output_directory_service import (
+    OutputDirectoryService,
+)
 from src.application.webapp.services.run_id_factory import RunIdFactory
 from src.application.webapp.services.run_key_service import RunKeyService
 from src.application.webapp.services.upload_service import UploadService

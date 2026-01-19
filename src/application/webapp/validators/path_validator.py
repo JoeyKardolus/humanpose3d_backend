@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Validation helpers for filesystem paths."""
+
+from __future__ import annotations
 
 from pathlib import Path
 

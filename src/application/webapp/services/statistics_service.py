@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Service that assembles statistics context from run outputs."""
+
+from __future__ import annotations
 
 import csv
 import json
@@ -189,9 +189,13 @@ class StatisticsService:
         augmented_payload = self._trc_plot_service.build_plot_payload(run_dir)
         if rotation_degrees:
             if skeleton_payload is not None:
-                skeleton_payload = self._rotate_plot_payload(skeleton_payload, rotation_degrees)
+                skeleton_payload = self._rotate_plot_payload(
+                    skeleton_payload, rotation_degrees
+                )
             if augmented_payload is not None:
-                augmented_payload = self._rotate_plot_payload(augmented_payload, rotation_degrees)
+                augmented_payload = self._rotate_plot_payload(
+                    augmented_payload, rotation_degrees
+                )
         plot_skeleton_data = skeleton_payload.__dict__ if skeleton_payload else None
         plot_augmented_data = augmented_payload.__dict__ if augmented_payload else None
 
@@ -207,7 +211,9 @@ class StatisticsService:
             "plot_augmented_data": plot_augmented_data,
         }
 
-    def _resolve_rotation(self, source_video: Path | None, run_dir: Path) -> tuple[int, bool]:
+    def _resolve_rotation(
+        self, source_video: Path | None, run_dir: Path
+    ) -> tuple[int, bool]:
         metadata_path = run_dir / "source" / "video_metadata.json"
         if metadata_path.exists():
             try:
@@ -288,7 +294,9 @@ class StatisticsService:
         return [x, y, z]
 
     @staticmethod
-    def _compute_bounds(frames: list[list[list[float | None]]]) -> dict[str, list[float]]:
+    def _compute_bounds(
+        frames: list[list[list[float | None]]],
+    ) -> dict[str, list[float]]:
         xs: list[float] = []
         ys: list[float] = []
         zs: list[float] = []
