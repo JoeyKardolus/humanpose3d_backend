@@ -44,6 +44,12 @@ class PipelineProgressTracker:
         elif "[main] step2 TRC" in line:
             progress = 30.0
             stage = "TRC generated"
+        elif "[pose] preview rotation detected" in line:
+            progress = 28.0
+            stage = "Correcting preview rotation"
+        elif "[media] tesseract not found" in line:
+            progress = 28.0
+            stage = "Skipping OCR rotation (tesseract missing)"
         elif "[main] step3 augment" in line:
             progress = self._progress_augment_start
             stage = "Augmenting markers"

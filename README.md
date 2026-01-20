@@ -6,9 +6,20 @@
 
 ### 1. Install uv (Python package manager)
 
+Linux:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.local/bin/env  # Add to PATH (or restart shell)
+```
+
+macOS (Homebrew):
+```bash
+brew install uv
+```
+
+Windows (PowerShell):
+```powershell
+irm https://astral.sh/uv/install.ps1 | iex
 ```
 
 ### 2. Clone and setup
@@ -33,6 +44,23 @@ Or use the included `.envrc` with [direnv](https://direnv.net/):
 
 ```bash
 direnv allow  # Automatically sets MPLBACKEND=Agg
+```
+
+Install the system `tesseract` binary if your preview videos are rotated and the source metadata is missing. OCR-based rotation detection uses it when generating preview videos.
+
+Linux:
+```bash
+sudo apt-get install tesseract-ocr
+```
+
+macOS (Homebrew):
+```bash
+brew install tesseract
+```
+
+Windows (Chocolatey):
+```powershell
+choco install tesseract
 ```
 
 ## Usage

@@ -175,26 +175,32 @@ class StatisticsService:
         video_path = None
         video_type = None
         video_route = None
-        if source_video:
-            video_path = source_video.relative_to(run_dir).as_posix()
-            video_type = source_video_type
-            video_route = "media"
-        elif preview_video:
+        if preview_video:
             video_path = preview_video.relative_to(run_dir).as_posix()
             video_type = preview_video_type
             video_route = "media"
+        elif source_video:
+            video_path = source_video.relative_to(run_dir).as_posix()
+            video_type = source_video_type
+            video_route = "media"
 
-        rotation_degrees, _ = self._resolve_rotation(source_video, run_dir)
+        rotation_degrees = self._resolve_preview_rotation(preview_video)
+        mirror_depth = rotation_degrees is not None and rotation_degrees != 0
+        mirror_y = rotation_degrees is not None and rotation_degrees != 0
+        if rotation_degrees is None:
+            rotation_degrees, _ = self._resolve_rotation(source_video, run_dir)
+            mirror_depth = False
+            mirror_y = False
         skeleton_payload = self._landmark_plot_service.build_plot_payload(run_dir)
         augmented_payload = self._trc_plot_service.build_plot_payload(run_dir)
         if rotation_degrees:
             if skeleton_payload is not None:
                 skeleton_payload = self._rotate_plot_payload(
-                    skeleton_payload, rotation_degrees
+                    skeleton_payload, rotation_degrees, mirror_depth, mirror_y
                 )
             if augmented_payload is not None:
                 augmented_payload = self._rotate_plot_payload(
-                    augmented_payload, rotation_degrees
+                    augmented_payload, rotation_degrees, mirror_depth, mirror_y
                 )
         plot_skeleton_data = skeleton_payload.__dict__ if skeleton_payload else None
         plot_augmented_data = augmented_payload.__dict__ if augmented_payload else None
@@ -264,9 +270,27 @@ class StatisticsService:
             return rotation
         return 0
 
-    def _rotate_plot_payload(self, payload, rotation: int):
+    @staticmethod
+    def _resolve_preview_rotation(preview_video: Path | None) -> int | None:
+        if preview_video is None:
+            return None
+        metadata_path = preview_video.with_suffix(".json")
+        if not metadata_path.exists():
+            return None
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        rotation = metadata.get("rotation_degrees")
+        if isinstance(rotation, int) and rotation in {0, 90, 180, 270}:
+            return rotation
+        return None
+
+    def _rotate_plot_payload(
+        self, payload, rotation: int, mirror_depth: bool, mirror_y: bool
+    ):
         rotated_frames = [
-            [self._rotate_point(point, rotation) for point in frame]
+            [self._rotate_point(point, rotation, mirror_depth, mirror_y) for point in frame]
             for frame in payload.frames
         ]
         bounds = self._compute_bounds(rotated_frames)
@@ -279,18 +303,27 @@ class StatisticsService:
         )
 
     @staticmethod
-    def _rotate_point(point: list[float | None], rotation: int) -> list[float | None]:
+    def _rotate_point(
+        point: list[float | None],
+        rotation: int,
+        mirror_depth: bool,
+        mirror_y: bool,
+    ) -> list[float | None]:
         if len(point) != 3:
             return point
         x, y, z = point
         if x is None or y is None:
             return [x, y, z]
+        if mirror_y:
+            y = -y
         if rotation == 90:
-            return [-y, x, z]
+            x, y = -y, x
         if rotation == 180:
-            return [-x, -y, z]
+            x, y = -x, -y
         if rotation == 270:
-            return [y, -x, z]
+            x, y = y, -x
+        if mirror_depth and z is not None:
+            z = -z
         return [x, y, z]
 
     @staticmethod

@@ -20,7 +20,11 @@ from src.kinematics.visualize_comprehensive_angles import (
 )
 from src.markeraugmentation.gpu_config import patch_pose2sim_gpu
 from src.markeraugmentation.markeraugmentation import run_pose2sim_augment
-from src.mediastream.media_stream import probe_video_rotation, read_video_rgb
+from src.mediastream.media_stream import (
+    detect_frame_rotation,
+    probe_video_rotation,
+    read_video_rgb,
+)
 from src.posedetector.pose_detector import extract_world_landmarks
 from src.postprocessing.temporal_smoothing import hide_markers_in_trc, smooth_trc
 from src.pipeline.cleanup import cleanup_output_directory
@@ -174,6 +178,13 @@ def run_pipeline(args: argparse.Namespace) -> None:
         preview_path = None
         if args.show_video or args.export_preview:
             preview_path = run_dir / f"{video_path.stem}_preview.mp4"
+            if preview_rotation == 0:
+                detected_rotation = detect_frame_rotation(frames[0])
+                if detected_rotation:
+                    preview_rotation = detected_rotation
+                    print(
+                        f"[main] preview rotation detected via OCR: {preview_rotation} degrees"
+                    )
 
         detection_output = extract_world_landmarks(
             frames,

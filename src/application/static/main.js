@@ -209,7 +209,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!runKey || !template) {
                 return;
             }
-            const target = template.replace("__RUN_KEY__", encodeURIComponent(runKey));
+            const encodedRunKey = encodeURIComponent(runKey).replace(/%2F/g, "/");
+            const target = template.replace("__RUN_KEY__", encodedRunKey);
             window.location.href = target;
         });
     }

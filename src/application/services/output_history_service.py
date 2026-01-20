@@ -19,6 +19,11 @@ class OutputHistoryService:
     """Enumerate run output directories for the UI."""
 
     _FINAL_TRC_SUFFIX = "_final.trc"
+    _INITIAL_TRC_SUFFIX = "_initial.trc"
+    _COMPLETE_TRC_SUFFIX = "_LSTM_complete.trc"
+    _RAW_LANDMARKS_SUFFIX = "_raw_landmarks.csv"
+    _PREVIEW_SUFFIX = "_preview.mp4"
+    _PIPELINE_LOG_NAME = "pipeline.log"
     _ERROR_LOG_NAME = "pipeline_error.log"
 
     def __init__(self, output_root: Path) -> None:
@@ -54,9 +59,17 @@ class OutputHistoryService:
             for item in candidate.iterdir():
                 if not item.is_file():
                     continue
-                if item.name == self._ERROR_LOG_NAME:
+                if item.name in {self._PIPELINE_LOG_NAME, self._ERROR_LOG_NAME}:
                     return True
-                if item.name.endswith(self._FINAL_TRC_SUFFIX):
+                if item.name.endswith(
+                    (
+                        self._FINAL_TRC_SUFFIX,
+                        self._INITIAL_TRC_SUFFIX,
+                        self._COMPLETE_TRC_SUFFIX,
+                        self._RAW_LANDMARKS_SUFFIX,
+                        self._PREVIEW_SUFFIX,
+                    )
+                ):
                     return True
         except OSError:
             return False

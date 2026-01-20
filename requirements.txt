@@ -12,6 +12,8 @@ opencv-python>=4.11.0.86
 numpy>=1.24.0
 pandas>=2.0.0
 matplotlib>=3.7.0
+pillow>=10.2.0
+pytesseract>=0.3.13
 
 # Marker Augmentation
 pose2sim>=0.10.0
