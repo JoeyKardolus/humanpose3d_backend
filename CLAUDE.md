@@ -45,6 +45,8 @@ data/output/pose-3d/<video>/
 | Flag | Description |
 |------|-------------|
 | `--main-refiner` | **Recommended**: Full neural pipeline (depth + joint refinement) |
+| `--height 1.78` | Subject height in meters (enables true metric scale output) |
+| `--mass 75` | Subject mass in kg (used for Pose2Sim biomechanics) |
 | `--estimate-missing` | Mirror occluded limbs from visible side |
 | `--force-complete` | Estimate shoulder clusters + hip joint centers |
 | `--augmentation-cycles N` | Multi-cycle averaging (default 20) |
@@ -63,6 +65,7 @@ data/output/pose-3d/<video>/
 | `markeraugmentation/` | Pose2Sim integration, GPU acceleration |
 | `kinematics/` | ISB joint angles, Euler decomposition, visualization |
 | `visualizedata/` | 3D plotting, skeleton connections |
+| `pof/` | Part Orientation Fields model, least-squares solver, metric scale recovery |
 | `depth_refinement/` | Neural depth correction model |
 | `joint_refinement/` | Neural joint constraint model |
 | `main_refinement/` | Fusion model combining depth + joint |
@@ -187,6 +190,20 @@ Corrects MediaPipe depth errors using camera viewpoint prediction. Trains on AIS
 | Depth error | 11.2 cm (45% improvement) |
 | Bone variance | 1.23 cm std (75% reduction) |
 
+**Metric Scale Recovery**:
+The POF model works in normalized space (unit torso scale) internally. True metric output is recovered using known subject height:
+
+```
+metric_torso = height / HEIGHT_TO_TORSO_RATIO  (where ratio ≈ 3.4)
+```
+
+This solves the monocular scale ambiguity without camera intrinsics:
+- `--height 1.78` → torso = 0.524m → all bone lengths in true meters
+- Training uses normalized space (scale-invariant POF directions)
+- Inference denormalizes using height-derived metric scale
+
+The constant `HEIGHT_TO_TORSO_RATIO = 3.4` is based on standard human proportions (height / shoulder-to-hip distance).
+
 **Bone Length Consistency**: Training includes bone variance loss to encourage temporally consistent bone lengths. At inference, bone locking computes median bone lengths from first 50 frames and projects all frames to those lengths. Result: more consistent than ground truth (0.57x GT variance).
 
 ```bash
@@ -268,6 +285,8 @@ Training sample fields (`.npz`):
 | `azimuth` | scalar | Camera angle 0-360° |
 | `elevation` | scalar | Camera angle -90 to +90° |
 | `visibility` | (17,) | Per-joint visibility |
+| `gt_scale` | scalar | Ground truth torso length in meters (for metric recovery) |
+| `mp_scale` | scalar | MediaPipe torso scale (for reference) |
 
 **CMU MTC Dataset** (`scripts/data/convert_cmu_mtc.py`):
 
