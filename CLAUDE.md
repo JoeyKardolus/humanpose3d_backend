@@ -149,7 +149,52 @@ uv run pytest
 
 # Format code before committing
 uv run python -m black src tests
+
+# Build standalone executable (recommended method)
+./scripts/packaging/build.sh linux
 ```
+
+### Building Standalone Executables
+
+The project uses PyInstaller to create standalone executables:
+
+**Build process:**
+```bash
+uv pip install pyinstaller
+
+# Recommended: Use the build script
+./scripts/packaging/build.sh [linux|macos|windows]
+
+# Alternative: Direct PyInstaller (requires all flags)
+uv run pyinstaller scripts/packaging/HumanPose3D-<platform>.spec -y --distpath bin --workpath bin/build
+```
+
+**Build script features:**
+- Automatically adds all required flags (`-y`, `--distpath`, `--workpath`)
+- No manual flag management needed
+- Clear output messages
+
+**Output paths:**
+- Executables: `bin/HumanPose3D-<platform>/`
+- Build artifacts: `bin/build/` (temporary files, ignored by git)
+
+**Entry point:** `scripts/packaging/pyinstaller_entry.py`
+- Detects frozen (bundled) vs development environment
+- Starts Django server on 127.0.0.1:8000 with `--noreload`
+- Automatically opens web browser when server is ready
+- Shows clear terminal banner with server status and stop instructions
+- Supports CLI commands in executable: `./HumanPose3D-linux run_pipeline ...`
+
+**Launcher script** (optional): `scripts/packaging/create_launcher.sh`
+- Generates `HumanPose3D.sh` wrapper script
+- Opens executable in a terminal window (gnome-terminal, konsole, xfce4-terminal, xterm)
+- Useful for double-clicking from file managers
+- Keeps terminal open after app exits
+
+**Spec files:** `scripts/packaging/HumanPose3D-<platform>.spec` (commit to version control)
+- Bundles: templates, static files, neural models
+- Hidden imports: all Django apps and Python modules
+- Output: `bin/HumanPose3D-<platform>/`
 
 ### Key Pipeline Flags
 

@@ -2,6 +2,43 @@
 
 3D human pose estimation pipeline using MediaPipe for detection and Pose2Sim for marker augmentation, with advanced biomechanical constraint optimization.
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+  - [1. Install uv (Python package manager)](#1-install-uv-python-package-manager)
+  - [2. Clone and setup](#2-clone-and-setup)
+  - [3. Environment setup (headless/WSL)](#3-environment-setup-headlesswsl)
+- [Usage](#usage)
+  - [GUI (Web App)](#gui-web-app)
+  - [CLI (Management Command)](#cli-management-command)
+  - [API (cURL)](#api-curl)
+- [Standalone App (PyInstaller)](#standalone-app-pyinstaller)
+  - [Building the Executable](#building-the-executable)
+  - [Features](#features-1)
+  - [About the Spec Files](#about-the-spec-files)
+- [Features](#features)
+- [Results](#results)
+- [Documentation](#documentation)
+  - [User Guides](#user-guides)
+  - [Technical Details](#technical-details)
+  - [Development](#development)
+- [Pipeline Overview](#pipeline-overview)
+  - [Processing Steps](#processing-steps)
+  - [Output Structure](#output-structure)
+- [Neural Depth Refinement (Optional)](#neural-depth-refinement-optional)
+  - [Training the Model](#training-the-model)
+  - [Applying Depth Refinement](#applying-depth-refinement)
+- [Requirements](#requirements)
+  - [System Requirements](#system-requirements)
+  - [Optional System Dependencies](#optional-system-dependencies)
+  - [Core Dependencies](#core-dependencies)
+  - [Neural Refinement Dependencies (Optional)](#neural-refinement-dependencies-optional)
+  - [GPU Acceleration (Optional)](#gpu-acceleration-optional)
+- [Common Issues](#common-issues)
+- [Troubleshooting](#troubleshooting)
+- [Citation](#citation)
+- [License](#license)
+
 ## Prerequisites
 
 ### 1. Install uv (Python package manager)
@@ -145,6 +182,67 @@ Fetch results list:
 ```bash
 curl http://127.0.0.1:8000/api/runs/<run_key>/
 ```
+
+## Standalone App (PyInstaller)
+
+Build a standalone executable for distribution (Windows/macOS/Linux). The executable bundles the Django server and automatically opens a web browser when launched.
+
+### Building the Executable
+
+1. Install PyInstaller:
+   ```bash
+   uv pip install pyinstaller
+   ```
+
+2. Build using the build script **(recommended)**:
+   ```bash
+   ./scripts/packaging/build.sh linux   # or macos, windows
+   ```
+
+   This automatically handles all flags and paths:
+   - Outputs to `bin/HumanPose3D-<platform>/`
+   - Build artifacts to `bin/build/`
+   - Auto-confirms overwrites with `-y`
+
+   **Or build directly with PyInstaller:**
+   ```bash
+   uv run pyinstaller scripts/packaging/HumanPose3D-linux.spec -y --distpath bin --workpath bin/build
+   ```
+
+3. Run the executable:
+   - Linux/macOS:
+     ```bash
+     ./bin/HumanPose3D-linux/HumanPose3D-linux
+     ```
+   - Windows:
+     ```powershell
+     .\bin\HumanPose3D-windows\HumanPose3D-windows.exe
+     ```
+
+4. **(Optional) Create launcher script** (Linux only):
+   ```bash
+   ./scripts/packaging/create_launcher.sh
+   ```
+   This creates `HumanPose3D.sh` which opens the app in a terminal window. Useful for double-clicking from file managers.
+
+### Features
+
+- Starts Django server at `http://127.0.0.1:8000/`
+- Automatically opens default web browser when launched
+- Shows clear terminal output with server status and stop instructions (Ctrl+C)
+- Optional launcher script for terminal window on double-click
+- No Python installation required on target system
+- Bundles all dependencies, templates, static files, and neural models
+- Supports CLI commands: `./HumanPose3D-linux run_pipeline --video ...`
+
+### About the Spec Files
+
+Spec files in `scripts/packaging/` (e.g., `HumanPose3D-linux.spec`) contain build configuration:
+- Entry point: `scripts/packaging/pyinstaller_entry.py` (handles server startup and browser opening)
+- Bundled data: templates, static files, neural models
+- Hidden imports: all Django apps and Python modules
+
+The spec files should be committed to version control for reproducible builds.
 
 ## Features
 
