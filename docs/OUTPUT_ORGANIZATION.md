@@ -110,7 +110,7 @@ Old runs and deprecated feature outputs are moved to `old_runs/`:
 The cleanup happens **after** the main pipeline completes:
 
 ```bash
-uv run python main.py \
+uv run python manage.py run_pipeline \
   --video data/input/<video>.mp4 \
   --height 1.78 --weight 75 \
   --estimate-missing --force-complete \

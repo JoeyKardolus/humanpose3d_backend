@@ -6,7 +6,7 @@ The **MainRefiner** is a unified neural pipeline that combines depth and joint c
 
 ```bash
 # Full pipeline with neural refinement
-uv run python main.py \
+uv run python manage.py run_pipeline \
   --video data/input/joey.mp4 \
   --height 1.78 --weight 75 \
   --estimate-missing --force-complete \
@@ -137,7 +137,7 @@ Save to aistpp_joint_angles/
 - Model saved: `models/checkpoints/best_joint_model.pth`
 
 **Pipeline Integration** ✅
-- Integrated into `main.py` with CLI flags
+- Integrated into the `run_pipeline` management command with CLI flags
 - `--joint-constraint-refinement` - Enable neural refinement after angle computation
 - `--joint-model-path` - Custom model path (default: `models/checkpoints/best_joint_model.pth`)
 - Applies refinement per-frame to all 12 joint groups
@@ -156,7 +156,7 @@ uv run --group neural python scripts/train/joint_model.py --epochs 100 --batch-s
 
 **Run with Main Pipeline (recommended):**
 ```bash
-uv run python main.py \
+uv run python manage.py run_pipeline \
   --video data/input/joey.mp4 \
   --height 1.78 --weight 75 \
   --estimate-missing --force-complete \
@@ -370,7 +370,7 @@ data/
 ### Next Steps
 
 1. **Full training run** with 300K+ samples (currently generating)
-2. **Integrate with main.py** - Add `--learned-depth-refinement` flag
+2. **Integrate with run_pipeline command** - Add `--learned-depth-refinement` flag
 3. **Validate on joey.mp4** - Measure bone length CV improvement
 4. **Target metrics**: <4cm depth error, <5° camera prediction
 
@@ -382,7 +382,7 @@ data/
 - Fixed angle extraction bug in training data generator (was extracting time column instead of angles)
 - Added GPU acceleration to `generate_joint_angle_training.py` via `patch_pose2sim_gpu()`
 - Started 1M sample generation (3000 sequences, 4 workers)
-- **Integrated joint refinement into main.py:**
+- **Integrated joint refinement into run_pipeline command:**
   - Added `--joint-constraint-refinement` flag
   - Added `--joint-model-path` for custom model paths
   - Created `apply_neural_joint_refinement()` function

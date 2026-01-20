@@ -91,9 +91,10 @@
                   </button>
                 </div>
               </div>
-              <div class="border rounded overflow-hidden collapse" id="resultsFileList">
-                <div class="table-responsive overflow-auto">
-                  <table class="table table-striped align-middle mb-0">
+              <div class="collapse mt-3" id="resultsFileList">
+                <div class="border rounded-4 overflow-hidden">
+                  <div class="table-responsive">
+                    <table class="table table-striped align-middle mb-0">
                   <thead>
                     <tr>
                       <th scope="col">File</th>
@@ -125,6 +126,7 @@
                     {% endfor %}
                   </tbody>
                 </table>
+                  </div>
                 </div>
               </div>
             {% else %}

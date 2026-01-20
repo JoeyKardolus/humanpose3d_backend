@@ -36,4 +36,4 @@ archive/
 
 ---
 
-*For the most up-to-date CLI options, run: `uv run python main.py --help`*
+*For the most up-to-date CLI options, run: `uv run python manage.py run_pipeline --help`*

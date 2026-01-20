@@ -202,12 +202,13 @@
                       <input type="number" class="form-control" id="jointAngleSmooth" name="joint_angle_smooth_window" min="1" step="1" value="9">
                     </div>
                     <div class="col">
-                      <label for="temporalSmoothing" class="form-label">Temporal smoothing window — Experimental Feature</label>
+                      <label for="temporalSmoothing" class="form-label">Temporal smoothing window <span class="badge bg-warning text-dark ms-2">Experimental</span></label>
                       <input type="number" class="form-control" id="temporalSmoothing" name="temporal_smoothing" min="0" step="1" value="3">
                     </div>
                   </div>
-                  <div class="row row-cols-1 row-cols-md-2 g-3 mt-2">
+                  <div class="row row-cols-1 row-cols-md-3 g-3 mt-2">
                     <div class="col">
+                      <p class="text-uppercase text-muted small mb-2">Core</p>
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="estimateMissing" name="estimate_missing" checked>
                         <label class="form-check-label" for="estimateMissing">Estimate missing input markers</label>
@@ -217,34 +218,23 @@
                         <label class="form-check-label" for="forceComplete">Force-complete augmented markers</label>
                       </div>
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="mainRefiner" name="main_refiner">
-                        <label class="form-check-label" for="mainRefiner">Enable MainRefiner (depth + joint refinement) — Experimental Feature</label>
-                      </div>
-                      <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="computeAllAngles" name="compute_all_joint_angles" checked>
                         <label class="form-check-label" for="computeAllAngles">Compute all joint angles</label>
                       </div>
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="plotAllAngles" name="plot_all_joint_angles">
-                        <label class="form-check-label" for="plotAllAngles">Plot all joint angles</label>
+                        <input class="form-check-input" type="checkbox" id="mainRefiner" name="main_refiner">
+                        <label class="form-check-label" for="mainRefiner">Enable MainRefiner (depth + joint refinement) <span class="badge bg-warning text-dark ms-2">Experimental</span></label>
                       </div>
+                    </div>
+                    <div class="col">
+                      <p class="text-uppercase text-muted small mb-2">Analysis</p>
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="saveAngleComparison" name="save_angle_comparison">
                         <label class="form-check-label" for="saveAngleComparison">Save left/right angle comparison</label>
                       </div>
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="showAllMarkers" name="show_all_markers">
-                        <label class="form-check-label" for="showAllMarkers">Show low-visibility markers</label>
-                      </div>
-                    </div>
-                    <div class="col">
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="showVideo" name="show_video">
-                        <label class="form-check-label" for="showVideo">Show video preview while processing</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="exportPreview" name="export_preview" checked>
-                        <label class="form-check-label" for="exportPreview">Export preview video</label>
+                        <input class="form-check-input" type="checkbox" id="plotAllAngles" name="plot_all_joint_angles">
+                        <label class="form-check-label" for="plotAllAngles">Plot all joint angles</label>
                       </div>
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="plotLandmarks" name="plot_landmarks">
@@ -253,6 +243,21 @@
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="plotAugmented" name="plot_augmented">
                         <label class="form-check-label" for="plotAugmented">Plot augmented TRC output</label>
+                      </div>
+                    </div>
+                    <div class="col">
+                      <p class="text-uppercase text-muted small mb-2">Preview</p>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="exportPreview" name="export_preview" checked>
+                        <label class="form-check-label" for="exportPreview">Export preview video</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showVideo" name="show_video">
+                        <label class="form-check-label" for="showVideo">Show video preview while processing</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="showAllMarkers" name="show_all_markers">
+                        <label class="form-check-label" for="showAllMarkers">Show low-visibility markers</label>
                       </div>
                       <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="fixHeader" name="fix_header">

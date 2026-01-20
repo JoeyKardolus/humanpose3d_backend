@@ -104,7 +104,7 @@ Application = core
   - `datastream` (CSV export)
   - `visualizedata` (3D plotting)
   - helper packages for augmentation and streaming utilities
-- `main.py` wires modules together; keep it thin and orchestration-only
+- `src/pipeline/runner.py` wires modules together; keep it thin and orchestration-only
 - `data/input/` and `data/output/` store raw videos and generated artifacts
 - `models/` ships with `pose_landmarker_heavy.task`
 - Tests live under `tests/` and mirror the structure of `src/`
@@ -114,7 +114,7 @@ Application = core
 
 ## Build, Test, and Development Commands
 - `uv sync` installs the Python 3.12 toolchain
-- `uv run python main.py --video data/input/<name>.mp4 --height <m> --weight <kg> --main-refiner`
+- `uv run python manage.py run_pipeline --video data/input/<name>.mp4 --height <m> --weight <kg> --main-refiner`
 - `uv run pytest`
 
 ---

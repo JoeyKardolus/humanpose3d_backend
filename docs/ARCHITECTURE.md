@@ -154,9 +154,8 @@ Following **strict separation of concerns** per AGENTS.md principles:
 | File | Purpose | Usage |
 |------|---------|-------|
 | `manage.py` | Django management (recommended) | `uv run python manage.py run_pipeline --video ...` |
-| `main.py` | Direct pipeline runner (legacy) | `uv run python main.py --video ...` |
 
-Both entry points run the same pipeline via `src/pipeline/runner.py`.
+The pipeline entry point lives in `src/pipeline/runner.py` and is invoked by the `run_pipeline` management command.
 
 ### Scripts
 
