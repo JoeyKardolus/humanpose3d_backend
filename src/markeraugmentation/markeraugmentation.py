@@ -45,17 +45,28 @@ ALL_MARKERS_64 = ORIGINAL_MARKERS + LOWER_BODY_AUGMENTED + UPPER_BODY_AUGMENTED
 
 
 def _resolve_pose2sim_command(config_path: Path) -> list[str]:
-    """Derive the Pose2Sim invocation command for augment_markers_all."""
+    """Derive the Pose2Sim invocation command for augment_markers_all (platform-independent)."""
     cmd_env = os.environ.get("POSE2SIM_CMD")
     if cmd_env:
         return shlex.split(cmd_env) + [str(config_path)]
 
+    # Determine platform-specific virtualenv paths
     repo_root = Path(__file__).resolve().parents[2]
-    local_cli = repo_root / ".venv" / "bin" / "pose2sim"
+    venv_dir = repo_root / ".venv"
+
+    # Platform-independent path resolution for virtualenv
+    if sys.platform == "win32":
+        venv_scripts = venv_dir / "Scripts"
+        local_cli = venv_scripts / "pose2sim.exe"
+        local_py = venv_scripts / "python.exe"
+    else:
+        venv_scripts = venv_dir / "bin"
+        local_cli = venv_scripts / "pose2sim"
+        local_py = venv_scripts / "python"
+
     if local_cli.is_file():
         return [str(local_cli), "augment_markers_all", str(config_path)]
 
-    local_py = repo_root / ".venv" / "bin" / "python"
     shim = (
         "import sys,pathlib,tomllib;"
         "from Pose2Sim import markerAugmentation;"

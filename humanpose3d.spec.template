@@ -1,0 +1,151 @@
+# -*- mode: python ; coding: utf-8 -*-
+"""
+PyInstaller spec file for HumanPose3D
+
+This template creates a standalone executable that:
+- Bundles all Python dependencies
+- Uses ~/.humanpose3d for all user data (cross-platform)
+- Works on Windows, macOS, and Linux
+
+Usage:
+    # Basic build
+    pyinstaller humanpose3d.spec
+
+    # One-file executable (slower startup but single file)
+    pyinstaller --onefile humanpose3d.spec
+
+    # With icon (optional)
+    pyinstaller --icon=icon.ico humanpose3d.spec
+
+Platform-specific notes:
+    Windows: Creates .exe in dist/
+    macOS: Creates .app bundle in dist/
+    Linux: Creates executable in dist/
+
+All user data (models, videos, results) goes to:
+    Windows: C:\\Users\\<username>\\.humanpose3d
+    macOS: /Users/<username>/.humanpose3d
+    Linux: /home/<username>/.humanpose3d
+"""
+
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+import sys
+from pathlib import Path
+
+# Application metadata
+APP_NAME = 'HumanPose3D'
+APP_VERSION = '1.0.0'
+
+# Determine entry point based on desired interface
+# Option 1: Django web server
+# ENTRY_POINT = 'manage.py'
+
+# Option 2: CLI interface
+ENTRY_POINT = 'src/cli/main.py'  # Create this file for CLI entry point
+
+# Collect all source modules
+hidden_imports = [
+    # Core Django
+    'django',
+    'django.contrib.staticfiles',
+    'django.contrib.contenttypes',
+    'django.contrib.auth',
+
+    # Application modules
+    'src.application',
+    'src.mediastream',
+    'src.posedetector',
+    'src.datastream',
+    'src.markeraugmentation',
+    'src.kinematics',
+    'src.pipeline',
+    'src.depth_refinement',
+    'src.joint_refinement',
+    'src.main_refinement',
+
+    # ML/CV dependencies
+    'torch',
+    'mediapipe',
+    'cv2',
+    'numpy',
+    'pandas',
+    'onnxruntime',
+    'sklearn',
+
+    # Pose2Sim
+    'Pose2Sim',
+]
+
+# Collect data files (DO NOT bundle user data - it goes to ~/.humanpose3d)
+# Only bundle application resources if needed (none currently)
+datas = [
+    # Example: ('src/application/static', 'src/application/static'),
+    # Example: ('src/application/templates', 'src/application/templates'),
+]
+
+# Analysis: scan the application
+a = Analysis(
+    [ENTRY_POINT],
+    pathex=[],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hidden_imports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        # Exclude test modules to reduce size
+        'pytest',
+        'unittest',
+        'test',
+        'tests',
+    ],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=None,
+    noarchive=False,
+)
+
+# Build the executable
+pyz = PYZ(a.pure, a.zipped_data, cipher=None)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name=APP_NAME,
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,  # Set to False for GUI-only application
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    # icon='icon.ico',  # Uncomment and provide icon file
+)
+
+# Collect everything into a directory
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name=APP_NAME,
+)
+
+# Platform-specific bundle (macOS only)
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        coll,
+        name=f'{APP_NAME}.app',
+        icon=None,  # Provide .icns file for macOS
+        bundle_identifier=f'com.humanpose3d.{APP_NAME}',
+        version=APP_VERSION,
+    )

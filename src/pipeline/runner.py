@@ -171,7 +171,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         print(f"[main] video not found: {video_path}", file=sys.stderr)
         sys.exit(1)
 
-    run_dir = user_paths.data_output / "pose-3d" / video_path.stem
+    run_dir = user_paths.data_output / video_path.stem
     run_dir.mkdir(parents=True, exist_ok=True)
 
     try:

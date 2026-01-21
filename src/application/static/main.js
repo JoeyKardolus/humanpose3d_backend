@@ -110,6 +110,17 @@ document.addEventListener("DOMContentLoaded", () => {
             keyboard: false,
         });
 
+        // Helper to clean up any stray backdrops (prevents overlay stacking issues)
+        const cleanupStrayBackdrops = () => {
+            const backdrops = document.querySelectorAll(".modal-backdrop");
+            backdrops.forEach((backdrop, index) => {
+                // Keep only the most recent backdrop, remove others
+                if (index < backdrops.length - 1) {
+                    backdrop.remove();
+                }
+            });
+        };
+
         // Enforce required acknowledgements before continuing.
         const requireCheck = (inputEl) => {
             if (!inputEl) return false;
@@ -125,19 +136,42 @@ document.addEventListener("DOMContentLoaded", () => {
         const instructionsAccepted = sessionStorage.getItem(instructionsKey) === "true";
         const privacyAccepted = sessionStorage.getItem(privacyKey) === "true";
 
-        if (!instructionsAccepted) {
-            instructionsModal.show();
-        } else if (!privacyAccepted) {
-            noticeModal.show();
-        }
+        // Wait for models modal to be handled first
+        const checkModelsAndShowOnboarding = () => {
+            // Only show if models modal is not visible
+            const modelsModalVisible = document.querySelector("#modelsModal.show");
+            if (modelsModalVisible) {
+                // Wait and try again
+                setTimeout(checkModelsAndShowOnboarding, 500);
+                return;
+            }
+
+            if (!instructionsAccepted) {
+                instructionsModal.show();
+            } else if (!privacyAccepted) {
+                noticeModal.show();
+            }
+        };
+
+        // Delay initial check to ensure models modal is handled first
+        setTimeout(checkModelsAndShowOnboarding, 300);
 
         instructionsModalEl.querySelector("[data-next]")?.addEventListener("click", () => {
             if (requireCheck(instructionCheck)) {
                 sessionStorage.setItem(instructionsKey, "true");
-                instructionsModal.hide();
+
+                // Wait for hide animation to complete before showing next modal
                 if (!privacyAccepted) {
-                    noticeModal.show();
+                    instructionsModalEl.addEventListener("hidden.bs.modal", () => {
+                        // Clean up any stray backdrops and show next modal
+                        cleanupStrayBackdrops();
+                        setTimeout(() => {
+                            noticeModal.show();
+                        }, 100);
+                    }, { once: true });
                 }
+
+                instructionsModal.hide();
             }
         });
 

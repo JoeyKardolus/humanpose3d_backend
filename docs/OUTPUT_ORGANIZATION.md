@@ -8,7 +8,7 @@
 ## Directory Structure
 
 ```
-data/output/pose-3d/<video_name>/
+data/output/<video_name>/
 ├── <video>_final.trc               # Final multi-constraint optimized skeleton (65 markers)
 ├── <video>_initial.trc             # Initial TRC from MediaPipe (22 markers)
 ├── <video>_raw_landmarks.csv       # Raw MediaPipe landmarks (CSV format)
@@ -132,7 +132,7 @@ uv run python manage.py run_pipeline \
 To clean up output directory manually:
 
 ```bash
-cd data/output/pose-3d/<video_name>/
+cd data/output/<video_name>/
 ./cleanup.sh  # If script exists
 
 # Or manually:

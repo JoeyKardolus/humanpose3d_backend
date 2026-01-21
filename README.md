@@ -43,20 +43,21 @@
 
 ### 1. Install uv (Python package manager)
 
-Linux:
+Windows (PowerShell):
+```powershell
+irm https://astral.sh/uv/install.ps1 | iex
+```
+
+macOS:
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.local/bin/env  # Add to PATH (or restart shell)
 ```
 
-macOS (Homebrew):
+Linux:
 ```bash
-brew install uv
-```
-
-Windows (PowerShell):
-```powershell
-irm https://astral.sh/uv/install.ps1 | iex
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.local/bin/env  # Add to PATH (or restart shell)
 ```
 
 ### 2. Clone and setup
@@ -85,19 +86,17 @@ direnv allow  # Automatically sets MPLBACKEND=Agg
 
 Install the system `tesseract` binary if your preview videos are rotated and the source metadata is missing. OCR-based rotation detection uses it when generating preview videos.
 
+Windows:
+Download and install from: https://github.com/UB-Mannheim/tesseract/wiki
+(Add to PATH during installation)
+
+macOS:
+Download and install from: https://github.com/tesseract-ocr/tesseract/wiki/Downloads
+Or compile from source: https://tesseract-ocr.github.io/tessdoc/Compiling.html
+
 Linux:
 ```bash
 sudo apt-get install tesseract-ocr
-```
-
-macOS (Homebrew):
-```bash
-brew install tesseract
-```
-
-Windows (Chocolatey):
-```powershell
-choco install tesseract
 ```
 
 ## Usage
@@ -143,7 +142,7 @@ uv run python manage.py run_pipeline \
 
 Visualize results:
 ```bash
-uv run python scripts/viz/visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
+uv run python scripts/viz/visualize_interactive.py data/output/joey/joey_final.trc
 ```
 
 ### API (cURL)
@@ -307,7 +306,7 @@ Video → MediaPipe → Neural Depth Refinement → TRC → GPU-Accelerated LSTM
 
 ### Output Structure
 ```
-data/output/pose-3d/<video>/
+data/output/<video>/
 ├── <video>_final.trc               # Final optimized skeleton (59-64 markers)
 ├── <video>_initial.trc             # Initial MediaPipe output (22 markers)
 ├── <video>_raw_landmarks.csv       # Raw landmark data
@@ -358,9 +357,9 @@ Once trained, apply the model to refine TRC files:
 ```bash
 # Refine depth in final TRC output
 uv run --group neural python scripts/apply_depth_refinement.py \
-  --input data/output/pose-3d/joey/joey_final.trc \
+  --input data/output/joey/joey_final.trc \
   --model models/checkpoints/best_depth_model.pth \
-  --output data/output/pose-3d/joey/joey_refined.trc
+  --output data/output/joey/joey_refined.trc
 ```
 
 **What it does:**

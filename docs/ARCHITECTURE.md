@@ -139,7 +139,7 @@ Following **strict separation of concerns** per AGENTS.md principles:
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           OUTPUT                                        │
-│  data/output/pose-3d/<video>/                                           │
+│  data/output/<video>/                                           │
 │  ├── <video>_final.trc           (optimized 59-64 markers)              │
 │  ├── <video>_initial.trc         (initial 22 markers)                   │
 │  ├── <video>_raw_landmarks.csv   (raw MediaPipe data)                   │

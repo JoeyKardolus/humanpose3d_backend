@@ -1,4 +1,12 @@
-"""User-specific path configuration for ~/.humanpose3d directory."""
+"""User-specific path configuration for ~/.humanpose3d directory.
+
+All user data (models, input videos, output results) is stored in a platform-independent
+location in the user's home directory. This ensures:
+- Portability across operating systems (Windows, macOS, Linux)
+- Separation of application code and user data
+- PyInstaller compatibility (data persists after application updates)
+- No write permissions needed in application directory
+"""
 
 from __future__ import annotations
 
@@ -8,7 +16,15 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class UserPaths:
-    """Paths within the user's home directory (~/.humanpose3d)."""
+    """Paths within the user's home directory (~/.humanpose3d).
+
+    Platform-independent path configuration:
+    - Windows: C:\\Users\\<username>\\.humanpose3d
+    - macOS: /Users/<username>/.humanpose3d
+    - Linux: /home/<username>/.humanpose3d
+
+    All paths use pathlib.Path for cross-platform compatibility.
+    """
 
     base: Path
     models: Path
@@ -18,7 +34,11 @@ class UserPaths:
 
     @classmethod
     def default(cls) -> "UserPaths":
-        """Create UserPaths with default ~/.humanpose3d location."""
+        """Create UserPaths with default ~/.humanpose3d location.
+
+        Uses Path.home() which automatically resolves to the correct home
+        directory on all platforms without hardcoded separators.
+        """
         base = Path.home() / ".humanpose3d"
         return cls(
             base=base,

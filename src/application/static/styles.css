@@ -45,6 +45,24 @@ body {
   --bs-btn-active-border-color: var(--bs-btn-border-color);
 }
 
+/* Modal z-index layering - prevent overlap issues */
+/* Models modal appears above onboarding modals */
+#modelsModal {
+  z-index: 1060;
+}
+
+/* Instructions and Privacy modals share same layer since they never overlap */
+#instructionsModal,
+#noticeModal {
+  z-index: 1055;
+}
+
+/* Ensure modal backdrops stack correctly */
+.modal-backdrop.show {
+  z-index: 1050;
+}
+
+/* Processing overlay is always on top */
 #processingOverlay {
   z-index: 2000;
 }

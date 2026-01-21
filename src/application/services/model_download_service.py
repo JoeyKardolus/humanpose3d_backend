@@ -1,4 +1,7 @@
-"""Service for downloading pre-trained model files from git repository."""
+"""Service for downloading pre-trained model files from git repository.
+
+Platform-independent implementation using pathlib and subprocess.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +10,31 @@ import tempfile
 import shutil
 from pathlib import Path
 from typing import Callable
+
+
+def _check_git_available() -> tuple[bool, str]:
+    """Check if git is available on the system (platform-independent).
+
+    Returns:
+        (is_available, git_path_or_error_message)
+    """
+    git_command = "git"
+    try:
+        result = subprocess.run(
+            [git_command, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return True, git_command
+        return False, "Git is installed but not functioning correctly"
+    except FileNotFoundError:
+        return False, "Git is not installed or not in PATH"
+    except subprocess.TimeoutExpired:
+        return False, "Git command timed out"
+    except Exception as e:
+        return False, f"Error checking git: {str(e)}"
 
 
 class ModelDownloadService:
@@ -28,7 +56,7 @@ class ModelDownloadService:
         self, progress_callback: Callable[[str], None] | None = None
     ) -> tuple[bool, str]:
         """
-        Download model files from the git repository.
+        Download model files from the git repository (platform-independent).
 
         Args:
             progress_callback: Optional callback for progress updates
@@ -36,6 +64,11 @@ class ModelDownloadService:
         Returns:
             Tuple of (success: bool, message: str)
         """
+        # Check if git is available
+        git_available, git_msg = _check_git_available()
+        if not git_available:
+            return False, f"Cannot download models: {git_msg}"
+
         try:
             self._update_progress(progress_callback, "Creating temporary directory...")
 
