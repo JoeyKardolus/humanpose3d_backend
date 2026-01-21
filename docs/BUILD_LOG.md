@@ -282,3 +282,7 @@
 - main step2 TRC /home/max/.humanpose3d/data/output/Jaap-ded49ef8/Jaap-ded49ef8.trc (710 frames, 21 markers) (2026-01-21 16:07:32Z)
 - main step3 augment /home/max/.humanpose3d/data/output/Jaap-ded49ef8/Jaap-ded49ef8_LSTM.trc (2026-01-21 16:07:53Z)
 - main step3.5 complete /home/max/.humanpose3d/data/output/Jaap-ded49ef8/Jaap-ded49ef8_LSTM_complete.trc (2026-01-21 16:07:53Z)
+- main step1 CSV /home/max/.humanpose3d/data/output/Mama-7022059c/Mama-7022059c.csv (260 frames, 5058 rows) (2026-01-21 16:28:47Z)
+- main step2 TRC /home/max/.humanpose3d/data/output/Mama-7022059c/Mama-7022059c.trc (260 frames, 21 markers) (2026-01-21 16:28:47Z)
+- main step3 augment /home/max/.humanpose3d/data/output/Mama-7022059c/Mama-7022059c_LSTM.trc (2026-01-21 16:29:04Z)
+- main step3.5 complete /home/max/.humanpose3d/data/output/Mama-7022059c/Mama-7022059c_LSTM_complete.trc (2026-01-21 16:29:04Z)

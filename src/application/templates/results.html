@@ -31,39 +31,6 @@
           </div>
         </div>
 
-        {% if source_video_path or preview_video_path %}
-          <div class="card panel-card border-0 rounded-4 shadow mb-4">
-            <div class="card-body">
-              <p class="text-uppercase text-success fw-semibold small mb-2">Videos</p>
-              <h2 class="h4 mb-3">Run videos</h2>
-              <div class="row g-3">
-                {% if source_video_path %}
-                  <div class="col-12 col-lg-6">
-                    <div class="border rounded-4 p-3 h-100">
-                      <h3 class="h6 fw-semibold mb-2">Original video</h3>
-                      <video class="w-100 rounded-3" controls preload="metadata" playsinline>
-                        <source src="{% url 'media' run_key=run_key file_path=source_video_path %}" type="{{ source_video_type }}">
-                        Your browser does not support the video tag.
-                      </video>
-                    </div>
-                  </div>
-                {% endif %}
-                {% if preview_video_path %}
-                  <div class="col-12 col-lg-6">
-                    <div class="border rounded-4 p-3 h-100">
-                      <h3 class="h6 fw-semibold mb-2">MediaPipe skeleton preview</h3>
-                      <video class="w-100 rounded-3" controls preload="metadata" playsinline>
-                        <source src="{% url 'media' run_key=run_key file_path=preview_video_path %}" type="{{ preview_video_type }}">
-                        Your browser does not support the video tag.
-                      </video>
-                    </div>
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        {% endif %}
-
         <div class="card panel-card border-0 rounded-4 shadow">
           <div class="card-body">
             {% if files %}

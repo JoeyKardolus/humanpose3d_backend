@@ -33,9 +33,32 @@ document.addEventListener("DOMContentLoaded", () => {
         return "";
     };
 
+    let modelsModal = null;
+    let modelsMissing = false;
+    let modelsCheckComplete = false;
+
+    const isOnboardingComplete = () => {
+        const instructionsAccepted = sessionStorage.getItem(instructionsKey) === "true";
+        const privacyAccepted = sessionStorage.getItem(privacyKey) === "true";
+        return instructionsAccepted && privacyAccepted;
+    };
+
+    const maybeShowModelsModal = () => {
+        if (!modelsModal || !modelsCheckComplete || !modelsMissing) {
+            return;
+        }
+        if (!isOnboardingComplete()) {
+            return;
+        }
+        if (document.querySelector("#modelsModal.show")) {
+            return;
+        }
+        modelsModal.show();
+    };
+
     // Check if models exist on page load
     if (modelsModalEl && window.bootstrap) {
-        const modelsModal = new bootstrap.Modal(modelsModalEl, {
+        modelsModal = new bootstrap.Modal(modelsModalEl, {
             backdrop: "static",
             keyboard: false,
         });
@@ -49,14 +72,15 @@ document.addEventListener("DOMContentLoaded", () => {
         fetch("/models/check/")
             .then(response => response.json())
             .then(data => {
-                if (!data.models_exist) {
-                    modelsModal.show();
-                }
+                modelsMissing = !data.models_exist;
+                modelsCheckComplete = true;
+                maybeShowModelsModal();
             })
             .catch(error => {
                 console.error("Failed to check models:", error);
                 // Show error to user - models might be missing but we can't verify
                 alert("Warning: Could not verify model files. Please check your internet connection and refresh the page.");
+                modelsCheckComplete = true;
             });
 
         // Handle download button click
@@ -133,35 +157,30 @@ document.addEventListener("DOMContentLoaded", () => {
             return false;
         };
 
-        const instructionsAccepted = sessionStorage.getItem(instructionsKey) === "true";
-        const privacyAccepted = sessionStorage.getItem(privacyKey) === "true";
-
-        // Wait for models modal to be handled first
-        const checkModelsAndShowOnboarding = () => {
-            // Only show if models modal is not visible
-            const modelsModalVisible = document.querySelector("#modelsModal.show");
-            if (modelsModalVisible) {
-                // Wait and try again
-                setTimeout(checkModelsAndShowOnboarding, 500);
-                return;
-            }
+        const showOnboarding = () => {
+            const instructionsAccepted = sessionStorage.getItem(instructionsKey) === "true";
+            const privacyAccepted = sessionStorage.getItem(privacyKey) === "true";
 
             if (!instructionsAccepted) {
                 instructionsModal.show();
-            } else if (!privacyAccepted) {
-                noticeModal.show();
+                return;
             }
+            if (!privacyAccepted) {
+                noticeModal.show();
+                return;
+            }
+            maybeShowModelsModal();
         };
 
-        // Delay initial check to ensure models modal is handled first
-        setTimeout(checkModelsAndShowOnboarding, 300);
+        // Delay initial check to let the page settle before showing modals
+        setTimeout(showOnboarding, 300);
 
         instructionsModalEl.querySelector("[data-next]")?.addEventListener("click", () => {
             if (requireCheck(instructionCheck)) {
                 sessionStorage.setItem(instructionsKey, "true");
 
                 // Wait for hide animation to complete before showing next modal
-                if (!privacyAccepted) {
+                if (sessionStorage.getItem(privacyKey) !== "true") {
                     instructionsModalEl.addEventListener("hidden.bs.modal", () => {
                         // Clean up any stray backdrops and show next modal
                         cleanupStrayBackdrops();
@@ -169,6 +188,8 @@ document.addEventListener("DOMContentLoaded", () => {
                             noticeModal.show();
                         }, 100);
                     }, { once: true });
+                } else {
+                    maybeShowModelsModal();
                 }
 
                 instructionsModal.hide();
@@ -179,6 +200,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (requireCheck(privacyCheck)) {
                 sessionStorage.setItem(privacyKey, "true");
                 noticeModal.hide();
+                maybeShowModelsModal();
             }
         });
     }
