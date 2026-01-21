@@ -3,9 +3,11 @@
 from django.urls import path
 
 from .views import (
-    DownloadAllView,
-    DownloadView,
+    CheckModelsView,
     DeleteRunView,
+    DownloadAllView,
+    DownloadModelsView,
+    DownloadView,
     HomeView,
     MediaView,
     PipelineProgressView,
@@ -17,6 +19,8 @@ from .views import (
 
 urlpatterns = [
     path("", HomeView.as_view(), name="home"),
+    path("models/check/", CheckModelsView.as_view(), name="check_models"),
+    path("models/download/", DownloadModelsView.as_view(), name="download_models"),
     path("run/", RunPipelineView.as_view(), name="run"),
     path("progress/<path:run_key>/", PipelineProgressView.as_view(), name="progress"),
     path(

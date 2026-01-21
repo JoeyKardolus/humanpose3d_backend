@@ -12,6 +12,43 @@
   <script defer src="{% static 'main.js' %}"></script>
 </head>
 <body class="page-body">
+  <div class="modal fade" id="modelsModal" tabindex="-1" aria-labelledby="modelsTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <p class="label mb-1 text-warning">Setup Required</p>
+            <h2 class="modal-title h4 fw-semibold" id="modelsTitle">Model Files Not Found</h2>
+          </div>
+        </div>
+        <div class="modal-body">
+          <p>The application requires pre-trained model files to function. These files (~125 MB) are not currently installed in your system.</p>
+          <p class="label fw-medium">Required models:</p>
+          <ul>
+            <li><code>best_depth_model.pth</code> - Depth refinement model (32 MB)</li>
+            <li><code>best_joint_model.pth</code> - Joint constraint model (11 MB)</li>
+            <li><code>best_main_refiner.pth</code> - Main refiner fusion model (15 MB)</li>
+            <li><code>pose_landmarker_heavy.task</code> - MediaPipe pose detection (30 MB)</li>
+            <li><code>GRU.h5</code> - Pose2Sim LSTM augmentation (37 MB)</li>
+          </ul>
+          <p>Click the button below to download these models automatically from the GitHub repository. This may take a few minutes depending on your internet connection.</p>
+          <div id="downloadProgress" class="d-none">
+            <div class="progress mb-2">
+              <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+            </div>
+            <p class="small text-muted text-center" id="downloadStatus">Downloading models...</p>
+          </div>
+          <div id="downloadError" class="alert alert-danger d-none" role="alert"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="downloadModelsBtn">
+            <i class="bi bi-download me-2"></i>Download Models
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal fade" id="instructionsModal" tabindex="-1" aria-labelledby="instructionsTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
@@ -58,7 +95,7 @@
         <div class="modal-header">
           <div>
             <p class="label mb-1 text-success">Quick Note</p>
-            <h2 class="modal-title h4 fw-semibold" id="instructionsTitle">Ethics and privacy instructions</h2>
+            <h2 class="modal-title h4 fw-semibold" id="noticeTitle">Ethics and privacy instructions</h2>
           </div>
         </div>
         <div class="modal-body">

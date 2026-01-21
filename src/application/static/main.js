@@ -1,5 +1,6 @@
 // Front-end behavior for modals, form submission, and progress polling.
 document.addEventListener("DOMContentLoaded", () => {
+    const modelsModalEl = document.getElementById("modelsModal");
     const instructionsModalEl = document.getElementById("instructionsModal");
     const noticeModalEl = document.getElementById("noticeModal");
     const instructionCheck = document.getElementById("instructions-check");
@@ -21,6 +22,83 @@ document.addEventListener("DOMContentLoaded", () => {
     const privacyKey = "privacyAccepted";
     const submitLabel = "Analyse Video";
     const submittingLabel = "Submitting...";
+
+    // Lightweight CSRF helper for Django-style cookies.
+    const getCookie = (name) => {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) {
+            return parts.pop().split(";").shift();
+        }
+        return "";
+    };
+
+    // Check if models exist on page load
+    if (modelsModalEl && window.bootstrap) {
+        const modelsModal = new bootstrap.Modal(modelsModalEl, {
+            backdrop: "static",
+            keyboard: false,
+        });
+
+        const downloadModelsBtn = document.getElementById("downloadModelsBtn");
+        const downloadProgress = document.getElementById("downloadProgress");
+        const downloadStatus = document.getElementById("downloadStatus");
+        const downloadError = document.getElementById("downloadError");
+
+        // Check models on startup
+        fetch("/models/check/")
+            .then(response => response.json())
+            .then(data => {
+                if (!data.models_exist) {
+                    modelsModal.show();
+                }
+            })
+            .catch(error => {
+                console.error("Failed to check models:", error);
+                // Show error to user - models might be missing but we can't verify
+                alert("Warning: Could not verify model files. Please check your internet connection and refresh the page.");
+            });
+
+        // Handle download button click
+        if (downloadModelsBtn) {
+            downloadModelsBtn.addEventListener("click", () => {
+                downloadModelsBtn.disabled = true;
+                downloadProgress.classList.remove("d-none");
+                downloadError.classList.add("d-none");
+                downloadStatus.textContent = "Downloading models from GitHub...";
+
+                fetch("/models/download/", {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCookie("csrftoken"),
+                        "Content-Type": "application/json",
+                    },
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            downloadStatus.textContent = "Models downloaded successfully!";
+                            setTimeout(() => {
+                                modelsModal.hide();
+                                downloadProgress.classList.add("d-none");
+                                downloadModelsBtn.disabled = false;
+                            }, 1500);
+                        } else {
+                            downloadProgress.classList.add("d-none");
+                            downloadError.textContent = `Download failed: ${data.message}`;
+                            downloadError.classList.remove("d-none");
+                            downloadModelsBtn.disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        downloadProgress.classList.add("d-none");
+                        downloadError.textContent = `Download failed: ${error.message}`;
+                        downloadError.classList.remove("d-none");
+                        downloadModelsBtn.disabled = false;
+                    });
+            });
+        }
+    }
 
     if (instructionsModalEl && noticeModalEl && window.bootstrap) {
         const instructionsModal = new bootstrap.Modal(instructionsModalEl, {
@@ -70,16 +148,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
-
-    // Lightweight CSRF helper for Django-style cookies.
-    const getCookie = (name) => {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) {
-            return parts.pop().split(";").shift();
-        }
-        return "";
-    };
 
     const showAjaxErrors = (errors) => {
         if (!ajaxErrors || !ajaxErrorsList) return;

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
+from collections import defaultdict
 from pathlib import Path
 
+from src.application.config.user_paths import UserPaths
 from src.application.build_log import append_build_log
 from src.datastream.data_stream import ORDER_22, csv_to_trc_strict, write_landmark_csv
 from src.datastream.marker_estimation import estimate_missing_markers
@@ -26,6 +29,7 @@ from src.mediastream.media_stream import (
     read_video_rgb,
 )
 from src.posedetector.pose_detector import extract_world_landmarks
+from src.postprocessing.marker_visibility import calculate_low_visibility_markers
 from src.postprocessing.temporal_smoothing import hide_markers_in_trc, smooth_trc
 from src.pipeline.cleanup import cleanup_output_directory
 from src.pipeline.refinement import (
@@ -34,11 +38,11 @@ from src.pipeline.refinement import (
 )
 from src.visualizedata.visualize_data import VisualizeData
 
-OUTPUT_ROOT = Path("data/output")
-
 
 def add_pipeline_arguments(parser: argparse.ArgumentParser) -> None:
     """Register pipeline CLI arguments on the provided parser."""
+    user_paths = UserPaths.default()
+
     parser.add_argument("--video", required=True, help="Input video file")
 
     parser.add_argument("--height", type=float, default=1.78, help="Subject height in meters")
@@ -76,19 +80,19 @@ def add_pipeline_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--depth-model-path",
         type=str,
-        default="models/checkpoints/best_depth_model.pth",
+        default=str(user_paths.models_checkpoints / "best_depth_model.pth"),
         help="Path to depth refinement model checkpoint",
     )
     parser.add_argument(
         "--joint-model-path",
         type=str,
-        default="models/checkpoints/best_joint_model.pth",
+        default=str(user_paths.models_checkpoints / "best_joint_model.pth"),
         help="Path to joint refinement model checkpoint",
     )
     parser.add_argument(
         "--main-refiner-path",
         type=str,
-        default="models/checkpoints/best_main_refiner.pth",
+        default=str(user_paths.models_checkpoints / "best_main_refiner.pth"),
         help="Path to MainRefiner model checkpoint",
     )
 
@@ -160,12 +164,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run_pipeline(args: argparse.Namespace) -> None:
     """Run the full pipeline with the provided CLI arguments."""
+    user_paths = UserPaths.default()
+
     video_path = Path(args.video)
     if not video_path.exists():
         print(f"[main] video not found: {video_path}", file=sys.stderr)
         sys.exit(1)
 
-    run_dir = OUTPUT_ROOT / video_path.stem
+    run_dir = user_paths.data_output / "pose-3d" / video_path.stem
     run_dir.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -189,7 +195,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         detection_output = extract_world_landmarks(
             frames,
             fps,
-            Path("models/pose_landmarker_heavy.task"),
+            user_paths.models / "pose_landmarker_heavy.task",
             args.visibility_min,
             display=args.show_video,
             return_raw_landmarks=args.plot_landmarks,
@@ -302,8 +308,6 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
             except Exception as exc:
                 print(f"[main] WARNING: Joint angle computation failed - {exc}", file=sys.stderr)
-                import traceback
-
                 traceback.print_exc()
 
         if args.plot_augmented:
@@ -322,51 +326,25 @@ def run_pipeline(args: argparse.Namespace) -> None:
             final_output = smooth_trc(final_output, final_output, window=args.temporal_smoothing)
 
         if not args.show_all_markers:
-            marker_children = {
-                "RShoulder": ["RElbow"],
-                "RElbow": ["RWrist"],
-                "LShoulder": ["LElbow"],
-                "LElbow": ["LWrist"],
-                "RKnee": ["RAnkle"],
-                "RAnkle": ["RHeel", "RBigToe", "RSmallToe"],
-                "LKnee": ["LAnkle"],
-                "LAnkle": ["LHeel", "LBigToe", "LSmallToe"],
-            }
-
-            def get_all_descendants(marker: str) -> list[str]:
-                result = [marker]
-                if marker in marker_children:
-                    for child in marker_children[marker]:
-                        result.extend(get_all_descendants(child))
-                return result
-
-            from collections import defaultdict
-
-            vis_sums = defaultdict(float)
-            vis_counts = defaultdict(int)
-            for rec in records:
-                vis_sums[rec.landmark] += rec.visibility
-                vis_counts[rec.landmark] += 1
-
-            low_vis_markers = set()
-            for marker, total in vis_sums.items():
-                avg_vis = total / vis_counts[marker] if vis_counts[marker] > 0 else 0
-                if avg_vis < 0.5:
-                    for marker_name in get_all_descendants(marker):
-                        if marker_name not in low_vis_markers:
-                            low_vis_markers.add(marker_name)
-                            desc_vis = (
-                                vis_sums.get(marker_name, 0)
-                                / vis_counts.get(marker_name, 1)
-                                if vis_counts.get(marker_name, 0) > 0
-                                else 0
-                            )
-                            print(
-                                f"[main] Hiding marker: {marker_name} (avg_vis={desc_vis:.2f})"
-                            )
+            low_vis_markers = calculate_low_visibility_markers(records, threshold=0.5)
 
             if low_vis_markers:
-                hide_markers_in_trc(final_output, list(low_vis_markers))
+                # Calculate visibility for logging
+                vis_sums = defaultdict(float)
+                vis_counts = defaultdict(int)
+                for rec in records:
+                    vis_sums[rec.landmark] += rec.visibility
+                    vis_counts[rec.landmark] += 1
+
+                for marker_name in low_vis_markers:
+                    avg_vis = (
+                        vis_sums.get(marker_name, 0) / vis_counts.get(marker_name, 1)
+                        if vis_counts.get(marker_name, 0) > 0
+                        else 0
+                    )
+                    print(f"[main] Hiding marker: {marker_name} (avg_vis={avg_vis:.2f})")
+
+                hide_markers_in_trc(final_output, low_vis_markers)
 
         print(f"[main] finished pipeline. Output: {final_output}")
 
