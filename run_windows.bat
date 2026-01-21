@@ -1,6 +1,14 @@
 @echo off
 setlocal
 
+if /i "%~1"=="--no-new-window" goto :start_script
+echo %CMDCMDLINE% | findstr /i "/c" >nul 2>nul
+if %errorlevel%==0 (
+  start "HumanPose3D" cmd /k ""%~f0" --no-new-window %*"
+  exit /b 0
+)
+
+:start_script
 cd /d "%~dp0"
 
 where uv >nul 2>nul

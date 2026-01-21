@@ -4,6 +4,23 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+if [ -z "${TERM-}" ] || [ ! -t 1 ]; then
+  script_path="$SCRIPT_DIR/run_macos|linux.sh"
+  escaped_script="$(printf '%q' "$script_path")"
+  escaped_args="$(printf ' %q' "$@")"
+  cmd="cd $(printf '%q' "$SCRIPT_DIR"); $escaped_script$escaped_args"
+
+  if command -v osascript >/dev/null 2>&1; then
+    osascript -e "tell application \"Terminal\" to do script \"$cmd\"" \
+      -e "tell application \"Terminal\" to activate"
+    exit 0
+  fi
+
+  if command -v x-terminal-emulator >/dev/null 2>&1; then
+    exec x-terminal-emulator -e bash -lc "$cmd"
+  fi
+fi
+
 if ! command -v uv >/dev/null 2>&1; then
   echo "uv not found. Installing..."
   curl -LsSf https://astral.sh/uv/install.sh | sh
