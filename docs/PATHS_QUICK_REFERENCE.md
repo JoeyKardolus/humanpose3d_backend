@@ -50,24 +50,6 @@ repo_root = app_paths.repo_root
 output_dir = app_paths.output_root
 ```
 
-### Access Bundled Resources (PyInstaller)
-```python
-from src.application.config.resource_paths import get_resource_path
-
-# Get path to bundled file (works in dev and PyInstaller)
-config_file = get_resource_path("config/settings.json")
-```
-
-### Check If Running as PyInstaller Bundle
-```python
-from src.application.config.resource_paths import is_frozen
-
-if is_frozen():
-    print("Running as bundled application")
-else:
-    print("Running from source")
-```
-
 ## Common Operations
 
 ### Create User Data Directories
@@ -279,5 +261,4 @@ print(f"Frozen: {getattr(sys, 'frozen', False)}")
 ## Resources
 
 - Full documentation: [PATH_CENTRALIZATION.md](PATH_CENTRALIZATION.md)
-- PyInstaller guide: [PYINSTALLER_BUNDLING.md](PYINSTALLER_BUNDLING.md)
 - pathlib documentation: https://docs.python.org/3/library/pathlib.html

@@ -8,11 +8,6 @@ import pytest
 
 from src.application.config.user_paths import UserPaths
 from src.application.config.paths import AppPaths, get_application_root
-from src.application.config.resource_paths import (
-    get_resource_path,
-    is_frozen,
-    get_temp_extraction_path,
-)
 
 
 class TestUserPaths:
@@ -131,35 +126,6 @@ class TestAppPaths:
         assert root.is_absolute()
         # Should find src directory in parents
         assert (root / "src").exists()
-
-
-class TestResourcePaths:
-    """Test PyInstaller-compatible resource path resolution."""
-
-    def test_is_frozen_returns_false_in_development(self):
-        """Verify is_frozen returns False when running from source."""
-        assert not is_frozen()
-
-    def test_get_temp_extraction_path_none_in_development(self):
-        """Verify temp extraction path is None when not frozen."""
-        assert get_temp_extraction_path() is None
-
-    def test_get_resource_path_development_mode(self):
-        """Verify resource path resolution in development mode."""
-        # Should resolve relative to repository root
-        resource = get_resource_path("README.md")
-        assert resource.is_absolute()
-        # In development, should find actual README.md
-        if resource.exists():
-            assert resource.name == "README.md"
-
-    def test_get_resource_path_with_pathlib(self):
-        """Verify get_resource_path works with Path objects."""
-        resource_str = get_resource_path("models/test.pth")
-        resource_path = get_resource_path(Path("models/test.pth"))
-
-        assert resource_str == resource_path
-        assert isinstance(resource_str, Path)
 
 
 class TestPlatformIndependence:

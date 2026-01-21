@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,28 +10,18 @@ from .user_paths import UserPaths
 
 def get_application_root() -> Path:
     """
-    Get the application root directory (platform-independent, PyInstaller-compatible).
+    Get the application root directory (platform-independent).
 
     Returns:
-        Application root path:
-        - When frozen (PyInstaller): directory containing the executable
-        - When running from source: repository root directory
+        Application root path when running from source.
     """
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller bundle
-        # sys._MEIPASS is the temporary folder where PyInstaller extracts files
-        if hasattr(sys, '_MEIPASS'):
-            # Use the directory containing the executable as application root
-            return Path(sys.executable).parent
-        return Path(sys.executable).parent
-    else:
-        # Running from source - find repository root
-        anchor = Path(__file__).resolve()
-        for parent in anchor.parents:
-            if parent.name == "src":
-                return parent.parent
-        # Fallback: go up 3 levels from config module
-        return anchor.parents[3]
+    # Running from source - find repository root
+    anchor = Path(__file__).resolve()
+    for parent in anchor.parents:
+        if parent.name == "src":
+            return parent.parent
+    # Fallback: go up 3 levels from config module
+    return anchor.parents[3]
 
 
 @dataclass(frozen=True)
@@ -54,7 +43,7 @@ class AppPaths:
         """Resolve application roots using UserPaths for data directories.
 
         IMPORTANT: This now uses ~/.humanpose3d for all data, making the
-        application portable and PyInstaller-friendly.
+        application portable.
         """
         repo_root = get_application_root()
         user_paths = UserPaths.default()

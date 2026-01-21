@@ -347,7 +347,6 @@ python scripts/download_models.py
 ## Related Documentation
 
 - [Path Centralization](PATH_CENTRALIZATION.md): Understanding where files are stored
-- [PyInstaller Bundling](PYINSTALLER_BUNDLING.md): Creating standalone executables
 - [Quick Reference](PATHS_QUICK_REFERENCE.md): Path configuration examples
 
 ## Support

@@ -4,7 +4,6 @@ All user data (models, input videos, output results) is stored in a platform-ind
 location in the user's home directory. This ensures:
 - Portability across operating systems (Windows, macOS, Linux)
 - Separation of application code and user data
-- PyInstaller compatibility (data persists after application updates)
 - No write permissions needed in application directory
 """
 

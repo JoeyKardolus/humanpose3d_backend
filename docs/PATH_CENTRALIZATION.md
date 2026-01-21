@@ -1,10 +1,10 @@
 # Path Centralization and Platform Independence
 
-This document describes the path centralization changes made to HumanPose3D for platform independence and PyInstaller compatibility.
+This document describes the path centralization changes made to HumanPose3D for platform independence.
 
 ## Overview
 
-All file paths have been centralized to use the user's home directory (`~/.humanpose3d`) with full platform independence. This ensures the application works identically on Windows, macOS, and Linux, and is ready for PyInstaller bundling.
+All file paths have been centralized to use the user's home directory (`~/.humanpose3d`) with full platform independence. This ensures the application works identically on Windows, macOS, and Linux.
 
 ## Changes Made
 
@@ -44,36 +44,10 @@ All file paths have been centralized to use the user's home directory (`~/.human
 **Purpose**: Application root detection and integration with UserPaths
 
 **Changes**:
-- Added `get_application_root()` for PyInstaller-compatible root detection
+- Added `get_application_root()` for application root detection
 - Updated `AppPaths` to use `UserPaths` for all data directories
 - Added `models_root` and `models_checkpoints` to `AppPaths`
 - Maintains `repo_root` only for application code (not data)
-
-**PyInstaller Detection**:
-```python
-if getattr(sys, 'frozen', False):
-    # Running as PyInstaller bundle
-    root = Path(sys.executable).parent
-else:
-    # Running from source
-    root = <find repository root>
-```
-
-#### `src/application/config/resource_paths.py` (NEW)
-**Purpose**: PyInstaller-compatible resource path resolution
-
-**Functions**:
-- `get_resource_path(relative_path)`: Resolve bundled resources
-- `is_frozen()`: Check if running as PyInstaller bundle
-- `get_temp_extraction_path()`: Get PyInstaller temp directory
-
-**Usage Example**:
-```python
-from src.application.config.resource_paths import get_resource_path
-
-# Works in both dev and PyInstaller bundle
-config_path = get_resource_path("config/settings.json")
-```
 
 ### 2. Module Updates
 
@@ -109,7 +83,6 @@ else:
 - ✅ No `os.path` usage (all use `pathlib.Path`)
 - ✅ All data paths use `UserPaths`
 - ✅ All path operations are platform-independent
-- ✅ PyInstaller-ready resource resolution
 
 ## Benefits
 
@@ -118,17 +91,12 @@ else:
 - Uses `pathlib.Path` for all operations
 - No hardcoded separators or platform-specific assumptions
 
-### 2. PyInstaller Compatibility
-- Application code and user data are separate
-- Models and data persist across application updates
-- Automatic detection of bundled vs development mode
-
-### 3. User Experience
+### 2. User Experience
 - **No admin rights required**: Everything in user's home directory
 - **Clean uninstall**: Delete `~/.humanpose3d` to remove all data
 - **Portable configuration**: Same location on all platforms
 
-### 4. Development Experience
+### 3. Development Experience
 - **Clear separation**: Code vs data
 - **Easy testing**: Just delete `~/.humanpose3d` to reset
 - **Version control friendly**: User data never in repository
@@ -138,7 +106,6 @@ else:
 ### Application Files (Read-Only)
 Location depends on installation method:
 - **Development**: Repository root
-- **PyInstaller**: Executable directory or temp extraction folder
 
 Content:
 - Python source code (`src/`)
@@ -223,24 +190,6 @@ Test on multiple platforms:
 2. **macOS**: Intel or Apple Silicon
 3. **Linux**: Various distributions
 
-## PyInstaller Integration
-
-See [PYINSTALLER_BUNDLING.md](PYINSTALLER_BUNDLING.md) for detailed instructions.
-
-**Quick start**:
-```bash
-# Build executable
-pyinstaller humanpose3d.spec
-
-# Test
-./dist/HumanPose3D/HumanPose3D --help
-```
-
-**First run**:
-- Application creates `~/.humanpose3d/` structure
-- Prompts to download models
-- Ready to use
-
 ## Troubleshooting
 
 ### Issue: "Models not found"
@@ -251,9 +200,6 @@ pyinstaller humanpose3d.spec
 
 ### Issue: Different paths on Windows
 **Solution**: This is expected. Use `Path.home()` in code, never hardcode paths.
-
-### Issue: PyInstaller can't find resources
-**Solution**: Use `get_resource_path()` from `resource_paths.py`
 
 ## Future Improvements
 
@@ -275,8 +221,7 @@ All file paths in HumanPose3D now:
 - ✅ Use `~/.humanpose3d` for all user data
 - ✅ Are platform-independent (Windows, macOS, Linux)
 - ✅ Use `pathlib.Path` exclusively
-- ✅ Are PyInstaller-ready
 - ✅ Separate code from data
 - ✅ Require no admin rights
 
-The application is now portable, user-friendly, and ready for distribution as standalone executables on all major platforms.
+The application is now portable and user-friendly on all major platforms.
