@@ -14,7 +14,7 @@ from src.application.services.landmark_plot_service import LandmarkPlotService
 from src.application.services.trc_plot_service import TrcPlotService
 
 ZERO_MODE = "first_n_seconds"
-ZERO_WINDOW_S = 1.0
+ZERO_WINDOW_S = 0.01
 
 
 class StatisticsService:
@@ -338,7 +338,10 @@ class StatisticsService:
         self, payload, rotation: int, mirror_depth: bool, mirror_y: bool
     ):
         rotated_frames = [
-            [self._rotate_point(point, rotation, mirror_depth, mirror_y) for point in frame]
+            [
+                self._rotate_point(point, rotation, mirror_depth, mirror_y)
+                for point in frame
+            ]
             for frame in payload.frames
         ]
         bounds = self._compute_bounds(rotated_frames)

@@ -279,3 +279,7 @@ NOTE: New build logs are written to ~/.humanpose3d/logs/BUILD_LOG.md.
 - main step2 TRC data/output/Jaap-ffbd05b3/Jaap-ffbd05b3.trc (710 frames, 21 markers) (2026-01-22 09:49:40Z)
 - main step3 augment data/output/Jaap-ffbd05b3/Jaap-ffbd05b3_LSTM.trc (2026-01-22 09:50:02Z)
 - main step3.5 complete data/output/Jaap-ffbd05b3/Jaap-ffbd05b3_LSTM_complete.trc (2026-01-22 09:50:02Z)
+- main step1 CSV data/output/Max-7b041bd0/Max-7b041bd0.csv (514 frames, 10280 rows) (2026-01-22 20:08:29Z)
+- main step2 TRC data/output/Max-7b041bd0/Max-7b041bd0.trc (514 frames, 21 markers) (2026-01-22 20:08:29Z)
+- main step3 augment data/output/Max-7b041bd0/Max-7b041bd0_LSTM.trc (2026-01-22 20:08:50Z)
+- main step3.5 complete data/output/Max-7b041bd0/Max-7b041bd0_LSTM_complete.trc (2026-01-22 20:08:51Z)
