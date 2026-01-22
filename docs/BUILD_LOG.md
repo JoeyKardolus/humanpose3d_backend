@@ -272,3 +272,9 @@
 - 2026-01-20 15:50:31 UTC | main step1 CSV data/output/PushUp/PushUp.csv (358 frames, 5902 rows)
 - 2026-01-20 15:50:31 UTC | main step2 TRC data/output/PushUp/PushUp.trc (358 frames, 21 markers)
 - 2026-01-20 15:50:42 UTC | main step3 augment data/output/PushUp/PushUp_LSTM.trc
+- 2026-01-22 13:42:15 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 8343 rows)
+- 2026-01-22 13:42:15 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 13:42:27 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 13:43:11 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 8343 rows)
+- 2026-01-22 13:43:11 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 13:43:13 UTC | main step3 augment data/output/joey/joey_LSTM.trc

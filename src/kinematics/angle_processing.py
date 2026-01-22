@@ -10,34 +10,35 @@ Provides functions for:
 from __future__ import annotations
 
 import math
-from typing import Literal, Optional
+from typing import Callable, Literal
 
 import numpy as np
-from scipy.ndimage import median_filter
+from scipy.ndimage import median_filter as scipy_median_filter
+from scipy.spatial.transform import Rotation
 
 
-def unwrap_angles_deg(angles: np.ndarray) -> np.ndarray:
-    """Remove 360° discontinuities from angle time series.
+# --- Helper Functions ---
 
-    Uses a greedy unwrapping strategy: for each sample, find the
-    ±360k representation closest to the previous value.
 
-    Args:
-        angles: Angle array (N,) or (N, 3) in degrees
+def _ensure_odd_window(w: int) -> int:
+    """Ensure window size is odd."""
+    return w + 1 if w % 2 == 0 else w
 
-    Returns:
-        Unwrapped angles in degrees
-    """
-    angles = np.asarray(angles, dtype=float).copy()
 
-    if angles.ndim == 1:
-        return _unwrap_1d(angles)
-    elif angles.ndim == 2:
-        for col in range(angles.shape[1]):
-            angles[:, col] = _unwrap_1d(angles[:, col])
-        return angles
-    else:
-        raise ValueError(f"Expected 1D or 2D array, got shape {angles.shape}")
+def _apply_per_column(func: Callable, arr: np.ndarray, **kwargs) -> np.ndarray:
+    """Apply 1D function to each column of 1D or 2D array."""
+    arr = np.asarray(arr, dtype=float)
+    if arr.ndim == 1:
+        return func(arr, **kwargs)
+    if arr.ndim == 2:
+        result = np.empty_like(arr)
+        for col in range(arr.shape[1]):
+            result[:, col] = func(arr[:, col], **kwargs)
+        return result
+    raise ValueError(f"Expected 1D or 2D array, got shape {arr.shape}")
+
+
+# --- Angle Unwrapping ---
 
 
 def _unwrap_1d(a: np.ndarray) -> np.ndarray:
@@ -72,38 +73,22 @@ def _unwrap_1d(a: np.ndarray) -> np.ndarray:
     return a
 
 
-def smooth_moving_average(
-    data: np.ndarray,
-    window_size: int,
-) -> np.ndarray:
-    """Apply moving average filter with NaN handling.
+def unwrap_angles_deg(angles: np.ndarray) -> np.ndarray:
+    """Remove 360° discontinuities from angle time series.
 
-    Uses convolution with normalized weights to handle missing data.
+    Uses a greedy unwrapping strategy: for each sample, find the
+    ±360k representation closest to the previous value.
 
     Args:
-        data: Input array (N,) or (N, M)
-        window_size: Filter window size (must be odd, >= 3)
+        angles: Angle array (N,) or (N, 3) in degrees
 
     Returns:
-        Smoothed array (same shape as input)
+        Unwrapped angles in degrees
     """
-    if window_size <= 1:
-        return data.copy()
+    return _apply_per_column(_unwrap_1d, angles)
 
-    if window_size % 2 == 0:
-        window_size += 1  # Ensure odd window
 
-    data = np.asarray(data, dtype=float)
-
-    if data.ndim == 1:
-        return _smooth_1d(data, window_size)
-    elif data.ndim == 2:
-        result = np.empty_like(data)
-        for col in range(data.shape[1]):
-            result[:, col] = _smooth_1d(data[:, col], window_size)
-        return result
-    else:
-        raise ValueError(f"Expected 1D or 2D array, got shape {data.shape}")
+# --- Smoothing ---
 
 
 def _smooth_1d(x: np.ndarray, window: int) -> np.ndarray:
@@ -119,15 +104,41 @@ def _smooth_1d(x: np.ndarray, window: int) -> np.ndarray:
     denominator = np.convolve(mask, kernel, mode="same")
 
     # Avoid division by zero
-    result = np.where(denominator > 0, numerator / denominator, np.nan)
-
-    return result
+    return np.where(denominator > 0, numerator / denominator, np.nan)
 
 
-def median_filter_angles(
-    angles: np.ndarray,
-    window_size: int = 5,
-) -> np.ndarray:
+def smooth_moving_average(data: np.ndarray, window_size: int) -> np.ndarray:
+    """Apply moving average filter with NaN handling.
+
+    Uses convolution with normalized weights to handle missing data.
+
+    Args:
+        data: Input array (N,) or (N, M)
+        window_size: Filter window size (must be odd, >= 3)
+
+    Returns:
+        Smoothed array (same shape as input)
+    """
+    if window_size <= 1:
+        return np.asarray(data, dtype=float).copy()
+    return _apply_per_column(_smooth_1d, data, window=_ensure_odd_window(window_size))
+
+
+# --- Median Filtering ---
+
+
+def _median_filter_1d(angles: np.ndarray, window: int) -> np.ndarray:
+    """Apply median filter to 1D angle array with NaN handling."""
+    valid_mask = np.isfinite(angles)
+    if not valid_mask.all():
+        filled = angles.copy()
+        result = scipy_median_filter(filled, size=window, mode='nearest')
+        result[~valid_mask] = np.nan
+        return result
+    return scipy_median_filter(angles, size=window, mode='nearest')
+
+
+def median_filter_angles(angles: np.ndarray, window_size: int = 5) -> np.ndarray:
     """Apply median filter to remove angle outliers.
 
     Robust to isolated spikes caused by gimbal lock or bad marker data.
@@ -140,34 +151,11 @@ def median_filter_angles(
         Filtered angles in degrees
     """
     if window_size <= 1:
-        return angles.copy()
+        return np.asarray(angles, dtype=float).copy()
+    return _apply_per_column(_median_filter_1d, angles, window=_ensure_odd_window(window_size))
 
-    if window_size % 2 == 0:
-        window_size += 1
 
-    angles = np.asarray(angles, dtype=float)
-
-    if angles.ndim == 1:
-        # Handle NaN by using scipy's median_filter with mode='nearest'
-        valid_mask = np.isfinite(angles)
-        if not valid_mask.all():
-            # Fill NaN for filtering, then restore
-            filled = angles.copy()
-            filled[~valid_mask] = np.nan
-            result = median_filter(filled, size=window_size, mode='nearest')
-            result[~valid_mask] = np.nan
-            return result
-        else:
-            return median_filter(angles, size=window_size, mode='nearest')
-
-    elif angles.ndim == 2:
-        result = np.empty_like(angles)
-        for col in range(angles.shape[1]):
-            result[:, col] = median_filter_angles(angles[:, col], window_size)
-        return result
-
-    else:
-        raise ValueError(f"Expected 1D or 2D array, got shape {angles.shape}")
+# --- Zeroing ---
 
 
 def zero_angles(
@@ -240,6 +228,33 @@ def zero_angles(
         raise ValueError(f"Unknown mode: {mode}")
 
 
+# --- Euler Decomposition ---
+
+
+def _fix_rotation_matrix(R: np.ndarray) -> np.ndarray:
+    """Project matrix to SO(3) if determinant is wrong."""
+    if abs(np.linalg.det(R) - 1.0) > 0.1:
+        U, _, Vt = np.linalg.svd(R)
+        R = U @ Vt
+        if np.linalg.det(R) < 0:
+            R[:, 2] *= -1
+    return R
+
+
+def euler_angles(R: np.ndarray, sequence: str = 'XYZ') -> np.ndarray:
+    """Extract Euler angles (degrees) from rotation matrix.
+
+    Args:
+        R: 3x3 rotation matrix
+        sequence: Euler sequence ('XYZ', 'ZXY', etc.)
+
+    Returns:
+        Euler angles in degrees, order matches sequence
+    """
+    R = _fix_rotation_matrix(R)
+    return Rotation.from_matrix(R).as_euler(sequence, degrees=True)
+
+
 def euler_xyz(rotation_matrix: np.ndarray) -> np.ndarray:
     """Extract Euler angles (XYZ sequence, intrinsic) from rotation matrix.
 
@@ -251,32 +266,7 @@ def euler_xyz(rotation_matrix: np.ndarray) -> np.ndarray:
     Returns:
         Euler angles [X_deg, Y_deg, Z_deg]
     """
-    # Check for valid rotation matrix
-    det = np.linalg.det(rotation_matrix)
-
-    # If determinant is negative or far from 1, fix the matrix
-    if abs(det - 1.0) > 0.1:
-        # Orthonormalize using SVD
-        U, S, Vt = np.linalg.svd(rotation_matrix)
-        rotation_matrix = U @ Vt
-
-        # Ensure right-handed (det = +1)
-        if np.linalg.det(rotation_matrix) < 0:
-            # Flip third column to make it right-handed
-            rotation_matrix[:, 2] = -rotation_matrix[:, 2]
-
-    try:
-        from scipy.spatial.transform import Rotation as R
-        return R.from_matrix(rotation_matrix).as_euler('XYZ', degrees=True)
-    except (ImportError, ValueError) as e:
-        # Fallback to manual extraction
-        R = rotation_matrix
-        c = np.clip(R[0, 2], -1.0, 1.0)
-        y_rad = math.asin(c)  # Y rotation
-        x_rad = math.atan2(-R[1, 2], R[2, 2])  # X rotation
-        z_rad = math.atan2(-R[0, 1], R[0, 0])  # Z rotation
-
-        return np.degrees([x_rad, y_rad, z_rad])
+    return euler_angles(rotation_matrix, 'XYZ')
 
 
 def euler_zxy(rotation_matrix: np.ndarray) -> np.ndarray:
@@ -290,25 +280,10 @@ def euler_zxy(rotation_matrix: np.ndarray) -> np.ndarray:
     Returns:
         Euler angles [Z_deg, X_deg, Y_deg]
     """
-    # Check for valid rotation matrix
-    det = np.linalg.det(rotation_matrix)
+    return euler_angles(rotation_matrix, 'ZXY')
 
-    # If determinant is negative or far from 1, fix the matrix
-    if abs(det - 1.0) > 0.1:
-        # Orthonormalize using SVD
-        U, S, Vt = np.linalg.svd(rotation_matrix)
-        rotation_matrix = U @ Vt
 
-        # Ensure right-handed (det = +1)
-        if np.linalg.det(rotation_matrix) < 0:
-            # Flip third column to make it right-handed
-            rotation_matrix[:, 2] = -rotation_matrix[:, 2]
-
-    try:
-        from scipy.spatial.transform import Rotation as R
-        return R.from_matrix(rotation_matrix).as_euler('ZXY', degrees=True)
-    except (ImportError, ValueError) as e:
-        raise ImportError(f"scipy required for ZXY Euler decomposition: {e}")
+# --- Geometric Angle Computation ---
 
 
 def geometric_elbow_flexion(

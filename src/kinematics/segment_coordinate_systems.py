@@ -122,6 +122,74 @@ def ensure_continuity(
     return current_axes
 
 
+def markers_valid(*markers) -> bool:
+    """Check all markers exist and are finite.
+
+    Args:
+        *markers: Variable number of marker arrays to check
+
+    Returns:
+        True if all markers are not None and contain finite values
+    """
+    return all(m is not None and np.isfinite(m).all() for m in markers)
+
+
+def align_with_reference(axis: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    """Flip axis if pointing opposite to reference direction.
+
+    Args:
+        axis: Vector to potentially flip (3,)
+        reference: Reference direction (3,)
+
+    Returns:
+        Axis pointing in same general direction as reference
+    """
+    return -axis if np.dot(axis, reference) < 0 else axis
+
+
+def build_segment_frame(
+    long_axis: np.ndarray,
+    lateral_hint: np.ndarray,
+    reference_lateral: np.ndarray,
+    negate_long_axis: bool = True,
+    previous: Optional[np.ndarray] = None,
+) -> Optional[np.ndarray]:
+    """Build standard segment frame: X=anterior, Y=along bone (distal), Z=lateral.
+
+    This is the common pattern for limb segments (femur, tibia, humerus, forearm, trunk).
+    Uses build_orthonormal_frame() with long_axis as primary, then reorders axes to
+    standard ISB convention.
+
+    Args:
+        long_axis: Vector along the bone (typically proximal→distal direction)
+        lateral_hint: Vector pointing roughly lateral (e.g., epicondyle line)
+        reference_lateral: Reference lateral direction (e.g., pelvis Z) for alignment
+        negate_long_axis: If True, negate Y axis so it points distally (default for limbs).
+                          Set False for trunk where Y should point superiorly.
+        previous: Previous frame for continuity check (3x3) or None
+
+    Returns:
+        Rotation matrix (3x3) with columns [X, Y, Z] or None if invalid
+    """
+    # Align lateral hint with reference direction
+    z_hint = align_with_reference(lateral_hint, reference_lateral)
+
+    # Build orthonormal frame with long axis as primary (X), lateral as secondary (Y)
+    axes = build_orthonormal_frame(long_axis, z_hint)
+
+    if np.isnan(axes).any():
+        return None
+
+    # Reorder to ISB convention: X=anterior, Y=long axis, Z=lateral
+    # build_orthonormal_frame returns: col0=X (long_axis), col1=Y (orthog lateral), col2=Z (cross)
+    x = axes[:, 2]  # anterior (cross product result)
+    y = -axes[:, 0] if negate_long_axis else axes[:, 0]  # along bone
+    z = axes[:, 1]  # lateral (re-orthogonalized)
+
+    result = np.column_stack([x, y, z])
+    return ensure_continuity(result, previous)
+
+
 def pelvis_axes(
     rasis: Optional[np.ndarray],
     lasis: Optional[np.ndarray],
@@ -150,12 +218,11 @@ def pelvis_axes(
 
     Returns:
         Rotation matrix (3x3) with columns [X, Y, Z] or None if invalid markers
+
+    Note: pelvis_axes uses a custom construction (Y primary, Z secondary) rather than
+    build_segment_frame() because it follows ISB pelvis-specific conventions.
     """
-    # Check for valid inputs
-    if any(
-        m is None or not np.isfinite(m).all()
-        for m in [rasis, lasis, rpsis, lpsis]
-    ):
+    if not markers_valid(rasis, lasis, rpsis, lpsis):
         return None
 
     asis_mid = 0.5 * (rasis + lasis)
@@ -223,10 +290,7 @@ def femur_axes(
 ) -> Optional[np.ndarray]:
     """Build femur anatomical coordinate system.
 
-    Femur frame:
-    - Y: Proximal->distal (knee center -> HJC, negated for distal-pointing)
-    - Z: Lateral (knee epicondyle line, aligned with pelvis)
-    - X: Anterior (Y × Z)
+    Femur frame: X=anterior, Y=distal, Z=lateral (ISB convention)
 
     Args:
         hjc: Hip joint center position (3,) or None
@@ -238,36 +302,17 @@ def femur_axes(
     Returns:
         Rotation matrix (3x3) or None if invalid
     """
-    if any(
-        m is None or not np.isfinite(m).all()
-        for m in [hjc, lateral_knee, medial_knee]
-    ):
+    if not markers_valid(hjc, lateral_knee, medial_knee):
         return None
 
     knee_mid = 0.5 * (lateral_knee + medial_knee)
-
-    # Y axis: knee -> hip (we'll negate for distal-pointing)
-    y_hint = hjc - knee_mid
-
-    # Z axis: lateral direction (epicondyle line)
-    z_hint = lateral_knee - medial_knee
-
-    # Ensure Z points in same general direction as pelvis Z
-    if np.dot(z_hint, pelvis_z) < 0:
-        z_hint = -z_hint
-
-    axes = build_orthonormal_frame(y_hint, z_hint)
-
-    if np.isnan(axes).any():
-        return None
-
-    # Current: Y=proximal-distal, temp_Y orthogonal, Z=lateral
-    x = axes[:, 2]  # anterior (Y × Z)
-    y = -axes[:, 0]  # distal-pointing (negate to point down)
-    z = axes[:, 1]  # lateral (re-orthogonalized)
-
-    result = np.column_stack([x, y, z])
-    return ensure_continuity(result, previous)
+    return build_segment_frame(
+        long_axis=hjc - knee_mid,
+        lateral_hint=lateral_knee - medial_knee,
+        reference_lateral=pelvis_z,
+        negate_long_axis=True,
+        previous=previous,
+    )
 
 
 def tibia_axes(
@@ -280,10 +325,7 @@ def tibia_axes(
 ) -> Optional[np.ndarray]:
     """Build tibia anatomical coordinate system.
 
-    Tibia frame:
-    - Y: Proximal->distal (ankle center -> knee center, negated)
-    - Z: Lateral (malleoli line, aligned with pelvis)
-    - X: Anterior (Y × Z)
+    Tibia frame: X=anterior, Y=distal, Z=lateral (ISB convention)
 
     Args:
         lateral_knee: Lateral knee condyle (3,) or None
@@ -296,36 +338,18 @@ def tibia_axes(
     Returns:
         Rotation matrix (3x3) or None if invalid
     """
-    if any(
-        m is None or not np.isfinite(m).all()
-        for m in [lateral_knee, medial_knee, lateral_ankle, medial_ankle]
-    ):
+    if not markers_valid(lateral_knee, medial_knee, lateral_ankle, medial_ankle):
         return None
 
     knee_mid = 0.5 * (lateral_knee + medial_knee)
     ankle_mid = 0.5 * (lateral_ankle + medial_ankle)
-
-    # Y axis: knee -> ankle (we'll negate for distal)
-    y_hint = knee_mid - ankle_mid
-
-    # Z axis: malleoli width (lateral)
-    z_hint = lateral_ankle - medial_ankle
-
-    # Align with pelvis lateral
-    if np.dot(z_hint, pelvis_z) < 0:
-        z_hint = -z_hint
-
-    axes = build_orthonormal_frame(y_hint, z_hint)
-
-    if np.isnan(axes).any():
-        return None
-
-    x = axes[:, 2]  # anterior
-    y = -axes[:, 0]  # distal
-    z = axes[:, 1]  # lateral
-
-    result = np.column_stack([x, y, z])
-    return ensure_continuity(result, previous)
+    return build_segment_frame(
+        long_axis=knee_mid - ankle_mid,
+        lateral_hint=lateral_ankle - medial_ankle,
+        reference_lateral=pelvis_z,
+        negate_long_axis=True,
+        previous=previous,
+    )
 
 
 def foot_axes(
@@ -351,29 +375,18 @@ def foot_axes(
 
     Returns:
         Rotation matrix (3x3) or None if invalid
+
+    Note: foot_axes uses a custom construction (X primary, Z secondary) because
+    the foot's anterior direction is the primary axis (unlike limbs where Y is primary).
     """
-    if any(
-        m is None or not np.isfinite(m).all()
-        for m in [calcaneus, toe, fifth_meta]
-    ):
+    if not markers_valid(calcaneus, toe, fifth_meta):
         return None
 
-    # Match professor's foot coordinate system construction:
-    # X = toe - calc (anterior/voorvoet)
-    # Z = M5 - toe (lateral), aligned with pelvis
-    # Y = cross(Z, X) (dorsal/superior)
-    # Z = cross(X, Y) (re-orthogonalized)
-
-    # X axis: heel -> toe (anterior)
+    # X axis: heel -> toe (anterior) - primary axis for foot
     x = normalize(toe - calcaneus)
 
-    # Z axis hint: forefoot width (lateral)
-    z_hint = fifth_meta - toe
-
-    # Align Z with pelvis lateral direction
-    if np.dot(z_hint, pelvis_z) < 0:
-        z_hint = -z_hint
-    z_temp = normalize(z_hint)
+    # Z axis: forefoot width (lateral), aligned with pelvis
+    z_temp = normalize(align_with_reference(fifth_meta - toe, pelvis_z))
 
     # Y axis: dorsal (up), from cross(Z, X)
     y = normalize(np.cross(z_temp, x))
@@ -400,10 +413,7 @@ def trunk_axes(
 ) -> Optional[np.ndarray]:
     """Build trunk (thorax) anatomical coordinate system.
 
-    Trunk frame:
-    - Y: Superior (pelvis midpoint -> C7/shoulder midpoint)
-    - Z: Lateral (R shoulder -> L shoulder direction, aligned with pelvis)
-    - X: Anterior (Y × Z)
+    Trunk frame: X=anterior, Y=superior, Z=lateral (ISB convention)
 
     Args:
         c7: C7 vertebra marker (3,) or None
@@ -416,42 +426,20 @@ def trunk_axes(
     Returns:
         Rotation matrix (3x3) or None if invalid
     """
-    if any(
-        m is None or not np.isfinite(m).all()
-        for m in [r_shoulder, l_shoulder, pelvis_origin]
-    ):
+    if not markers_valid(r_shoulder, l_shoulder, pelvis_origin):
         return None
 
     shoulder_mid = 0.5 * (r_shoulder + l_shoulder)
-
     # Use C7 if available, otherwise use shoulder midpoint
-    if c7 is not None and np.isfinite(c7).all():
-        trunk_top = c7
-    else:
-        trunk_top = shoulder_mid
+    trunk_top = c7 if markers_valid(c7) else shoulder_mid
 
-    # Y axis: inferior-superior (pelvis -> trunk top)
-    y_hint = trunk_top - pelvis_origin
-
-    # Z axis: lateral (right shoulder -> left shoulder)
-    z_hint = r_shoulder - l_shoulder
-
-    # Align with pelvis lateral direction
-    if np.dot(z_hint, pelvis_z) < 0:
-        z_hint = -z_hint
-
-    axes = build_orthonormal_frame(y_hint, z_hint)
-
-    if np.isnan(axes).any():
-        return None
-
-    # Reorder: Y=superior, Z=lateral, X=anterior
-    x = axes[:, 2]  # anterior (cross product)
-    y = axes[:, 0]  # superior
-    z = axes[:, 1]  # lateral (re-orthogonalized)
-
-    result = np.column_stack([x, y, z])
-    return ensure_continuity(result, previous)
+    return build_segment_frame(
+        long_axis=trunk_top - pelvis_origin,
+        lateral_hint=r_shoulder - l_shoulder,
+        reference_lateral=pelvis_z,
+        negate_long_axis=False,  # Y points superiorly (not distally)
+        previous=previous,
+    )
 
 
 def humerus_axes(
@@ -463,10 +451,8 @@ def humerus_axes(
 ) -> Optional[np.ndarray]:
     """Build humerus (upper arm) anatomical coordinate system.
 
-    Humerus frame:
-    - Y: Proximal->distal (shoulder -> elbow, negated for distal-pointing)
-    - Z: Lateral (perpendicular to plane of shoulder-elbow-wrist)
-    - X: Anterior (Y × Z)
+    Humerus frame: X=anterior, Y=distal, Z=lateral (ISB convention)
+    Z axis is perpendicular to the shoulder-elbow-wrist plane.
 
     Args:
         shoulder: Shoulder marker (3,) or None
@@ -478,35 +464,19 @@ def humerus_axes(
     Returns:
         Rotation matrix (3x3) or None if invalid
     """
-    if any(
-        m is None or not np.isfinite(m).all()
-        for m in [shoulder, elbow, wrist]
-    ):
+    if not markers_valid(shoulder, elbow, wrist):
         return None
 
-    # Y axis: shoulder -> elbow (will negate for distal)
-    y_hint = elbow - shoulder
+    # Z hint: perpendicular to arm plane (shoulder-elbow-wrist)
+    lateral_hint = np.cross(elbow - shoulder, wrist - elbow)
 
-    # Z axis: perpendicular to arm plane (shoulder-elbow-wrist)
-    v1 = elbow - shoulder
-    v2 = wrist - elbow
-    z_hint = np.cross(v1, v2)
-
-    # Align with trunk lateral
-    if np.dot(z_hint, trunk_z) < 0:
-        z_hint = -z_hint
-
-    axes = build_orthonormal_frame(y_hint, z_hint)
-
-    if np.isnan(axes).any():
-        return None
-
-    x = axes[:, 2]  # anterior
-    y = -axes[:, 0]  # distal-pointing (negated)
-    z = axes[:, 1]  # lateral
-
-    result = np.column_stack([x, y, z])
-    return ensure_continuity(result, previous)
+    return build_segment_frame(
+        long_axis=elbow - shoulder,
+        lateral_hint=lateral_hint,
+        reference_lateral=trunk_z,
+        negate_long_axis=True,
+        previous=previous,
+    )
 
 
 def forearm_axes(
@@ -517,10 +487,8 @@ def forearm_axes(
 ) -> Optional[np.ndarray]:
     """Build forearm anatomical coordinate system.
 
-    Forearm frame:
-    - Y: Proximal->distal (elbow -> wrist, negated for distal)
-    - Z: Lateral (aligned with humerus)
-    - X: Anterior (Y × Z)
+    Forearm frame: X=anterior, Y=distal, Z=lateral (ISB convention)
+    Z axis is aligned with the humerus lateral axis.
 
     Args:
         elbow: Elbow marker (3,) or None
@@ -531,26 +499,13 @@ def forearm_axes(
     Returns:
         Rotation matrix (3x3) or None if invalid
     """
-    if any(
-        m is None or not np.isfinite(m).all()
-        for m in [elbow, wrist]
-    ):
+    if not markers_valid(elbow, wrist):
         return None
 
-    # Y axis: elbow -> wrist
-    y_hint = wrist - elbow
-
-    # Z axis: align with humerus lateral
-    z_hint = humerus_z.copy()
-
-    axes = build_orthonormal_frame(y_hint, z_hint)
-
-    if np.isnan(axes).any():
-        return None
-
-    x = axes[:, 2]  # anterior
-    y = -axes[:, 0]  # distal
-    z = axes[:, 1]  # lateral
-
-    result = np.column_stack([x, y, z])
-    return ensure_continuity(result, previous)
+    return build_segment_frame(
+        long_axis=wrist - elbow,
+        lateral_hint=humerus_z,
+        reference_lateral=humerus_z,  # Already aligned, this is a no-op
+        negate_long_axis=True,
+        previous=previous,
+    )
