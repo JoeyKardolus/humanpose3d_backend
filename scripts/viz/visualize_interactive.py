@@ -7,6 +7,7 @@ import sys
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from src.application.config.paths import StoragePaths
 from src.visualizedata.visualize_data import VisualizeData
 
 def main():
@@ -14,7 +15,8 @@ def main():
         trc_path = Path(sys.argv[1])
     else:
         # Default to complete TRC with corrected HJC
-        trc_path = Path('data/output/pose-3d/joey/joey_LSTM_complete.trc')
+        storage_paths = StoragePaths.load()
+        trc_path = storage_paths.output_root / "joey" / "joey_LSTM_complete.trc"
 
     if not trc_path.exists():
         print(f"Error: TRC file not found: {trc_path}")

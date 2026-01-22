@@ -141,6 +141,10 @@ class HomeView(View):
 
         if result.return_code != 0:
             log_path = spec.pipeline_run_dir / "pipeline_error.log"
+            try:
+                log_display = str(log_path.relative_to(_APP_PATHS.repo_root))
+            except ValueError:
+                log_display = str(log_path)
             tail_lines = (result.stderr_text or result.stdout_text).splitlines()[-12:]
             tail_text = "\n".join(tail_lines)
             return render(
@@ -150,7 +154,7 @@ class HomeView(View):
                     errors=[
                         "Pipeline failed to run. Check the server logs for details.",
                         f"Exit code: {result.return_code}",
-                        f"Log file: {log_path.relative_to(_APP_PATHS.repo_root)}",
+                        f"Log file: {log_display}",
                         f"Last output:\n{tail_text}"
                         if tail_text
                         else "No output captured.",

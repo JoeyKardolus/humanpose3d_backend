@@ -4,7 +4,7 @@ Inference module for depth refinement.
 Usage:
     from src.depth_refinement.inference import DepthRefiner
 
-    refiner = DepthRefiner('models/checkpoints/best_depth_model.pth')
+    refiner = DepthRefiner('~/.humanpose3d/models/checkpoints/best_depth_model.pth')
     refined_pose = refiner.refine(pose_3d, visibility, pose_2d)
 """
 
@@ -13,6 +13,7 @@ import numpy as np
 from pathlib import Path
 from typing import Optional, Union
 
+from src.application.config.paths import StoragePaths
 from .model import PoseAwareDepthRefiner
 from .losses import COCO_BONES
 
@@ -416,7 +417,8 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Test depth refinement inference')
-    parser.add_argument('--model', type=str, default='models/checkpoints/best_depth_model.pth')
+    default_model = StoragePaths.load().checkpoints_root / "best_depth_model.pth"
+    parser.add_argument('--model', type=str, default=str(default_model))
     args = parser.parse_args()
 
     if not Path(args.model).exists():

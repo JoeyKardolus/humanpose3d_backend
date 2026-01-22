@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Lock, Thread
+from time import time
+from urllib.error import URLError
+from urllib.request import Request, urlopen
+from uuid import uuid4
 
 from django.http import (
     FileResponse,
@@ -17,6 +23,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from src.application.config.paths import AppPaths
+from src.application.config.paths import StoragePaths
 from src.application.dto.pipeline_request import PipelineRequestData
 from src.application.repositories.run_status_repository import (
     RunStatusRepository,
@@ -105,6 +112,109 @@ _MEDIA_SERVICE = MediaService(
     _APP_PATHS.upload_root,
     _PATH_VALIDATOR,
 )
+
+_MODELS_BASE_URL = "https://raw.githubusercontent.com/JoeyKardolus/humanpose3d_backend/models"
+_MODEL_DOWNLOAD_LOCK = Lock()
+_MODEL_DOWNLOAD_JOBS: dict[str, "ModelDownloadJob"] = {}
+
+
+@dataclass(frozen=True)
+class ModelAsset:
+    name: str
+    source_path: str
+    target_path: Path
+
+
+@dataclass
+class ModelDownloadJob:
+    total_bytes: int
+    downloaded_bytes: int = 0
+    downloaded_files: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    status: str = "running"
+    started_at: float = field(default_factory=time)
+
+
+def _get_model_assets(storage_paths: StoragePaths) -> list[ModelAsset]:
+    return [
+        ModelAsset(
+            name="pose_landmarker_heavy.task",
+            source_path="models/pose_landmarker_heavy.task",
+            target_path=storage_paths.models_root / "pose_landmarker_heavy.task",
+        ),
+        ModelAsset(
+            name="GRU.h5",
+            source_path="models/GRU.h5",
+            target_path=storage_paths.models_root / "GRU.h5",
+        ),
+        ModelAsset(
+            name="best_depth_model.pth",
+            source_path="models/checkpoints/best_depth_model.pth",
+            target_path=storage_paths.checkpoints_root / "best_depth_model.pth",
+        ),
+        ModelAsset(
+            name="best_joint_model.pth",
+            source_path="models/checkpoints/best_joint_model.pth",
+            target_path=storage_paths.checkpoints_root / "best_joint_model.pth",
+        ),
+        ModelAsset(
+            name="best_main_refiner.pth",
+            source_path="models/checkpoints/best_main_refiner.pth",
+            target_path=storage_paths.checkpoints_root / "best_main_refiner.pth",
+        ),
+    ]
+
+
+def _head_content_length(url: str) -> int | None:
+    request = Request(url, method="HEAD")
+    try:
+        with urlopen(request, timeout=10) as response:
+            length = response.headers.get("Content-Length")
+            return int(length) if length else None
+    except (OSError, URLError, ValueError):
+        return None
+
+
+def _download_to_path(url: str, target_path: Path, job_id: str, total_bytes: int) -> None:
+    with urlopen(url, timeout=30) as response:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with target_path.open("wb") as handle:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+                with _MODEL_DOWNLOAD_LOCK:
+                    job = _MODEL_DOWNLOAD_JOBS.get(job_id)
+                    if job is None:
+                        return
+                    job.downloaded_bytes += len(chunk)
+
+
+def _start_model_download(job_id: str, assets: list[ModelAsset], total_bytes: int) -> None:
+    for asset in assets:
+        url = f"{_MODELS_BASE_URL}/{asset.source_path}"
+        try:
+            _download_to_path(url, asset.target_path, job_id, total_bytes)
+            with _MODEL_DOWNLOAD_LOCK:
+                job = _MODEL_DOWNLOAD_JOBS.get(job_id)
+                if job is None:
+                    return
+                job.downloaded_files.append(asset.name)
+        except (OSError, URLError) as exc:
+            with _MODEL_DOWNLOAD_LOCK:
+                job = _MODEL_DOWNLOAD_JOBS.get(job_id)
+                if job is None:
+                    return
+                job.errors.append(f"{asset.name}: {exc}")
+                job.status = "failed"
+            return
+
+    with _MODEL_DOWNLOAD_LOCK:
+        job = _MODEL_DOWNLOAD_JOBS.get(job_id)
+        if job is None:
+            return
+        job.status = "completed"
 
 
 def _json_error(message: str | list[str], status: int = 400) -> JsonResponse:
@@ -200,6 +310,95 @@ class RunSyncView(View):
                 ),
             }
         )
+
+
+class ModelsStatusView(View):
+    """Expose model asset availability for the web UI."""
+
+    def get(self, request: HttpRequest) -> JsonResponse:
+        storage_paths = StoragePaths.load()
+        assets = _get_model_assets(storage_paths)
+        missing = [asset.name for asset in assets if not asset.target_path.exists()]
+        return JsonResponse(
+            {
+                "missing": missing,
+                "expected": [asset.name for asset in assets],
+                "storage_root": str(storage_paths.root),
+            }
+        )
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ModelsDownloadView(View):
+    """Download missing model assets to the shared storage directory."""
+
+    def post(self, request: HttpRequest) -> JsonResponse:
+        storage_paths = StoragePaths.load()
+        assets = _get_model_assets(storage_paths)
+        missing_assets = [asset for asset in assets if not asset.target_path.exists()]
+        if not missing_assets:
+            return JsonResponse({"downloaded": [], "missing": []})
+
+        total_bytes = 0
+        for asset in missing_assets:
+            url = f"{_MODELS_BASE_URL}/{asset.source_path}"
+            length = _head_content_length(url)
+            if length is None:
+                total_bytes = 0
+                break
+            total_bytes += length
+
+        job_id = uuid4().hex
+        job = ModelDownloadJob(total_bytes=total_bytes)
+        with _MODEL_DOWNLOAD_LOCK:
+            _MODEL_DOWNLOAD_JOBS[job_id] = job
+
+        worker = Thread(
+            target=_start_model_download,
+            args=(job_id, missing_assets, total_bytes),
+            daemon=True,
+        )
+        worker.start()
+
+        return JsonResponse(
+            {
+                "job_id": job_id,
+                "progress_url": reverse(
+                    "api_models_download_progress", kwargs={"job_id": job_id}
+                ),
+                "missing": [asset.name for asset in missing_assets],
+            },
+            status=202,
+        )
+
+
+class ModelsDownloadProgressView(View):
+    """Return download progress for model assets."""
+
+    def get(self, request: HttpRequest, job_id: str) -> JsonResponse:
+        with _MODEL_DOWNLOAD_LOCK:
+            job = _MODEL_DOWNLOAD_JOBS.get(job_id)
+            if job is None:
+                return JsonResponse({"error": "Download job not found."}, status=404)
+            total = job.total_bytes
+            downloaded = job.downloaded_bytes
+            status = job.status
+            errors = list(job.errors)
+            files = list(job.downloaded_files)
+
+        progress = 0
+        if total > 0:
+            progress = min(100, int((downloaded / total) * 100))
+        elif status == "completed":
+            progress = 100
+
+        payload = {
+            "status": status,
+            "progress": progress,
+            "downloaded_files": files,
+            "errors": errors,
+        }
+        return JsonResponse(payload)
 
 
 class RunDetailView(View):

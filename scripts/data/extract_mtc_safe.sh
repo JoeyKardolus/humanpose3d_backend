@@ -12,7 +12,8 @@
 
 set -e
 
-MTC_DIR="/home/dupe/ai-test-project/humanpose3d_mediapipe/data/mtc"
+HUMANPOSE_HOME="${HUMANPOSE3D_HOME:-$HOME/.humanpose3d}"
+MTC_DIR="${HUMANPOSE_HOME}/training/mtc"
 ARCHIVE="$MTC_DIR/mtc_dataset.tar.gz"
 EXTRACT_DIR="$MTC_DIR"
 

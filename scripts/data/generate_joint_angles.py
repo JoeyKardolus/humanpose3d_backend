@@ -29,6 +29,7 @@ import numpy as np
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from src.application.config.paths import StoragePaths
 from src.datastream.data_stream import LandmarkRecord, ORDER_22, write_landmark_csv
 from src.markeraugmentation.gpu_config import patch_pose2sim_gpu
 
@@ -664,19 +665,20 @@ def process_sequence(args: Tuple[str, List[Tuple[Path, int]], Path]) -> Tuple[in
 
 
 def main():
+    storage_paths = StoragePaths.load()
     parser = argparse.ArgumentParser(description='Generate joint angle training data')
     parser.add_argument('--input-dir', type=Path,
-                        default=Path('data/training/aistpp_converted'),
+                        default=storage_paths.training_root / "aistpp_converted",
                         help='Input directory with NPZ files')
     parser.add_argument('--output-dir', type=Path,
-                        default=Path('data/training/aistpp_joint_angles'),
+                        default=storage_paths.training_root / "aistpp_joint_angles",
                         help='Output directory for extended NPZ files')
     parser.add_argument('--max-sequences', type=int, default=None,
                         help='Maximum number of sequences to process')
     parser.add_argument('--workers', type=int, default=1,
                         help='Number of parallel workers')
     parser.add_argument('--depth-model', type=Path,
-                        default=Path('models/checkpoints/best_depth_model.pth'),
+                        default=storage_paths.checkpoints_root / "best_depth_model.pth",
                         help='Path to depth refinement model')
     parser.add_argument('--no-depth', action='store_true',
                         help='Disable depth refinement')

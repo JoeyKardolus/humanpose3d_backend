@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Final
 
-DEFAULT_LOG_RELATIVE_PATH: Final = Path("docs") / "BUILD_LOG.md"
+from src.application.config.paths import StoragePaths
 
 
 def append_build_log(message: str, log_path: Path | None = None) -> None:
@@ -22,5 +21,5 @@ def append_build_log(message: str, log_path: Path | None = None) -> None:
 def _resolve_log_path(log_path: Path | None) -> Path:
     if log_path is not None:
         return log_path
-    project_root = Path(__file__).resolve().parents[2]
-    return project_root / DEFAULT_LOG_RELATIVE_PATH
+    storage_paths = StoragePaths.load()
+    return storage_paths.logs_root / "BUILD_LOG.md"

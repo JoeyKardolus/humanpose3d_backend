@@ -24,6 +24,7 @@ from matplotlib.widgets import Slider, Button
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.lines import Line2D
 
+from src.application.config.paths import StoragePaths
 from src.kinematics.comprehensive_joint_angles import compute_all_joint_angles
 from src.kinematics.trc_utils import read_trc
 from src.joint_refinement.model import create_model
@@ -406,7 +407,8 @@ class SkeletonViewer:
 
 def main():
     video_name = sys.argv[1] if len(sys.argv) > 1 else 'joey'
-    run_dir = Path(f'data/output/pose-3d/{video_name}')
+    storage_paths = StoragePaths.load()
+    run_dir = storage_paths.output_root / video_name
 
     # Find TRC file
     trc_candidates = [
@@ -425,7 +427,7 @@ def main():
         print(f"Error: No TRC file found in {run_dir}")
         sys.exit(1)
 
-    model_path = Path('models/checkpoints/best_joint_model.pth')
+    model_path = storage_paths.checkpoints_root / "best_joint_model.pth"
     if not model_path.exists():
         print(f"Error: Model not found: {model_path}")
         sys.exit(1)

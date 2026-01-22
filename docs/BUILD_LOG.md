@@ -1,3 +1,4 @@
+NOTE: New build logs are written to ~/.humanpose3d/logs/BUILD_LOG.md.
 - main step1 CSV data/output/pose-3d/Max/Max.csv (514 frames, 9465 rows) (2026-01-16 12:52:29Z)
 - main step2 TRC data/output/pose-3d/Max/Max.trc (514 frames, 22 markers) (2026-01-16 12:52:29Z)
 - main step3 augment data/output/pose-3d/Max/Max_LSTM.trc (2026-01-16 12:52:41Z)

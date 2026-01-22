@@ -802,7 +802,9 @@ dependencies = [
     { name = "onnxruntime-gpu" },
     { name = "opencv-python" },
     { name = "pandas" },
+    { name = "pillow" },
     { name = "pose2sim" },
+    { name = "pytesseract" },
     { name = "tensorflow" },
     { name = "torch" },
 ]
@@ -815,7 +817,6 @@ neural = [
     { name = "einops" },
     { name = "ezc3d" },
     { name = "tensorboard" },
-    { name = "torch" },
     { name = "torchvision" },
     { name = "tqdm" },
 ]
@@ -830,7 +831,9 @@ requires-dist = [
     { name = "onnxruntime-gpu", specifier = ">=1.23.0" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "pandas", specifier = ">=2.0.0" },
+    { name = "pillow", specifier = ">=10.2.0" },
     { name = "pose2sim", specifier = ">=0.10.0" },
+    { name = "pytesseract", specifier = ">=0.3.13" },
     { name = "tensorflow", specifier = ">=2.13.0" },
     { name = "torch", specifier = ">=2.9.1" },
 ]
@@ -841,7 +844,6 @@ neural = [
     { name = "einops", specifier = ">=0.8.1" },
     { name = "ezc3d", specifier = ">=1.5.0" },
     { name = "tensorboard", specifier = ">=2.18.0" },
-    { name = "torch", specifier = ">=2.9.1" },
     { name = "torchvision", specifier = ">=0.24.1" },
     { name = "tqdm", specifier = ">=4.66.0" },
 ]
@@ -2623,6 +2625,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0f/49/4cea918a08f02817aabae639e3d0ac046fef9f9180518a3ad394e22da148/pyreadline3-3.5.4.tar.gz", hash = "sha256:8d57d53039a1c75adba8e50dd3d992b28143480816187ea5efbd5c78e6c885b7", size = 99839, upload-time = "2024-09-19T02:40:10.062Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5a/dc/491b7661614ab97483abf2056be1deee4dc2490ecbf7bff9ab5cdbac86e1/pyreadline3-3.5.4-py3-none-any.whl", hash = "sha256:eaf8e6cc3c49bcccf145fc6067ba8643d1df34d604a1ec0eccbf7a18e6d3fae6", size = 83178, upload-time = "2024-09-19T02:40:08.598Z" },
+]
+
+[[package]]
+name = "pytesseract"
+version = "0.3.13"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pillow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9f/a6/7d679b83c285974a7cb94d739b461fa7e7a9b17a3abfd7bf6cbc5c2394b0/pytesseract-0.3.13.tar.gz", hash = "sha256:4bf5f880c99406f52a3cfc2633e42d9dc67615e69d8a509d74867d3baddb5db9", size = 17689, upload-time = "2024-08-16T02:33:56.762Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/33/8312d7ce74670c9d39a532b2c246a853861120486be9443eebf048043637/pytesseract-0.3.13-py3-none-any.whl", hash = "sha256:7a99c6c2ac598360693d83a416e36e0b33a67638bb9d77fdcac094a3589d4b34", size = 14705, upload-time = "2024-08-16T02:36:10.09Z" },
 ]
 
 [[package]]

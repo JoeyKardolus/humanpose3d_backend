@@ -10,9 +10,9 @@ Usage:
     from src.main_refinement import MainRefinerPipeline
 
     pipeline = MainRefinerPipeline(
-        depth_checkpoint='models/checkpoints/best_depth_model.pth',
-        joint_checkpoint='models/checkpoints/best_joint_model.pth',
-        main_checkpoint='models/checkpoints/best_main_refiner.pth',
+        depth_checkpoint='~/.humanpose3d/models/checkpoints/best_depth_model.pth',
+        joint_checkpoint='~/.humanpose3d/models/checkpoints/best_joint_model.pth',
+        main_checkpoint='~/.humanpose3d/models/checkpoints/best_main_refiner.pth',
     )
     refined_pose = pipeline.refine(pose_3d, visibility, pose_2d)
 """

@@ -34,7 +34,7 @@ class OutputDirectoryService:
             errors.append(
                 "Output location already exists. Choose a different output folder."
             )
-            errors.append(f"Output path: {output_dir.relative_to(self._repo_root)}")
+            errors.append(f"Output path: {output_dir}")
 
         return OutputDirectories(
             pipeline_run_dir=pipeline_run_dir,

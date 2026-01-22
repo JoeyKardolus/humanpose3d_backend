@@ -7,7 +7,7 @@ The **MainRefiner** is a unified neural pipeline that combines depth and joint c
 ```bash
 # Full pipeline with neural refinement
 uv run python manage.py run_pipeline \
-  --video data/input/joey.mp4 \
+  --video ~/.humanpose3d/input/joey.mp4 \
   --height 1.78 --weight 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
@@ -22,9 +22,9 @@ uv run python manage.py run_pipeline \
 **Training:**
 ```bash
 uv run --group neural python scripts/train/main_refiner.py \
-  --data "data/training/aistpp_converted,data/training/mtc_converted" \
-  --depth-checkpoint models/checkpoints/best_depth_model.pth \
-  --joint-checkpoint models/checkpoints/best_joint_model.pth \
+  --data "~/.humanpose3d/training/aistpp_converted,~/.humanpose3d/training/mtc_converted" \
+  --depth-checkpoint ~/.humanpose3d/models/checkpoints/best_depth_model.pth \
+  --joint-checkpoint ~/.humanpose3d/models/checkpoints/best_joint_model.pth \
   --epochs 50 --batch-size 256 --workers 8 --bf16
 ```
 
@@ -119,7 +119,7 @@ Save to aistpp_joint_angles/
 **Data Generation** ✅
 - `scripts/generate_joint_angle_training.py` - Groups frames by sequence, estimates feet, runs augmentation, computes angles
 - GPU-accelerated via `patch_pose2sim_gpu()` for LSTM inference
-- Output: `data/training/aistpp_joint_angles/`
+- Output: `~/.humanpose3d/training/aistpp_joint_angles/`
 - Current: ~1M samples generating (3000 sequences × ~340 frames/seq)
 
 **Model** ✅ (`src/joint_refinement/`)
@@ -134,12 +134,12 @@ Save to aistpp_joint_angles/
 **Training** ✅
 - `scripts/train_joint_model.py` - Full training script
 - Quick test (3 epochs, 1800 samples): 22.7° → 22.4° mean error
-- Model saved: `models/checkpoints/best_joint_model.pth`
+- Model saved: `~/.humanpose3d/models/checkpoints/best_joint_model.pth`
 
 **Pipeline Integration** ✅
 - Integrated into the `run_pipeline` management command with CLI flags
 - `--joint-constraint-refinement` - Enable neural refinement after angle computation
-- `--joint-model-path` - Custom model path (default: `models/checkpoints/best_joint_model.pth`)
+- `--joint-model-path` - Custom model path (default: `~/.humanpose3d/models/checkpoints/best_joint_model.pth`)
 - Applies refinement per-frame to all 12 joint groups
 
 ### Usage
@@ -157,7 +157,7 @@ uv run --group neural python scripts/train/joint_model.py --epochs 100 --batch-s
 **Run with Main Pipeline (recommended):**
 ```bash
 uv run python manage.py run_pipeline \
-  --video data/input/joey.mp4 \
+  --video ~/.humanpose3d/input/joey.mp4 \
   --height 1.78 --weight 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
@@ -169,7 +169,7 @@ uv run python manage.py run_pipeline \
 ```python
 from src.joint_refinement.inference import JointRefiner
 
-refiner = JointRefiner('models/checkpoints/best_joint_model.pth')
+refiner = JointRefiner('~/.humanpose3d/models/checkpoints/best_joint_model.pth')
 refined_angles = refiner.refine(angles, visibility)
 ```
 
@@ -218,7 +218,7 @@ The model learns to:
 - Batch size: 64
 - Training time: ~7 minutes (RTX 5080, FP16)
 - Best validation loss: 0.0545
-- Model saved: `models/checkpoints/best_depth_model.pth`
+- Model saved: `~/.humanpose3d/models/checkpoints/best_depth_model.pth`
 
 ### Data Generation Status
 
@@ -325,7 +325,7 @@ HAND-CRAFTED FEATURES (15 total):
 **Training:**
 ```bash
 uv run --group neural python scripts/train/depth_model.py \
-  --data "data/training/aistpp_converted,data/training/mtc_converted" \
+  --data "~/.humanpose3d/training/aistpp_converted,~/.humanpose3d/training/mtc_converted" \
   --epochs 50 --batch-size 256 --workers 8 --bf16 \
   --use-limb-orientations --limb-orientation-weight 0.5 \
   --d-model 128 --num-layers 6 --num-heads 8
@@ -335,7 +335,7 @@ uv run --group neural python scripts/train/depth_model.py \
 ```python
 from src.depth_refinement.inference import DepthRefiner
 
-refiner = DepthRefiner('models/checkpoints/best_depth_model.pth')
+refiner = DepthRefiner('~/.humanpose3d/models/checkpoints/best_depth_model.pth')
 refined_pose = refiner.refine(pose, visibility)  # Auto-computes view angle
 ```
 

@@ -7,6 +7,9 @@ from .views import (
     DownloadAllView,
     DownloadView,
     MediaView,
+    ModelsDownloadView,
+    ModelsDownloadProgressView,
+    ModelsStatusView,
     PipelineProgressView,
     RunDetailView,
     RunListView,
@@ -18,6 +21,13 @@ from .views import (
 urlpatterns = [
     path("runs/", RunListView.as_view(), name="api_run_list"),
     path("runs/sync/", RunSyncView.as_view(), name="api_run_sync"),
+    path("models/status/", ModelsStatusView.as_view(), name="api_models_status"),
+    path("models/download/", ModelsDownloadView.as_view(), name="api_models_download"),
+    path(
+        "models/download/<str:job_id>/progress/",
+        ModelsDownloadProgressView.as_view(),
+        name="api_models_download_progress",
+    ),
     path("runs/<path:run_key>/", RunDetailView.as_view(), name="api_run_detail"),
     path(
         "runs/<path:run_key>/progress/",

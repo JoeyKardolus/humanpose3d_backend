@@ -79,6 +79,12 @@ Or use the included `.envrc` with [direnv](https://direnv.net/):
 direnv allow  # Automatically sets MPLBACKEND=Agg
 ```
 
+### Storage Location
+
+All non-code assets (inputs, outputs, models, training data, logs) live in `~/.humanpose3d` by default.
+Override this location by setting `HUMANPOSE3D_HOME`.
+Model assets should live in `~/.humanpose3d/models/` (copy `pose_landmarker_heavy.task` and any checkpoints there).
+
 Install the system `tesseract` binary if your preview videos are rotated and the source metadata is missing. OCR-based rotation detection uses it when generating preview videos.
 
 Linux:
@@ -139,14 +145,14 @@ uv run python manage.py run_pipeline \
 
 Visualize results:
 ```bash
-uv run python scripts/viz/visualize_interactive.py data/output/pose-3d/joey/joey_final.trc
+uv run python scripts/viz/visualize_interactive.py ~/.humanpose3d/output/joey/joey_final.trc
 ```
 
 ### API (cURL)
 
 Start a run asynchronously (multipart form upload):
 ```bash
-curl -F "video=@data/input/joey.mp4" \
+curl -F "video=@~/.humanpose3d/input/joey.mp4" \
   -F "height=1.78" \
   -F "weight=75" \
   -F "consent=accepted" \
@@ -163,9 +169,9 @@ curl -F "video=@data/input/joey.mp4" \
   -F "plot_augmented=on" \
   -F "visibility_min=0.1" \
   -F "temporal_smoothing=3" \
-  -F "depth_model_path=models/checkpoints/best_depth_model.pth" \
-  -F "joint_model_path=models/checkpoints/best_joint_model.pth" \
-  -F "main_refiner_path=models/checkpoints/best_main_refiner.pth" \
+  -F "depth_model_path=~/.humanpose3d/models/checkpoints/best_depth_model.pth" \
+  -F "joint_model_path=~/.humanpose3d/models/checkpoints/best_joint_model.pth" \
+  -F "main_refiner_path=~/.humanpose3d/models/checkpoints/best_main_refiner.pth" \
   http://127.0.0.1:8000/api/runs/
 ```
 
@@ -181,8 +187,8 @@ curl http://127.0.0.1:8000/api/runs/<run_key>/
 
 ## Features
 
-- ✅ **MediaPipe Pose Detection** - 33 landmarks → 22 Pose2Sim markers
-- ✅ **GPU-Accelerated LSTM Augmentation** - 22 → 64 markers (full OpenCap set) with 3-10x speedup
+- ✅ **MediaPipe Pose Detection** - 33 landmarks -> 22 Pose2Sim markers
+- ✅ **GPU-Accelerated LSTM Augmentation** - 22 -> 64 markers (full OpenCap set) with 3-10x speedup
 - ✅ **Neural Depth Refinement** - Transformer-based depth correction trained on AIST++ motion capture
 - ✅ **Neural Joint Refinement** - Learned soft joint constraints from motion capture data
 - ✅ **MainRefiner Pipeline** - Unified neural pipeline combining depth + joint refinement
@@ -212,26 +218,66 @@ curl http://127.0.0.1:8000/api/runs/<run_key>/
 - [docs/NEURAL_MODELS.md](docs/NEURAL_MODELS.md) - Neural refinement models (depth + joint)
 
 ### Development
-- [CLAUDE.md](CLAUDE.md) - AI assistant instructions and codebase guidelines
-- [docs/AGENTS.md](docs/AGENTS.md) - Development principles and architectural guidelines
+- [CLAUDE.md](CLAUDE.md) - Universal instructions for contributors and AI assistants
+- [AGENTS.md](AGENTS.md) - Engineering guidelines and architectural principles
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) - Development history and milestones
 - [docs/BUILD_LOG.md](docs/BUILD_LOG.md) - Run logs and testing notes
+
+## Codebase Structure
+
+```
+src/
+├── application/          # Django app - web interface (all UI logic here)
+│   ├── controllers/      # View functions (thin entry points)
+│   ├── services/         # Business logic
+│   ├── use_cases/        # Orchestration (coordinates services)
+│   ├── repositories/     # Data access
+│   ├── validators/       # Validation logic
+│   ├── dto/              # Data transfer objects
+│   ├── config/           # Configuration
+│   ├── static/           # CSS, JS
+│   └── templates/        # HTML
+├── cli/                  # Management commands
+├── mediastream/          # Video I/O (OpenCV)
+├── posedetector/         # MediaPipe inference, landmark mapping
+├── datastream/           # CSV/TRC conversion, marker estimation
+├── markeraugmentation/   # Pose2Sim integration, GPU acceleration
+├── kinematics/           # ISB joint angles, Euler decomposition
+├── visualizedata/        # 3D plotting, skeleton connections
+├── depth_refinement/     # Neural depth correction model
+├── joint_refinement/     # Neural joint constraint model
+├── main_refinement/      # Fusion model (depth + joint)
+├── pipeline/             # Pipeline orchestration
+└── postprocessing/       # Output organization
+```
+
+## Development Workflow
+
+Run tests:
+```bash
+uv run pytest
+```
+
+Format code before committing:
+```bash
+uv run python -m black src tests
+```
 
 ## Pipeline Overview
 
 ```
-Video → MediaPipe → Neural Depth Refinement → TRC → GPU-Accelerated LSTM → Joint Angles → Neural Joint Refinement → Output
+Video -> MediaPipe -> Neural Depth Refinement -> TRC -> GPU-Accelerated LSTM -> Joint Angles -> Neural Joint Refinement -> Output
 ```
 
 ### Processing Steps
 
-1. **MediaPipe extraction** → 33 landmarks → 22 Pose2Sim markers
-2. **Neural depth refinement** → corrects MediaPipe depth errors (17 COCO joints)
+1. **MediaPipe extraction** -> 33 landmarks -> 22 Pose2Sim markers
+2. **Neural depth refinement** -> corrects MediaPipe depth errors (17 COCO joints)
 3. **TRC conversion** with derived markers (Hip, Neck)
-4. **Pose2Sim augmentation** → 64 markers (43 added via LSTM)
-5. **Joint angle computation** → 12 ISB-compliant joint groups
-6. **Neural joint refinement** → corrects joint angles using learned constraints
-7. **Automatic cleanup** → organized output structure
+4. **Pose2Sim augmentation** -> 64 markers (43 added via LSTM)
+5. **Joint angle computation** -> 12 ISB-compliant joint groups
+6. **Neural joint refinement** -> corrects joint angles using learned constraints
+7. **Automatic cleanup** -> organized output structure
 
 **Neural Refinement Pipeline** (`--main-refiner` flag):
 - **Stage 1 (Pre-augmentation)**: Depth refinement corrects MediaPipe 3D errors on 17 COCO joints
@@ -242,7 +288,7 @@ Video → MediaPipe → Neural Depth Refinement → TRC → GPU-Accelerated LSTM
 
 ### Output Structure
 ```
-data/output/pose-3d/<video>/
+~/.humanpose3d/output/<video>/
 ├── <video>_final.trc               # Final optimized skeleton (59-64 markers)
 ├── <video>_initial.trc             # Initial MediaPipe output (22 markers)
 ├── <video>_raw_landmarks.csv       # Raw landmark data
@@ -264,7 +310,7 @@ Train on CMU Motion Capture data (professional mocap as ground truth):
 uv sync --group neural
 
 # 2. Download CMU Motion Capture dataset (~2GB)
-cd data/training/cmu_mocap
+cd ~/.humanpose3d/training/cmu_mocap
 git clone https://github.com/una-dinosauria/cmu-mocap.git
 cd ../../..
 
@@ -284,7 +330,7 @@ uv run --group neural python scripts/train_depth_model.py \
 - **Architecture**: PoseFormer (25.5M parameters, Transformer-based)
 - **Training**: 6 camera angles (0-75°), 3 noise levels (30-80mm)
 - **Losses**: Bone length, ground plane, symmetry, smoothness, joint angles
-- **Output**: `models/checkpoints/best_depth_model.pth`
+- **Output**: `~/.humanpose3d/models/checkpoints/best_depth_model.pth`
 
 ### Applying Depth Refinement
 
@@ -293,9 +339,9 @@ Once trained, apply the model to refine TRC files:
 ```bash
 # Refine depth in final TRC output
 uv run --group neural python scripts/apply_depth_refinement.py \
-  --input data/output/pose-3d/joey/joey_final.trc \
-  --model models/checkpoints/best_depth_model.pth \
-  --output data/output/pose-3d/joey/joey_refined.trc
+  --input ~/.humanpose3d/output/joey/joey_final.trc \
+  --model ~/.humanpose3d/models/checkpoints/best_depth_model.pth \
+  --output ~/.humanpose3d/output/joey/joey_refined.trc
 ```
 
 **What it does:**
@@ -339,10 +385,13 @@ Managed via `pyproject.toml` and installed with `uv sync`:
 | numpy | ≥1.24.0 | Array operations |
 | pandas | ≥2.0.0 | Data manipulation |
 | matplotlib | ≥3.7.0 | Visualization |
+| pillow | ≥10.2.0 | Image processing |
+| pytesseract | ≥0.3.13 | OCR for rotation detection |
 | tensorflow | ≥2.13.0 | LSTM backend |
 | onnxruntime-gpu | ≥1.23.0 | GPU-accelerated inference |
 | torch | ≥2.9.1 | Neural models |
-| django | ≥6.0.1 | Web API (optional) |
+| django | ≥6.0.1 | Web UI (no database required) |
+| jupyter | ≥1.1.1 | Notebook workflows |
 
 ### Neural Refinement Dependencies (Optional)
 
@@ -350,7 +399,6 @@ Install with `uv sync --group neural` for training neural depth/joint models:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| torch | ≥2.9.1 | Neural network training |
 | torchvision | ≥0.24.1 | Vision utilities |
 | einops | ≥0.8.1 | Tensor operations |
 | ezc3d | ≥1.5.0 | C3D file support |

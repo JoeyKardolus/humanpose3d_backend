@@ -66,7 +66,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cameras', nargs='+', default=['c04', 'c05', 'c06', 'c07', 'c08', 'c09'],
                        help='Camera views to download')
-    parser.add_argument('--download_folder', default='data/AIST++/videos',
+    default_download = os.path.join(os.path.expanduser('~'), '.humanpose3d', 'training', 'AIST++', 'videos')
+    parser.add_argument('--download_folder', default=default_download,
                        help='Where to store videos')
     parser.add_argument('--num_processes', type=int, default=4,
                        help='Number of parallel downloads')

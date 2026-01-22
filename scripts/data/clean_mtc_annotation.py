@@ -90,8 +90,9 @@ def clean_annotation_data(data: dict) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="Clean MTC annotation by removing hand data")
+    default_mtc_dir = Path.home() / ".humanpose3d" / "training" / "mtc" / "a4_release"
     parser.add_argument("--mtc-dir", type=str,
-                       default="/home/dupe/ai-test-project/humanpose3d_mediapipe/data/mtc/a4_release",
+                       default=str(default_mtc_dir),
                        help="Path to MTC a4_release directory")
     parser.add_argument("--dry-run", action="store_true",
                        help="Preview changes without modifying files")

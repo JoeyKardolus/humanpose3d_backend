@@ -11,7 +11,7 @@ Usage:
     uv run --group neural python scripts/train_joint_model.py
 
 Options:
-    --data        Path to training data (default: data/training/aistpp_joint_angles)
+    --data        Path to training data (default: ~/.humanpose3d/training/aistpp_joint_angles)
     --epochs      Number of epochs (default: 100)
     --batch-size  Batch size (default: 64)
     --lr          Learning rate (default: 1e-4)
@@ -39,6 +39,7 @@ from tqdm import tqdm
 # Compact logging mode (disable tqdm progress bars when piped to file)
 IS_TTY = sys.stdout.isatty()
 
+from src.application.config.paths import StoragePaths
 from src.joint_refinement.model import create_model
 from src.joint_refinement.losses import JointRefinementLoss
 from src.joint_refinement.dataset import create_dataloaders
@@ -146,9 +147,10 @@ def validate(
 
 
 def main():
+    storage_paths = StoragePaths.load()
     parser = argparse.ArgumentParser(description='Train joint constraint refinement model')
     parser.add_argument('--data', type=Path,
-                        default=Path('data/training/aistpp_joint_angles'),
+                        default=storage_paths.training_root / "aistpp_joint_angles",
                         help='Path to training data')
     parser.add_argument('--epochs', type=int, default=100,
                         help='Number of epochs')
@@ -250,7 +252,7 @@ def main():
     scaler = GradScaler() if args.fp16 else None
 
     # Create checkpoint directory
-    checkpoint_dir = Path('models/checkpoints')
+    checkpoint_dir = storage_paths.checkpoints_root
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     # Training loop

@@ -8,7 +8,7 @@
 #   - ~750K joint angle constraint samples (subset with computed joint angles)
 #
 # Prerequisites:
-#   - AIST++ dataset downloaded to data/AIST++/
+#   - AIST++ dataset downloaded to ~/.humanpose3d/training/AIST++/
 #   - uv package manager installed
 #
 # Usage:
@@ -30,6 +30,10 @@ echo "=============================================================="
 echo "Project root: $PROJECT_ROOT"
 echo "Target: 1.5M depth samples, 750K joint angle samples"
 echo ""
+
+HUMANPOSE_HOME="${HUMANPOSE3D_HOME:-$HOME/.humanpose3d}"
+TRAINING_ROOT="${HUMANPOSE_HOME}/training"
+LOG_DIR="${HUMANPOSE_HOME}/logs"
 
 # Parse arguments
 DEPTH_ONLY=false
@@ -64,7 +68,7 @@ if [ "$JOINT_ONLY" = false ]; then
     echo ""
 
     # Create output directory
-    mkdir -p data/training/aistpp_converted
+    mkdir -p "${TRAINING_ROOT}/aistpp_converted"
 
     # Run the conversion script
     # The script is already configured with proper parameters
@@ -72,10 +76,11 @@ if [ "$JOINT_ONLY" = false ]; then
     echo "This will take several hours. Progress will be logged."
     echo ""
 
-    uv run python scripts/data/convert_aistpp.py 2>&1 | tee logs/depth_conversion.log
+    mkdir -p "$LOG_DIR"
+    uv run python scripts/data/convert_aistpp.py 2>&1 | tee "$LOG_DIR/depth_conversion.log"
 
     # Count samples
-    DEPTH_COUNT=$(ls data/training/aistpp_converted/*.npz 2>/dev/null | wc -l)
+    DEPTH_COUNT=$(ls "${TRAINING_ROOT}/aistpp_converted"/*.npz 2>/dev/null | wc -l)
     echo ""
     echo "Depth samples generated: $DEPTH_COUNT"
     echo ""
@@ -97,7 +102,7 @@ if [ "$DEPTH_ONLY" = false ]; then
     echo ""
 
     # Check if depth data exists
-    DEPTH_COUNT=$(ls data/training/aistpp_converted/*.npz 2>/dev/null | wc -l || echo "0")
+    DEPTH_COUNT=$(ls "${TRAINING_ROOT}/aistpp_converted"/*.npz 2>/dev/null | wc -l || echo "0")
     if [ "$DEPTH_COUNT" -eq 0 ]; then
         echo "ERROR: No depth samples found. Run depth generation first."
         echo "Use: $0 --depth-only"
@@ -110,7 +115,7 @@ if [ "$DEPTH_ONLY" = false ]; then
     # Each sequence has ~250 frames, so need ~3000 sequences for 750K
     # But sequences vary in length, so we'll process based on target output
 
-    mkdir -p data/training/aistpp_joint_angles
+    mkdir -p "${TRAINING_ROOT}/aistpp_joint_angles"
 
     echo "Starting joint angle data generation..."
     echo "This will take many hours. GPU acceleration enabled for Pose2Sim."
@@ -122,13 +127,14 @@ if [ "$DEPTH_ONLY" = false ]; then
     # We'll process ~2500 sequences to be safe and let caching handle duplicates
 
     # Process sequences - the script handles grouping and caching
+    mkdir -p "$LOG_DIR"
     uv run python scripts/data/generate_joint_angles.py \
         --max-sequences 2500 \
         --workers 1 \
-        2>&1 | tee logs/joint_angle_conversion.log
+        2>&1 | tee "$LOG_DIR/joint_angle_conversion.log"
 
     # Count samples
-    JOINT_COUNT=$(ls data/training/aistpp_joint_angles/*.npz 2>/dev/null | wc -l)
+    JOINT_COUNT=$(ls "${TRAINING_ROOT}/aistpp_joint_angles"/*.npz 2>/dev/null | wc -l)
     echo ""
     echo "Joint angle samples generated: $JOINT_COUNT"
     echo ""
@@ -143,19 +149,19 @@ echo "GENERATION COMPLETE"
 echo "=============================================================="
 
 if [ "$JOINT_ONLY" = false ]; then
-    DEPTH_COUNT=$(ls data/training/aistpp_converted/*.npz 2>/dev/null | wc -l || echo "0")
-    DEPTH_SIZE=$(du -sh data/training/aistpp_converted 2>/dev/null | cut -f1 || echo "0")
+    DEPTH_COUNT=$(ls "${TRAINING_ROOT}/aistpp_converted"/*.npz 2>/dev/null | wc -l || echo "0")
+    DEPTH_SIZE=$(du -sh "${TRAINING_ROOT}/aistpp_converted" 2>/dev/null | cut -f1 || echo "0")
     echo "Depth samples:       $DEPTH_COUNT ($DEPTH_SIZE)"
 fi
 
 if [ "$DEPTH_ONLY" = false ]; then
-    JOINT_COUNT=$(ls data/training/aistpp_joint_angles/*.npz 2>/dev/null | wc -l || echo "0")
-    JOINT_SIZE=$(du -sh data/training/aistpp_joint_angles 2>/dev/null | cut -f1 || echo "0")
+    JOINT_COUNT=$(ls "${TRAINING_ROOT}/aistpp_joint_angles"/*.npz 2>/dev/null | wc -l || echo "0")
+    JOINT_SIZE=$(du -sh "${TRAINING_ROOT}/aistpp_joint_angles" 2>/dev/null | cut -f1 || echo "0")
     echo "Joint angle samples: $JOINT_COUNT ($JOINT_SIZE)"
 fi
 
 echo ""
-echo "Training data ready at: data/training/"
+echo "Training data ready at: ${TRAINING_ROOT}/"
 echo ""
 echo "Next steps:"
 echo "  1. Train depth model:  uv run python scripts/train/depth_model.py --epochs 100"

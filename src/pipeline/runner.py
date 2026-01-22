@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from src.application.build_log import append_build_log
+from src.application.config.paths import StoragePaths
 from src.datastream.data_stream import ORDER_22, csv_to_trc_strict, write_landmark_csv
 from src.datastream.marker_estimation import estimate_missing_markers
 from src.datastream.post_augmentation_estimation import (
@@ -34,7 +35,8 @@ from src.pipeline.refinement import (
 )
 from src.visualizedata.visualize_data import VisualizeData
 
-OUTPUT_ROOT = Path("data/output")
+_STORAGE_PATHS = StoragePaths.load()
+OUTPUT_ROOT = _STORAGE_PATHS.output_root
 
 
 def add_pipeline_arguments(parser: argparse.ArgumentParser) -> None:
@@ -76,19 +78,19 @@ def add_pipeline_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--depth-model-path",
         type=str,
-        default="models/checkpoints/best_depth_model.pth",
+        default=str(_STORAGE_PATHS.checkpoints_root / "best_depth_model.pth"),
         help="Path to depth refinement model checkpoint",
     )
     parser.add_argument(
         "--joint-model-path",
         type=str,
-        default="models/checkpoints/best_joint_model.pth",
+        default=str(_STORAGE_PATHS.checkpoints_root / "best_joint_model.pth"),
         help="Path to joint refinement model checkpoint",
     )
     parser.add_argument(
         "--main-refiner-path",
         type=str,
-        default="models/checkpoints/best_main_refiner.pth",
+        default=str(_STORAGE_PATHS.checkpoints_root / "best_main_refiner.pth"),
         help="Path to MainRefiner model checkpoint",
     )
 
@@ -189,7 +191,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         detection_output = extract_world_landmarks(
             frames,
             fps,
-            Path("models/pose_landmarker_heavy.task"),
+            _STORAGE_PATHS.models_root / "pose_landmarker_heavy.task",
             args.visibility_min,
             display=args.show_video,
             return_raw_landmarks=args.plot_landmarks,

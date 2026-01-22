@@ -2,6 +2,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     const instructionsModalEl = document.getElementById("instructionsModal");
     const noticeModalEl = document.getElementById("noticeModal");
+    const modelsModalEl = document.getElementById("modelsModal");
     const instructionCheck = document.getElementById("instructions-check");
     const privacyCheck = document.getElementById("privacy-check");
     const analyzeForm = document.getElementById("homeForm");
@@ -17,10 +18,57 @@ document.addEventListener("DOMContentLoaded", () => {
     const ajaxErrorsList = document.getElementById("ajaxErrorsList");
     const deleteRunButton = document.getElementById("deleteRunButton");
     const deleteRunForm = document.getElementById("deleteRunForm");
+    const missingModelsList = document.getElementById("missingModelsList");
+    const downloadModelsButton = document.getElementById("downloadModelsBtn");
+    const modelsDownloadError = document.getElementById("modelsDownloadError");
+    const modelsDownloadProgress = document.getElementById("modelsDownloadProgress");
     const instructionsKey = "instructionsAccepted";
     const privacyKey = "privacyAccepted";
     const submitLabel = "Analyse Video";
     const submittingLabel = "Submitting...";
+
+    const modelStatusUrl = document.body?.dataset.modelStatusUrl;
+    const modelDownloadUrl = document.body?.dataset.modelDownloadUrl;
+
+    const fetchModelStatus = async () => {
+        if (!modelStatusUrl) return null;
+        const response = await fetch(modelStatusUrl, {
+            cache: "no-store",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+        });
+        if (!response.ok) {
+            return null;
+        }
+        return response.json();
+    };
+
+    const renderMissingModels = (missing) => {
+        if (!missingModelsList) return;
+        missingModelsList.innerHTML = "";
+        missing.forEach((name) => {
+            const item = document.createElement("li");
+            item.textContent = name;
+            missingModelsList.appendChild(item);
+        });
+    };
+
+    const showModelsModalIfMissing = async (modelsModal) => {
+        if (!modelsModal || !modelStatusUrl) return;
+        const status = await fetchModelStatus();
+        if (!status || !Array.isArray(status.missing)) return;
+        if (status.missing.length === 0) return;
+        renderMissingModels(status.missing);
+        modelsDownloadError?.classList.add("d-none");
+        if (modelsDownloadProgress) {
+            const progressBar = modelsDownloadProgress.querySelector(".progress-bar");
+            modelsDownloadProgress.classList.add("d-none");
+            modelsDownloadProgress.setAttribute("aria-valuenow", "0");
+            if (progressBar) {
+                progressBar.style.width = "0%";
+            }
+        }
+        modelsModal.show();
+    };
 
     if (instructionsModalEl && noticeModalEl && window.bootstrap) {
         const instructionsModal = new bootstrap.Modal(instructionsModalEl, {
@@ -31,6 +79,9 @@ document.addEventListener("DOMContentLoaded", () => {
             backdrop: "static",
             keyboard: false,
         });
+        const modelsModal = modelsModalEl
+            ? new bootstrap.Modal(modelsModalEl, { backdrop: "static", keyboard: false })
+            : null;
 
         // Enforce required acknowledgements before continuing.
         const requireCheck = (inputEl) => {
@@ -51,6 +102,8 @@ document.addEventListener("DOMContentLoaded", () => {
             instructionsModal.show();
         } else if (!privacyAccepted) {
             noticeModal.show();
+        } else if (modelsModal) {
+            showModelsModalIfMissing(modelsModal);
         }
 
         instructionsModalEl.querySelector("[data-next]")?.addEventListener("click", () => {
@@ -67,8 +120,102 @@ document.addEventListener("DOMContentLoaded", () => {
             if (requireCheck(privacyCheck)) {
                 sessionStorage.setItem(privacyKey, "true");
                 noticeModal.hide();
+                showModelsModalIfMissing(modelsModal);
             }
         });
+
+        if (downloadModelsButton && modelDownloadUrl && modelsModal) {
+            downloadModelsButton.addEventListener("click", async () => {
+                downloadModelsButton.disabled = true;
+                downloadModelsButton.textContent = "Downloading...";
+                modelsDownloadError?.classList.add("d-none");
+                let downloadSucceeded = false;
+                if (modelsDownloadProgress) {
+                    const progressBar = modelsDownloadProgress.querySelector(".progress-bar");
+                    modelsDownloadProgress.classList.remove("d-none");
+                    if (progressBar) {
+                        progressBar.style.width = "0%";
+                    }
+                    modelsDownloadProgress.setAttribute("aria-valuenow", "0");
+                }
+                try {
+                    const response = await fetch(modelDownloadUrl, {
+                        method: "POST",
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest",
+                            "X-CSRFToken": getCookie("csrftoken"),
+                        },
+                    });
+                    const data = await response.json();
+                    if (!response.ok) {
+                        const errors = data.errors || ["Download failed."];
+                        if (modelsDownloadError) {
+                            modelsDownloadError.textContent = errors.join("\n");
+                            modelsDownloadError.classList.remove("d-none");
+                        }
+                    }
+                    const progressUrl = data.progress_url || null;
+                    if (progressUrl && modelsDownloadProgress) {
+                        const progressBar = modelsDownloadProgress.querySelector(".progress-bar");
+                        let finished = false;
+                        while (!finished) {
+                            const progressResponse = await fetch(progressUrl, {
+                                cache: "no-store",
+                                headers: { "X-Requested-With": "XMLHttpRequest" },
+                            });
+                            const progressData = await progressResponse.json();
+                            if (progressData.error) {
+                                throw new Error(progressData.error);
+                            }
+                            const progress = Number(progressData.progress || 0);
+                            modelsDownloadProgress.setAttribute("aria-valuenow", String(progress));
+                            if (progressBar) {
+                                progressBar.style.width = `${progress}%`;
+                            }
+                            if (progressData.status === "failed") {
+                                const errors = progressData.errors || ["Download failed."];
+                                if (modelsDownloadError) {
+                                    modelsDownloadError.textContent = errors.join("\n");
+                                    modelsDownloadError.classList.remove("d-none");
+                                }
+                                finished = true;
+                            } else if (progressData.status === "completed") {
+                                downloadSucceeded = true;
+                                finished = true;
+                            }
+                            if (!finished) {
+                                await new Promise((resolve) => setTimeout(resolve, 1000));
+                            }
+                        }
+                    }
+                } catch (error) {
+                    if (modelsDownloadError) {
+                        modelsDownloadError.textContent = "Unable to download models. Check your network.";
+                        modelsDownloadError.classList.remove("d-none");
+                    }
+                }
+
+                if (modelsDownloadProgress) {
+                    const progressBar = modelsDownloadProgress.querySelector(".progress-bar");
+                    modelsDownloadProgress.setAttribute(
+                        "aria-valuenow",
+                        downloadSucceeded ? "100" : modelsDownloadProgress.getAttribute("aria-valuenow") || "0"
+                    );
+                    if (progressBar) {
+                        progressBar.style.width = downloadSucceeded
+                            ? "100%"
+                            : progressBar.style.width || "0%";
+                    }
+                }
+                downloadModelsButton.disabled = false;
+                downloadModelsButton.textContent = "Download models";
+                await showModelsModalIfMissing(modelsModal);
+                const status = await fetchModelStatus();
+                if (status && status.missing && status.missing.length === 0) {
+                    modelsModal.hide();
+                }
+            });
+        }
     }
 
     // Lightweight CSRF helper for Django-style cookies.

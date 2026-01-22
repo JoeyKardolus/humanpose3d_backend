@@ -48,7 +48,7 @@ src/
 
 ## Application Layer (Django)
 
-Following **strict separation of concerns** per AGENTS.md principles:
+Following strict separation of concerns per `AGENTS.md` principles:
 
 | Component | Purpose | Rule |
 |-----------|---------|------|
@@ -139,7 +139,7 @@ Following **strict separation of concerns** per AGENTS.md principles:
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           OUTPUT                                        │
-│  data/output/pose-3d/<video>/                                           │
+│  ~/.humanpose3d/output/<video>/                                        │
 │  ├── <video>_final.trc           (optimized 59-64 markers)              │
 │  ├── <video>_initial.trc         (initial 22 markers)                   │
 │  ├── <video>_raw_landmarks.csv   (raw MediaPipe data)                   │
@@ -258,7 +258,7 @@ Internal Communication:
 
 ## Design Principles
 
-Following **AGENTS.md** architectural guidelines:
+Following `AGENTS.md` architectural guidelines:
 
 ### General Principles
 - **KISS and SRP**: Single Responsibility Principle everywhere
