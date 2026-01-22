@@ -274,3 +274,7 @@
 - main step2 TRC data/output/Mama-75fb08be/Mama-75fb08be.trc (260 frames, 21 markers) (2026-01-20 07:18:18Z)
 - main step3 augment data/output/Mama-75fb08be/Mama-75fb08be_LSTM.trc (2026-01-20 07:18:36Z)
 - main step3.5 complete data/output/Mama-75fb08be/Mama-75fb08be_LSTM_complete.trc (2026-01-20 07:18:36Z)
+- main step1 CSV data/output/Jaap-ffbd05b3/Jaap-ffbd05b3.csv (710 frames, 14099 rows) (2026-01-22 09:49:40Z)
+- main step2 TRC data/output/Jaap-ffbd05b3/Jaap-ffbd05b3.trc (710 frames, 21 markers) (2026-01-22 09:49:40Z)
+- main step3 augment data/output/Jaap-ffbd05b3/Jaap-ffbd05b3_LSTM.trc (2026-01-22 09:50:02Z)
+- main step3.5 complete data/output/Jaap-ffbd05b3/Jaap-ffbd05b3_LSTM_complete.trc (2026-01-22 09:50:02Z)

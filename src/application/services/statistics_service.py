@@ -13,6 +13,9 @@ from pathlib import Path
 from src.application.services.landmark_plot_service import LandmarkPlotService
 from src.application.services.trc_plot_service import TrcPlotService
 
+ZERO_MODE = "first_n_seconds"
+ZERO_WINDOW_S = 1.0
+
 
 class StatisticsService:
     """Prepare joint angle and landmark series for the statistics view."""
@@ -90,6 +93,7 @@ class StatisticsService:
                     entry["y"].append(values[1])
                     entry["z"].append(values[2])
 
+                entry = self._zero_series(entry)
                 key = f"joint:{joint_name}"
                 series[key] = entry
                 joint_options.append(
@@ -216,6 +220,50 @@ class StatisticsService:
             "plot_skeleton_data": plot_skeleton_data,
             "plot_augmented_data": plot_augmented_data,
         }
+
+    def _zero_series(
+        self, entry: dict[str, list[float] | list[str]]
+    ) -> dict[str, list[float] | list[str]]:
+        times = entry.get("t")
+        if not isinstance(times, list) or not times:
+            return entry
+        for axis in ("x", "y", "z"):
+            values = entry.get(axis)
+            if not isinstance(values, list) or not values:
+                continue
+            offset = self._resolve_zero_offset(times, values)
+            if offset is None:
+                continue
+            entry[axis] = [
+                value - offset if self._is_finite_number(value) else value
+                for value in values
+            ]
+        return entry
+
+    def _resolve_zero_offset(
+        self, times: list[float], values: list[float | None]
+    ) -> float | None:
+        if ZERO_MODE == "global_mean":
+            sample = [value for value in values if self._is_finite_number(value)]
+        elif ZERO_MODE == "first_n_seconds":
+            tmax = times[0] + ZERO_WINDOW_S
+            sample = [
+                value
+                for time_value, value in zip(times, values)
+                if time_value <= tmax and self._is_finite_number(value)
+            ]
+        elif ZERO_MODE == "first_frame":
+            first_value = values[0] if values else None
+            sample = [first_value] if self._is_finite_number(first_value) else []
+        else:
+            sample = []
+        if not sample:
+            return None
+        return sum(sample) / len(sample)
+
+    @staticmethod
+    def _is_finite_number(value: float | None) -> bool:
+        return value is not None and math.isfinite(value)
 
     def _resolve_rotation(
         self, source_video: Path | None, run_dir: Path
