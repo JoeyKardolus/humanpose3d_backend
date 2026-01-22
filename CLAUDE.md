@@ -16,14 +16,14 @@ uv run python main.py \
   --main-refiner
 ```
 
-**Results**: ~60s processing, neural depth + joint refinement, 59/64 markers, 12 joint groups computed.
+**Results**: ~60s processing, POF 3D reconstruction + joint refinement, 59/64 markers, 12 joint groups computed.
 
-The `--main-refiner` flag enables the full neural refinement pipeline, replacing traditional constraint-based methods with learned models trained on AIST++ motion capture data.
+The `--main-refiner` flag enables the full neural refinement pipeline using POF (Part Orientation Fields) for 3D reconstruction and learned joint constraints trained on AIST++ motion capture data.
 
 ## Pipeline Steps
 
 1. **MediaPipe extraction** → 33 landmarks → 22 Pose2Sim markers
-2. **Neural depth refinement** → corrects MediaPipe depth errors (17 COCO joints)
+2. **POF 3D reconstruction** → reconstructs 3D from 2D using Part Orientation Fields (17 COCO joints)
 3. **TRC conversion** with derived markers (Hip, Neck)
 4. **Pose2Sim augmentation** → 64 markers (43 added via LSTM)
 5. **Joint angle computation** → 12 ISB-compliant joint groups
@@ -44,7 +44,7 @@ data/output/pose-3d/<video>/
 
 | Flag | Description |
 |------|-------------|
-| `--main-refiner` | **Recommended**: Full neural pipeline (depth + joint refinement) |
+| `--main-refiner` | **Recommended**: Full neural pipeline (POF 3D + joint refinement) |
 | `--height 1.78` | Subject height in meters (enables true metric scale output) |
 | `--mass 75` | Subject mass in kg (used for Pose2Sim biomechanics) |
 | `--estimate-missing` | Mirror occluded limbs from visible side |
@@ -65,10 +65,9 @@ data/output/pose-3d/<video>/
 | `markeraugmentation/` | Pose2Sim integration, GPU acceleration |
 | `kinematics/` | ISB joint angles, Euler decomposition, visualization |
 | `visualizedata/` | 3D plotting, skeleton connections |
-| `pof/` | Part Orientation Fields model, least-squares solver, metric scale recovery |
-| `depth_refinement/` | Neural depth correction model |
+| `pof/` | POF models (Transformer, GCN, SemGCN-Temporal), LS solver, metric scale |
 | `joint_refinement/` | Neural joint constraint model |
-| `main_refinement/` | Fusion model combining depth + joint |
+| `main_refinement/` | Fusion model combining POF + joint |
 | `pipeline/` | Orchestration (refinement, cleanup) |
 | `application/` | Django web interface |
 
@@ -93,7 +92,7 @@ Automatic CPU fallback if GPU unavailable.
 |-------|----------|
 | Right arm missing | Use `--estimate-missing` to mirror from left |
 | "No trc files found" | Check Pose2Sim project structure |
-| Depth errors / front-back confusion | Use `--main-refiner` (neural depth correction) |
+| Depth errors / front-back confusion | Use `--main-refiner` (POF 3D reconstruction) |
 | Joint angle spikes | Use `--main-refiner` (learned joint constraints) |
 | Markers disappear mid-video | Use `--visibility-min 0.1` (MediaPipe confidence drops below default 0.3 threshold) |
 
@@ -152,24 +151,15 @@ uv run python scripts/viz/visualize_interactive.py [file.trc]  # 3D viewer
 
 ## Neural Refinement
 
-### Depth Refinement
-Corrects MediaPipe depth errors using camera viewpoint prediction. Trains on AIST++ dataset (1.2M frames) with real MediaPipe errors paired with motion capture ground truth.
+### POF (Part Orientation Fields) 3D Reconstruction
+Reconstructs 3D poses from 2D keypoints using Part Orientation Fields. Based on MonocularTotalCapture (CVPR 2019). Trains on AIST++ dataset (1.2M frames) with real MediaPipe 2D detections paired with motion capture ground truth.
 
-**Architecture**: Transformer with Part Orientation Fields (POF)
-- Based on MonocularTotalCapture (CVPR 2019) Part Orientation Fields
-- Predicts 14 per-limb 3D unit vectors (local depth info per body part)
-- Uses camera direction vector for front/back disambiguation
-- Optional MTC-style least-squares solver for geometric consistency
-- Key insight: 2D foreshortening directly encodes 3D limb orientation
+**Architecture**: Transformer predicting 14 per-limb 3D unit vectors
+- Predicts limb orientation from 2D foreshortening (key insight: foreshortening encodes depth)
+- MTC-style least-squares solver ensures 3D is consistent with 2D observations
+- Bypasses MediaPipe's broken depth estimation entirely
 
 **Model**: ~3M params (d_model=128, 6 layers, 8 heads)
-
-**Key components**:
-- **LimbOrientationPredictor**: Predicts 3D unit vectors for 14 limbs from 2D foreshortening
-- **LeastSquaresDepthSolver**: MTC-style solver ensuring 3D is consistent with 2D observations
-- **DirectAnglePredictor**: Predicts global azimuth/elevation for disambiguation
-- **Camera Direction Vector**: Explicit (x,y,z) direction toward camera for front/back
-- **CrossJointAttention**: Transformer for inter-joint depth reasoning
 
 **14 Limbs** (COCO-17 indices):
 | Limb | Parent → Child | Limb | Parent → Child |
@@ -182,13 +172,12 @@ Corrects MediaPipe depth errors using camera viewpoint prediction. Trains on AIS
 | L torso | 5→11 | R torso | 6→12 |
 | L cross-body | 5→12 | R cross-body | 6→11 |
 
-**Performance**:
-| Metric | Value |
-|--------|-------|
-| Azimuth error | 7.1° |
-| Elevation error | 4.4° |
-| Depth error | 11.2 cm (45% improvement) |
-| Bone variance | 1.23 cm std (75% reduction) |
+**POF Angular Error Comparison**:
+| Source | POF Error (limb orientation) |
+|--------|------------------------------|
+| MediaPipe 3D | 16.3° mean (11.9° median) |
+| Transformer POF (from 2D) | ~11° |
+| **SemGCN-Temporal POF** | **~7°** (best) |
 
 **Metric Scale Recovery**:
 The POF model works in normalized space (unit torso scale) internally. True metric output is recovered using known subject height:
@@ -202,55 +191,71 @@ This solves the monocular scale ambiguity without camera intrinsics:
 - Training uses normalized space (scale-invariant POF directions)
 - Inference denormalizes using height-derived metric scale
 
-The constant `HEIGHT_TO_TORSO_RATIO = 3.4` is based on standard human proportions (height / shoulder-to-hip distance).
-
-**Bone Length Consistency**: Training includes bone variance loss to encourage temporally consistent bone lengths. At inference, bone locking computes median bone lengths from first 50 frames and projects all frames to those lengths. Result: more consistent than ground truth (0.57x GT variance).
-
 ```bash
-# Train model with POF (recommended)
-uv run --group neural python scripts/train/depth_model.py \
+# Train Transformer POF model (original)
+uv run --group neural python scripts/train/pof_model.py \
   --data "data/training/aistpp_converted,data/training/mtc_converted" \
   --epochs 50 --batch-size 256 --workers 8 --bf16 \
-  --use-limb-orientations --limb-orientation-weight 0.5 \
   --d-model 128 --num-layers 6 --num-heads 8
 
-# Train with MTC-style least-squares solver (experimental)
-uv run --group neural python scripts/train/depth_model.py \
-  --epochs 50 --batch-size 256 --workers 8 --bf16 \
-  --use-limb-orientations --limb-orientation-weight 0.5 \
-  --use-least-squares --projection-loss-weight 0.3
-
-# Diagnose POF predictions
-uv run --group neural python scripts/debug/diagnose_pof.py \
-  --checkpoint models/checkpoints/best_depth_model.pth
-
 # Use trained model
---neural-depth-refinement --depth-model-path models/checkpoints/best_depth_model.pth
+--camera-pof --pof-model-path models/checkpoints/best_pof_model.pth
 ```
 
-**Training flags**:
-| Flag | Description |
-|------|-------------|
-| `--use-limb-orientations` | Enable POF (Part Orientation Fields) prediction |
-| `--limb-orientation-weight 0.5` | Weight for limb orientation loss |
-| `--use-least-squares` | Enable MTC-style least-squares depth solver (experimental) |
-| `--projection-loss-weight 0.3` | Weight for projection consistency loss |
-| `--optimizer adamw` | Optimizer: adamw, lion, ademamix, sophia, schedule_free, soap |
-| `--d-model 128` | Model hidden dimension (recommended) |
-| `--num-layers 6` | Number of transformer layers (recommended) |
-| `--num-heads 8` | Number of attention heads (recommended) |
-| `--checkpoint PATH` | Resume from checkpoint |
+### SemGCN-Temporal POF (Recommended)
 
-**Least-Squares Solver** (MTC-style, experimental):
-- Solves for joint depths hierarchically: hips → torso → arms/legs
-- Uses input 3D X,Y as "2D" positions (MTC insight: under orthographic projection, 3D[:2] ≈ 2D)
-- This ensures coordinate consistency between delta_2d and orientation vectors
-- Scale factor regularization penalizes negative scales (wrong limb direction)
-- Note: Experimental feature, may require further tuning for stability
+Graph Neural Network with Z-sign classification and temporal context. Achieves **~7° error** vs 11° for transformer, 16° for MediaPipe.
+
+**Key insight**: When a limb appears short in 2D (foreshortened), it could be pointing toward (+Z) or away (-Z) from camera. Both project identically. The model solves this with:
+
+1. **Semantic Graph Convolution**: Uses skeleton structure as inductive bias
+   - Joint-sharing edges: limbs connected at same joint
+   - Kinematic edges: parent→child limb dependencies
+   - Symmetry edges: left↔right limb pairs
+
+2. **Z-Sign Classification Head**: Binary classifier for each limb's depth direction
+   - Predicts P(Z > 0) for all 14 limbs
+   - Auxiliary loss helps disambiguate foreshortening
+   - Achieves **94-95% accuracy** on Z-sign prediction
+
+3. **Temporal Context**: Previous frame's POF informs current prediction
+   - "Arm was forward in frame N → probably still forward in frame N+1"
+   - Arms don't teleport between frames
+
+**Architecture**: ~1.7M params (d_model=256, 4 GCN layers)
+- 3 parallel GCN stacks (joint/kinematic/symmetry edges)
+- Fusion layer combines edge-type outputs
+- Temporal encoder for previous frame's POF
+- Z-sign head + POF head
+
+**Training**:
+```bash
+# Train SemGCN-Temporal (recommended)
+uv run --group neural python scripts/train/pof_gnn_model.py \
+  --data data/training/aistpp_rtmpose \
+  --model-type semgcn-temporal \
+  --d-model 256 --num-layers 4 \
+  --z-sign-weight 0.2 --temporal \
+  --epochs 50 --batch-size 256 --workers 8 --bf16
+```
+
+**Training Results** (1.15M samples, 6867 sequences):
+| Epoch | Val Error | Z-Sign Acc | Notes |
+|-------|-----------|------------|-------|
+| 1 | 7.58° | 93.8% | Already beats transformer |
+| 2 | 7.36° | 94.1% | Rapid convergence |
+| 50 | ~6-7° | ~95% | Final (expected) |
+
+**Model Variants**:
+| Model | Params | Error | Use Case |
+|-------|--------|-------|----------|
+| `gcn` | ~350K | ~10° | Lightweight |
+| `semgcn` | ~500K | ~9° | Single-frame |
+| `semgcn-temporal` | ~1.7M | **~7°** | Video (recommended) |
 
 **Training Data Generation** (`scripts/data/convert_aistpp.py`):
 
-Processes AIST++ dataset (1400 sequences × 6 camera views) to create ~1.5M training pairs with REAL MediaPipe errors.
+Processes AIST++ dataset (1400 sequences × 6 camera views) to create ~1.5M training pairs.
 
 ```bash
 # Parallel (recommended, ~2-4 hours)
@@ -258,22 +263,7 @@ uv run python scripts/data/convert_aistpp.py --workers 8
 
 # Single-threaded (verbose output)
 uv run python scripts/data/convert_aistpp.py
-
-# Verify alignment (saves to data/training/viz/)
-uv run python scripts/viz/training_sample_viz.py --num-samples 40
 ```
-
-**Coordinate transformations**:
-1. **Y/Z flip**: MediaPipe (Y-down, Z-toward-camera) → AIST++ (Y-up, Z-away)
-2. **Body frame alignment**: `align_body_frames()` rotates MediaPipe to match GT world orientation
-3. **Scale normalization**: Both poses normalized to unit torso scale
-4. **2D projection**: GT 3D → 2D via camera calibration (for POF foreshortening)
-5. **c05 flip**: Camera c05 videos are horizontally flipped in AIST++; script compensates
-
-**Expected alignment quality** (from viz stats):
-- Body Frame Error: ~0°
-- Torso Orientation: ~6°
-- Arms/Legs Orientation: ~20-30° (actual MediaPipe depth errors)
 
 Training sample fields (`.npz`):
 | Field | Shape | Description |
@@ -282,43 +272,9 @@ Training sample fields (`.npz`):
 | `ground_truth` | (17, 3) | AIST++ GT 3D, normalized |
 | `pose_2d` | (17, 2) | MediaPipe 2D detection |
 | `projected_2d` | (17, 2) | GT 3D projected to 2D (for POF) |
-| `azimuth` | scalar | Camera angle 0-360° |
-| `elevation` | scalar | Camera angle -90 to +90° |
+| `camera_R` | (3, 3) | Camera rotation matrix |
 | `visibility` | (17,) | Per-joint visibility |
-| `gt_scale` | scalar | Ground truth torso length in meters (for metric recovery) |
-| `mp_scale` | scalar | MediaPipe torso scale (for reference) |
-
-**CMU MTC Dataset** (`scripts/data/convert_cmu_mtc.py`):
-
-Additional training data from CMU Panoptic MTC dataset (~28K frames × 31 cameras). Provides diverse multi-view poses with high-quality motion capture ground truth.
-
-```bash
-# Extract dataset (290GB archive, use pigz for speed)
-cd data/mtc
-pigz -dc mtc_dataset.tar.gz | tar -xf -
-# Or standard tar (slower):
-tar -xzf mtc_dataset.tar.gz
-
-# Explore dataset structure
-uv run python scripts/data/convert_cmu_mtc.py --explore --mtc-dir data/mtc/a4_release
-
-# Convert to training format
-uv run python scripts/data/convert_cmu_mtc.py \
-  --mtc-dir data/mtc/a4_release \
-  --output-dir data/training/mtc_converted \
-  --frame-skip 3 --workers 4
-
-# Train with combined AIST++ and MTC data (recommended)
-uv run --group neural python scripts/train/depth_model.py \
-  --data "data/training/aistpp_converted,data/training/mtc_converted" \
-  --epochs 50 --batch-size 256 --workers 8 --bf16 \
-  --use-limb-orientations --limb-orientation-weight 0.5 \
-  --d-model 128 --num-layers 6 --num-heads 8
-```
-
-**MTC coordinate transforms** (different from AIST++):
-- MTC uses Y-down, Z-toward convention; script flips both Y and Z
-- Camera params (t) are in cm; projection converts accordingly
+| `gt_scale` | scalar | Ground truth torso length in meters |
 
 ### Joint Constraint Refinement
 Learns soft joint constraints from AIST++ motion capture data. Transformer-based model corrects joint angles using cross-joint attention.
@@ -362,10 +318,10 @@ uv run python compare_joint_interactive.py
 
 ### MainRefiner (Fusion Model)
 
-Combines depth and joint constraint models into a unified two-stage pipeline:
+Combines POF and joint constraint models into a unified two-stage pipeline:
 
 **Stage 1 - Pre-augmentation (17 COCO joints)**:
-- Depth refinement corrects MediaPipe 3D errors
+- POF reconstructs 3D from 2D keypoints
 - Runs before marker augmentation
 
 **Stage 2 - Post-augmentation (64 markers)**:
@@ -373,16 +329,16 @@ Combines depth and joint constraint models into a unified two-stage pipeline:
 - Joint constraint model refines computed angles
 
 **Model**: 1.2M params (d_model=128, 4 heads, 2 layers)
-- Learns optimal fusion of depth + joint outputs via gating
-- Cross-attention between depth and joint features
+- Learns optimal fusion of POF + joint outputs via gating
+- Cross-attention between POF and joint features
 - Per-joint confidence estimation
 
 **Training**:
 ```bash
-# Train MainRefiner (requires pre-trained depth + joint models)
+# Train MainRefiner (requires pre-trained POF + joint models)
 uv run --group neural python scripts/train/main_refiner.py \
   --data "data/training/aistpp_converted,data/training/mtc_converted" \
-  --depth-checkpoint models/checkpoints/best_depth_model.pth \
+  --pof-checkpoint models/checkpoints/best_pof_model.pth \
   --joint-checkpoint models/checkpoints/best_joint_model.pth \
   --epochs 50 --batch-size 256 --workers 8 --bf16
 ```
@@ -395,9 +351,9 @@ uv run python main.py --video input.mp4 --main-refiner \
 ```
 
 The `--main-refiner` flag auto-enables:
-- `--neural-depth-refinement` (early stage)
+- `--camera-pof` (POF 3D reconstruction)
 - `--compute-all-joint-angles` (required for joint model)
-- `--joint-constraint-refinement` (late stage)
+- Joint constraint refinement (late stage)
 
 ## Technical Details
 

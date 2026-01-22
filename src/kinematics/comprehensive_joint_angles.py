@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 
 from .angle_processing import (
-    clamp_biomechanical_angles,
     euler_xyz,
     euler_zxy,
     geometric_elbow_flexion,
@@ -379,17 +378,15 @@ def compute_all_joint_angles(
                             elbow_l_flex[fi] = geometric_elbow_flexion(l_shoulder, elbow_l, wrist_l)
 
     if verbose:
-        print("[comprehensive_angles] Post-processing angles (filter, unwrap, zero, clamp)...")
+        print("[comprehensive_angles] Post-processing angles (filter, unwrap, zero)...")
 
-    # Post-process all angles: median filter -> unwrap -> zero -> clamp
-    def process_angle_array(angles, joint_type, dof_names, skip_clamp=False, use_global_mean=False, skip_median_filter=False):
+    # Post-process all angles: median filter -> unwrap -> zero
+    # Note: Biomechanical limit enforcement is handled by joint_refinement module
+    def process_angle_array(angles, use_global_mean=False, skip_median_filter=False):
         """Apply full processing pipeline to angle array.
 
         Args:
             angles: Angle array (N, 3) or (N,)
-            joint_type: Joint name for clamping limits
-            dof_names: DOF names for clamping
-            skip_clamp: Skip biomechanical clamping
             use_global_mean: Use global_mean zeroing (for pelvis global angles)
             skip_median_filter: Skip median filtering (for pelvis - matches reference)
         """
@@ -408,14 +405,6 @@ def compute_all_joint_angles(
         actual_zero_mode = "global_mean" if use_global_mean else zero_mode
         filtered = zero_angles(filtered, times, actual_zero_mode, zero_window_s)
 
-        # Clamp to biomechanical limits (skip for pelvis - uses global angles)
-        if not skip_clamp:
-            if filtered.ndim == 2:  # Multi-DOF
-                for i, dof in enumerate(dof_names):
-                    filtered[:, i] = clamp_biomechanical_angles(filtered[:, i], joint_type, dof)
-            else:  # Single DOF
-                filtered = clamp_biomechanical_angles(filtered, joint_type, dof_names[0])
-
         return filtered
 
     # Process all angle arrays
@@ -423,22 +412,22 @@ def compute_all_joint_angles(
     # - Index 0 (X rotation) = Abduction/Adduction
     # - Index 1 (Y rotation) = Internal/External Rotation
     # - Index 2 (Z rotation) = Flexion/Extension
-    # Pelvis: skip clamping, skip median filter, use global_mean zeroing (matches reference implementation)
+    # Pelvis: skip median filter, use global_mean zeroing (matches reference implementation)
     # Pelvis uses ZXY Euler which has different mapping - kept as is
-    pelvis_angles = process_angle_array(pelvis_angles, "pelvis", ["flex", "abd", "rot"], skip_clamp=True, use_global_mean=True, skip_median_filter=True)
+    pelvis_angles = process_angle_array(pelvis_angles, use_global_mean=True, skip_median_filter=True)
     # Lower body: Index 0=ABD, Index 1=ROT, Index 2=FLEX
-    hip_r_angles = process_angle_array(hip_r_angles, "hip", ["abd", "rot", "flex"])
-    hip_l_angles = process_angle_array(hip_l_angles, "hip", ["abd", "rot", "flex"])
-    knee_r_angles = process_angle_array(knee_r_angles, "knee", ["abd", "rot", "flex"])
-    knee_l_angles = process_angle_array(knee_l_angles, "knee", ["abd", "rot", "flex"])
-    ankle_r_angles = process_angle_array(ankle_r_angles, "ankle", ["abd", "rot", "flex"])
-    ankle_l_angles = process_angle_array(ankle_l_angles, "ankle", ["abd", "rot", "flex"])
+    hip_r_angles = process_angle_array(hip_r_angles)
+    hip_l_angles = process_angle_array(hip_l_angles)
+    knee_r_angles = process_angle_array(knee_r_angles)
+    knee_l_angles = process_angle_array(knee_l_angles)
+    ankle_r_angles = process_angle_array(ankle_r_angles)
+    ankle_l_angles = process_angle_array(ankle_l_angles)
     # Trunk uses XYZ Euler: Index 0=ABD (lateral flex), Index 1=ROT, Index 2=FLEX
-    trunk_angles = process_angle_array(trunk_angles, "trunk", ["abd", "rot", "flex"])
-    shoulder_r_angles = process_angle_array(shoulder_r_angles, "shoulder", ["exo", "flex", "abd"])
-    shoulder_l_angles = process_angle_array(shoulder_l_angles, "shoulder", ["exo", "flex", "abd"])
-    elbow_r_flex = process_angle_array(elbow_r_flex, "elbow", ["flex"])
-    elbow_l_flex = process_angle_array(elbow_l_flex, "elbow", ["flex"])
+    trunk_angles = process_angle_array(trunk_angles)
+    shoulder_r_angles = process_angle_array(shoulder_r_angles)
+    shoulder_l_angles = process_angle_array(shoulder_l_angles)
+    elbow_r_flex = process_angle_array(elbow_r_flex)
+    elbow_l_flex = process_angle_array(elbow_l_flex)
 
     # Build output DataFrames
     # For XYZ Euler: Index 0=ABD, Index 1=ROT, Index 2=FLEX

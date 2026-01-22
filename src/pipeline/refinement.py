@@ -1,7 +1,8 @@
 """Neural refinement functions for the pose estimation pipeline.
 
-This module contains functions for applying neural depth and joint refinement
-to landmark records and joint angles.
+This module contains functions for applying:
+- Camera-space POF reconstruction (primary 3D source)
+- Neural joint constraint refinement (post-augmentation)
 """
 
 from __future__ import annotations
@@ -12,8 +13,8 @@ import numpy as np
 from collections import defaultdict
 
 from src.datastream.data_stream import LandmarkRecord
-from src.depth_refinement.inference import DepthRefiner
 from src.joint_refinement.inference import JointRefiner
+from src.pof.inference import CameraPOFInference
 
 # Mapping from OpenCap/MediaPipe marker names to COCO 17 joint indices
 # COCO 17: nose, left_eye, right_eye, left_ear, right_ear, left_shoulder, right_shoulder,
@@ -166,149 +167,6 @@ def _update_records_with_refined_poses(
     return new_records
 
 
-def _report_corrections(corrections: np.ndarray, visibility: np.ndarray, label: str) -> None:
-    """Print correction statistics."""
-    mask = visibility > 0.3
-    mean_correction_xyz = np.abs(corrections[mask]).mean(axis=0)
-    total_correction = np.linalg.norm(corrections[mask], axis=-1).mean()
-    print(f"[{label}] Applied neural 3D refinement:")
-    print(f"        Mean |correction|: X={mean_correction_xyz[0]*100:.2f}cm, "
-          f"Y={mean_correction_xyz[1]*100:.2f}cm, Z={mean_correction_xyz[2]*100:.2f}cm")
-    print(f"        Total 3D: {total_correction*100:.2f} cm")
-
-
-def apply_neural_depth_refinement(
-    records: list,
-    model_path: str | Path,
-    landmarks_2d: dict = None,
-) -> list:
-    """Apply neural 3D pose refinement to landmark records.
-
-    Uses a trained transformer model to correct MediaPipe pose errors
-    on all three axes (X, Y, Z), with emphasis on depth (Z) corrections.
-
-    Args:
-        records: List of LandmarkRecord named tuples
-        model_path: Path to trained pose refinement model
-        landmarks_2d: Optional dict of 2D normalized image coords from MediaPipe
-                     {(timestamp, landmark_name): (x, y)} where x,y are 0-1 normalized
-
-    Returns:
-        Updated records with refined x, y, z coordinates
-    """
-    model_path = Path(model_path)
-    if not model_path.exists():
-        print(f"[depth] WARNING: Model not found at {model_path}, skipping refinement")
-        return records
-
-    try:
-        refiner = DepthRefiner(model_path)
-    except Exception as e:
-        print(f"[depth] WARNING: Failed to load model: {e}")
-        return records
-
-    timestamps, pose_3d, visibility, pose_2d, _ = _records_to_coco_arrays(records, landmarks_2d)
-    if not timestamps:
-        return records
-
-    # Transform to training coordinates
-    pose_centered, pelvis = _transform_to_training_coords(pose_3d)
-
-    # Apply refinement with bone locking for temporal consistency
-    # Bone locking computes median bone lengths from first N frames and projects all frames to match
-    try:
-        refined_centered = refiner.refine_sequence_with_bone_locking(
-            pose_centered, visibility, poses_2d=pose_2d if landmarks_2d else None
-        )
-    except Exception as e:
-        print(f"[depth] WARNING: Refinement failed: {e}")
-        return records
-
-    # Transform back
-    refined_poses = _transform_from_training_coords(refined_centered, pelvis)
-    corrections = refined_poses - pose_3d
-
-    _report_corrections(corrections, visibility, "depth")
-
-    return _update_records_with_refined_poses(records, timestamps, refined_poses, corrections)
-
-
-def apply_main_refiner(
-    records: list,
-    depth_model_path: str | Path,
-    joint_model_path: str | Path,
-    main_model_path: str | Path,
-) -> list:
-    """Apply MainRefiner (fusion of depth + joint models) for best pose refinement.
-
-    The MainRefiner combines outputs from depth and joint constraint models
-    using learned gating to produce optimal refined poses.
-
-    Args:
-        records: List of LandmarkRecord named tuples
-        depth_model_path: Path to depth model checkpoint
-        joint_model_path: Path to joint model checkpoint
-        main_model_path: Path to main refiner checkpoint
-
-    Returns:
-        Updated records with refined coordinates
-    """
-    depth_model_path = Path(depth_model_path)
-    joint_model_path = Path(joint_model_path)
-    main_model_path = Path(main_model_path)
-
-    # Check all models exist
-    for path, name in [(depth_model_path, "depth"), (joint_model_path, "joint"), (main_model_path, "main")]:
-        if not path.exists():
-            print(f"[main_refiner] WARNING: {name} model not found at {path}, skipping")
-            return records
-
-    try:
-        from src.main_refinement.inference import MainRefinerPipeline
-        pipeline = MainRefinerPipeline(
-            depth_checkpoint=depth_model_path,
-            joint_checkpoint=joint_model_path,
-            main_checkpoint=main_model_path,
-        )
-    except Exception as e:
-        print(f"[main_refiner] WARNING: Failed to load pipeline: {e}")
-        return records
-
-    timestamps, pose_3d, visibility, pose_2d, _ = _records_to_coco_arrays(records)
-    if not timestamps:
-        return records
-
-    n_frames = len(timestamps)
-    pose_centered, pelvis = _transform_to_training_coords(pose_3d)
-
-    # Apply refinement frame by frame
-    refined_centered = np.zeros_like(pose_centered)
-    print(f"[main_refiner] Refining {n_frames} frames...")
-
-    try:
-        for fi in range(n_frames):
-            result = pipeline.refine(
-                pose_centered[fi],
-                visibility[fi],
-                pose_2d[fi],
-            )
-            refined_centered[fi] = result['refined_pose']
-
-            if (fi + 1) % 100 == 0:
-                print(f"[main_refiner] Processed {fi + 1}/{n_frames} frames")
-    except Exception as e:
-        print(f"[main_refiner] WARNING: Refinement failed at frame {fi}: {e}")
-        return records
-
-    # Transform back
-    refined_poses = _transform_from_training_coords(refined_centered, pelvis)
-    corrections = refined_poses - pose_3d
-
-    _report_corrections(corrections, visibility, "main_refiner")
-
-    return _update_records_with_refined_poses(records, timestamps, refined_poses, corrections)
-
-
 def apply_neural_joint_refinement(
     angle_results: dict,
     model_path: str | Path,
@@ -400,3 +258,109 @@ def apply_neural_joint_refinement(
             refined_results[joint_name] = df
 
     return refined_results
+
+
+def apply_camera_pof_reconstruction(
+    records: list,
+    model_path: str | Path,
+    landmarks_2d: dict,
+    height_m: float,
+    image_size: tuple[int, int] = None,
+    is_primary_3d: bool = False,
+) -> list:
+    """Apply camera-space POF reconstruction to landmark records.
+
+    Uses a trained POF model to predict limb orientations from 2D keypoints
+    and reconstructs 3D poses in camera space. This is an alternative to
+    the world-space depth refinement approach.
+
+    Args:
+        records: List of LandmarkRecord named tuples
+        model_path: Path to trained POF model
+        landmarks_2d: Dict of 2D normalized image coords from pose estimator
+                     {(timestamp, landmark_name): (x, y)} where x,y are 0-1 normalized
+        height_m: Subject body height in meters (for bone length estimation)
+        image_size: Optional (height, width) for aspect ratio calculation
+        is_primary_3d: If True, POF is the primary 3D source (e.g., RTMPose).
+                      Skips correction stats and uses meter coord conversion.
+
+    Returns:
+        Updated records with reconstructed 3D coordinates
+    """
+    model_path = Path(model_path)
+    if not model_path.exists():
+        print(f"[pof] WARNING: Model not found at {model_path}, skipping POF reconstruction")
+        return records
+
+    if not landmarks_2d:
+        print("[pof] WARNING: 2D landmarks required for POF reconstruction")
+        return records
+
+    try:
+        pof_inference = CameraPOFInference(model_path)
+    except Exception as e:
+        print(f"[pof] WARNING: Failed to load POF model: {e}")
+        return records
+
+    timestamps, pose_3d, visibility, pose_2d, frames_data = _records_to_coco_arrays(records, landmarks_2d)
+    if not timestamps:
+        return records
+
+    n_frames = len(timestamps)
+    print(f"[pof] Reconstructing {n_frames} frames with camera-space POF...")
+
+    # Calculate aspect ratio from image size if provided
+    aspect_ratio = 16/9  # default
+    if image_size is not None:
+        h, w = image_size
+        aspect_ratio = w / h
+
+    # Reconstruct 3D poses from 2D keypoints using POF
+    try:
+        # For 2D-only estimators (RTMPose), use_meter_coords=True converts
+        # normalized [0,1] 2D coords to approximate meter coordinates
+        reconstructed = pof_inference.reconstruct_3d(
+            pose_2d, visibility, height_m,
+            use_meter_coords=is_primary_3d,
+            aspect_ratio=aspect_ratio,
+        )
+    except Exception as e:
+        print(f"[pof] WARNING: POF reconstruction failed: {e}")
+        return records
+
+    # Report statistics
+    mask = visibility > 0.3
+    if mask.any():
+        if is_primary_3d:
+            # For primary 3D (RTMPose), report reconstruction stats instead of corrections
+            # Compute bone lengths to verify reconstruction quality
+            from src.pof.bone_lengths import estimate_bone_lengths_array
+            expected_bones = estimate_bone_lengths_array(height_m)
+
+            # Sample: compute shoulder-hip distance (torso)
+            l_torso = np.linalg.norm(
+                reconstructed[:, 5] - reconstructed[:, 11], axis=-1
+            ).mean()
+            r_torso = np.linalg.norm(
+                reconstructed[:, 6] - reconstructed[:, 12], axis=-1
+            ).mean()
+
+            pelvis_z = (reconstructed[:, 11, 2] + reconstructed[:, 12, 2]).mean() / 2
+            print(f"[pof] POF 3D reconstruction (primary):")
+            print(f"      Pelvis depth: {pelvis_z:.2f}m")
+            print(f"      Torso length: L={l_torso*100:.1f}cm, R={r_torso*100:.1f}cm (expected ~{expected_bones[10]*100:.1f}cm)")
+        else:
+            # For refinement mode, report corrections from original 3D
+            corrections = reconstructed - pose_3d
+            mean_correction_xyz = np.abs(corrections[mask]).mean(axis=0)
+            total_correction = np.linalg.norm(corrections[mask], axis=-1).mean()
+            print(f"[pof] Applied camera-space POF refinement:")
+            print(f"      Mean |correction|: X={mean_correction_xyz[0]*100:.2f}cm, "
+                  f"Y={mean_correction_xyz[1]*100:.2f}cm, Z={mean_correction_xyz[2]*100:.2f}cm")
+            print(f"      Total 3D: {total_correction*100:.2f} cm")
+
+    # For primary 3D mode, corrections are not meaningful (comparing against placeholder zeros)
+    # Create a dummy corrections array
+    corrections = reconstructed - pose_3d
+
+    return _update_records_with_refined_poses(records, timestamps, reconstructed, corrections)

@@ -2,17 +2,17 @@
 Main Refiner Model with Learned Constraint Fusion.
 
 This model learns to optimally combine outputs from:
-1. Depth Refinement Model (PoseAwareDepthRefiner) - provides depth corrections
+1. POF Model (CameraPOFModel) - provides 3D poses via Part Orientation Fields
 2. Joint Angle Refinement Model (JointConstraintRefiner) - provides angle corrections
 
 Architecture:
 - Encodes outputs from each constraint model into a unified feature space
-- Cross-attention allows depth and joint features to inform each other
+- Cross-attention allows POF and joint features to inform each other
 - Gating network learns when to trust each constraint source per-joint
 - Fusion head combines weighted outputs into final pose
 
 Key insight: Different joints benefit from different constraints:
-- Limb endpoints (wrists, ankles) benefit from depth model (occlusion handling)
+- Limb endpoints (wrists, ankles) benefit from POF model (direct 3D from 2D)
 - Core joints (pelvis, hips) benefit from joint model (anatomical consistency)
 - The model learns this from data rather than hard-coded rules.
 """
@@ -216,32 +216,31 @@ class Joint12To17Mapper(nn.Module):
         return self.output_proj(output)
 
 
-class DepthOutputEncoder(nn.Module):
-    """Encode depth model outputs into feature space."""
+class POFOutputEncoder(nn.Module):
+    """Encode POF model outputs into feature space.
+
+    POF provides:
+    - pof_vectors: (14, 3) unit vectors per limb
+    - reconstructed_pose: (17, 3) full 3D pose (not deltas)
+    - confidence: (17,) per-joint confidence from LS solver
+    """
 
     def __init__(self, d_model: int):
         super().__init__()
 
-        # Per-joint features: delta_xyz (3) + confidence (1) = 4
+        # Limb orientation features: 14 limbs -> per-joint
+        self.limb_to_joint = LimbToJointMapper(d_model)
+
+        # Per-joint features: 3D position (3) + confidence (1) = 4
         self.joint_encoder = nn.Sequential(
             nn.Linear(4, d_model),
             nn.LayerNorm(d_model),
             nn.ReLU(),
         )
 
-        # Limb orientation features: 14 limbs -> per-joint
-        self.limb_to_joint = LimbToJointMapper(d_model)
-
-        # Camera angle embedding: azimuth + elevation
-        self.camera_encoder = nn.Sequential(
-            nn.Linear(4, d_model // 2),  # sin/cos of az, sin/cos of el
-            nn.ReLU(),
-            nn.Linear(d_model // 2, d_model),
-        )
-
-        # Combine all features: joint (d_model) + limb (d_model) + camera (d_model)
+        # Combine: joint (d_model) + limb (d_model)
         self.fusion = nn.Sequential(
-            nn.Linear(d_model * 3, d_model * 2),
+            nn.Linear(d_model * 2, d_model * 2),
             nn.LayerNorm(d_model * 2),
             nn.ReLU(),
             nn.Linear(d_model * 2, d_model),
@@ -249,59 +248,40 @@ class DepthOutputEncoder(nn.Module):
 
     def forward(
         self,
-        depth_outputs: Dict[str, torch.Tensor],
+        pof_outputs: Dict[str, torch.Tensor],
         raw_pose: torch.Tensor,
     ) -> torch.Tensor:
         """
         Args:
-            depth_outputs: dict with:
-                - 'delta_xyz': (B, 17, 3)
-                - 'confidence': (B, 17)
-                - 'pred_limb_orientations': (B, 14, 3) optional
-                - 'pred_azimuth': (B,)
-                - 'pred_elevation': (B,)
-            raw_pose: (B, 17, 3) input pose
+            pof_outputs: dict with:
+                - 'pof_vectors': (B, 14, 3) unit vectors per limb
+                - 'reconstructed_pose': (B, 17, 3) full 3D pose
+                - 'confidence': (B, 17) optional per-joint confidence
+            raw_pose: (B, 17, 3) input pose (MediaPipe or placeholder)
 
         Returns:
-            (B, 17, d_model) encoded depth features
+            (B, 17, d_model) encoded POF features
         """
         batch_size = raw_pose.size(0)
         device = raw_pose.device
 
-        # Encode per-joint corrections
-        delta_xyz = depth_outputs['delta_xyz']
-        confidence = depth_outputs.get('confidence', torch.ones(batch_size, 17, device=device))
+        # Get POF vectors and reconstructed pose
+        pof_vectors = pof_outputs['pof_vectors']
+        recon_pose = pof_outputs.get('reconstructed_pose', raw_pose)
+        confidence = pof_outputs.get('confidence', torch.ones(batch_size, 17, device=device))
 
+        # Encode limb orientations -> per-joint features
+        limb_feat = self.limb_to_joint(pof_vectors)  # (B, 17, d_model)
+
+        # Encode per-joint 3D positions
         joint_input = torch.cat([
-            delta_xyz,
+            recon_pose,
             confidence.unsqueeze(-1),
         ], dim=-1)  # (B, 17, 4)
         joint_feat = self.joint_encoder(joint_input)  # (B, 17, d_model)
 
-        # Encode limb orientations -> per-joint
-        if 'pred_limb_orientations' in depth_outputs:
-            limb_feat = self.limb_to_joint(depth_outputs['pred_limb_orientations'])
-        else:
-            # If no limb orientations, use zeros
-            limb_feat = torch.zeros_like(joint_feat)
-
-        # Encode camera angles -> broadcast to all joints
-        azimuth = depth_outputs.get('pred_azimuth', torch.zeros(batch_size, device=device))
-        elevation = depth_outputs.get('pred_elevation', torch.zeros(batch_size, device=device))
-
-        # Convert to sin/cos for smooth encoding
-        az_rad = azimuth * (math.pi / 180.0)
-        el_rad = elevation * (math.pi / 180.0)
-        camera_input = torch.stack([
-            torch.sin(az_rad), torch.cos(az_rad),
-            torch.sin(el_rad), torch.cos(el_rad),
-        ], dim=-1)  # (B, 4)
-
-        camera_feat = self.camera_encoder(camera_input)  # (B, d_model)
-        camera_feat = camera_feat.unsqueeze(1).expand(-1, 17, -1)  # (B, 17, d_model)
-
-        # Fuse all features
-        combined = torch.cat([joint_feat, limb_feat, camera_feat], dim=-1)
+        # Fuse limb and joint features
+        combined = torch.cat([joint_feat, limb_feat], dim=-1)
         return self.fusion(combined)  # (B, 17, d_model)
 
 
@@ -442,7 +422,7 @@ class CrossModelAttention(nn.Module):
 class GatingNetwork(nn.Module):
     """Learn per-joint weights for each constraint source.
 
-    Outputs weights that indicate how much to trust depth vs joint
+    Outputs weights that indicate how much to trust POF vs joint
     model for each joint. Uses softmax so weights sum to 1.
     """
 
@@ -450,12 +430,12 @@ class GatingNetwork(nn.Module):
         super().__init__()
 
         # Input: fused features after cross-attention
-        # Output: weights for [depth, joint, residual] per joint
+        # Output: weights for [pof, joint, residual] per joint
         self.gate = nn.Sequential(
             nn.Linear(d_model, d_model // 2),
             nn.LayerNorm(d_model // 2),
             nn.ReLU(),
-            nn.Linear(d_model // 2, 3),  # depth_weight, joint_weight, residual_weight
+            nn.Linear(d_model // 2, 3),  # pof_weight, joint_weight, residual_weight
         )
 
     def forward(self, fused_features: torch.Tensor) -> Dict[str, torch.Tensor]:
@@ -465,7 +445,7 @@ class GatingNetwork(nn.Module):
 
         Returns:
             dict with:
-                'depth_weights': (B, 17) how much to trust depth model
+                'pof_weights': (B, 17) how much to trust POF model
                 'joint_weights': (B, 17) how much to trust joint model
                 'residual_weights': (B, 17) how much to add learned correction
         """
@@ -475,7 +455,7 @@ class GatingNetwork(nn.Module):
         weights = F.softmax(raw_weights, dim=-1)
 
         return {
-            'depth_weights': weights[:, :, 0],
+            'pof_weights': weights[:, :, 0],
             'joint_weights': weights[:, :, 1],
             'residual_weights': weights[:, :, 2],
         }
@@ -501,46 +481,44 @@ class FusionHead(nn.Module):
     def forward(
         self,
         fused_features: torch.Tensor,
-        depth_delta: torch.Tensor,
+        pof_pose: torch.Tensor,
         gating_weights: Dict[str, torch.Tensor],
         raw_pose: torch.Tensor,
     ) -> torch.Tensor:
         """
         Args:
             fused_features: (B, 17, d_model)
-            depth_delta: (B, 17, 3) depth model corrections
-            gating_weights: dict with depth_weights, joint_weights, residual_weights
-            raw_pose: (B, 17, 3) original input pose
+            pof_pose: (B, 17, 3) POF reconstructed pose
+            gating_weights: dict with pof_weights, joint_weights, residual_weights
+            raw_pose: (B, 17, 3) original input pose (MediaPipe or placeholder)
 
         Returns:
             (B, 17, 3) refined pose
         """
-        # Weighted depth correction
-        depth_weight = gating_weights['depth_weights'].unsqueeze(-1)  # (B, 17, 1)
-        weighted_depth = depth_delta * depth_weight
+        # POF weight: interpolate between raw pose and POF pose
+        pof_weight = gating_weights['pof_weights'].unsqueeze(-1)  # (B, 17, 1)
 
         # Learned residual correction
         residual_weight = gating_weights['residual_weights'].unsqueeze(-1)
         learned_correction = self.correction_head(fused_features)
         weighted_residual = learned_correction * residual_weight
 
-        # Final pose = raw + weighted corrections
-        # Note: joint model provides angle corrections, not position corrections
-        # So we only use depth_delta and learned residual for position
-        refined_pose = raw_pose + weighted_depth + weighted_residual
+        # Final pose = weighted blend of raw and POF + learned residual
+        # Note: joint model provides angle corrections (not used for position)
+        refined_pose = (1 - pof_weight) * raw_pose + pof_weight * pof_pose + weighted_residual
 
         return refined_pose
 
 
 class MainRefiner(nn.Module):
     """
-    Main refiner that learns to combine depth and joint constraint models.
+    Main refiner that learns to combine POF and joint constraint models.
 
     Uses learned gating to decide when to trust each constraint source.
     Trained with GT to learn optimal fusion strategy.
 
     Architecture:
-    1. Encode outputs from depth model (delta_xyz, confidence, limb orientations, camera angles)
+    1. Encode outputs from POF model (pof_vectors, reconstructed_pose)
     2. Encode outputs from joint model (delta_angles, refined_angles)
     3. Cross-attention between both feature streams
     4. Gating network learns per-joint weights for each source
@@ -559,7 +537,7 @@ class MainRefiner(nn.Module):
         self.d_model = d_model
 
         # Constraint Model Encoders
-        self.depth_encoder = DepthOutputEncoder(d_model)
+        self.pof_encoder = POFOutputEncoder(d_model)
         self.joint_encoder = JointOutputEncoder(d_model)
 
         # Raw pose encoder (for residual learning)
@@ -606,22 +584,24 @@ class MainRefiner(nn.Module):
         self,
         raw_pose: torch.Tensor,
         visibility: torch.Tensor,
-        depth_outputs: Dict[str, torch.Tensor],
+        pof_outputs: Dict[str, torch.Tensor],
         joint_outputs: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
         """
         Forward pass.
 
         Args:
-            raw_pose: (B, 17, 3) raw 3D pose
+            raw_pose: (B, 17, 3) raw 3D pose (MediaPipe or placeholder)
             visibility: (B, 17) per-joint visibility
-            depth_outputs: dict from PoseAwareDepthRefiner
+            pof_outputs: dict from CameraPOFModel with:
+                - 'pof_vectors': (B, 14, 3) unit vectors per limb
+                - 'reconstructed_pose': (B, 17, 3) full 3D pose
             joint_outputs: dict from JointConstraintRefiner
 
         Returns:
             dict with:
                 'refined_pose': (B, 17, 3) final fused pose
-                'depth_weights': (B, 17) how much depth model was used
+                'pof_weights': (B, 17) how much POF model was used
                 'joint_weights': (B, 17) how much joint model was used
                 'residual_weights': (B, 17) how much learned correction was used
                 'confidence': (B, 17) overall confidence
@@ -637,11 +617,11 @@ class MainRefiner(nn.Module):
         pose_features = self.pos_encoder(pose_features)
 
         # Encode constraint model outputs
-        depth_features = self.depth_encoder(depth_outputs, raw_pose)  # (B, 17, d_model)
+        pof_features = self.pof_encoder(pof_outputs, raw_pose)  # (B, 17, d_model)
         joint_features = self.joint_encoder(joint_outputs)  # (B, 17, d_model)
 
-        # Cross-attention between depth and joint
-        fused_features = self.cross_attention(depth_features, joint_features)
+        # Cross-attention between POF and joint
+        fused_features = self.cross_attention(pof_features, joint_features)
 
         # Combine with raw pose features
         combined = torch.cat([fused_features, pose_features], dim=-1)
@@ -650,10 +630,13 @@ class MainRefiner(nn.Module):
         # Gating network learns which source to trust
         gating_weights = self.gating_network(final_features)
 
+        # Get POF reconstructed pose
+        pof_pose = pof_outputs.get('reconstructed_pose', raw_pose)
+
         # Fusion head produces final pose
         refined_pose = self.fusion_head(
             final_features,
-            depth_outputs['delta_xyz'],
+            pof_pose,
             gating_weights,
             raw_pose,
         )
@@ -663,7 +646,7 @@ class MainRefiner(nn.Module):
 
         return {
             'refined_pose': refined_pose,
-            'depth_weights': gating_weights['depth_weights'],
+            'pof_weights': gating_weights['pof_weights'],
             'joint_weights': gating_weights['joint_weights'],
             'residual_weights': gating_weights['residual_weights'],
             'confidence': confidence,
@@ -716,13 +699,11 @@ if __name__ == '__main__':
     raw_pose = torch.randn(B, 17, 3)
     visibility = torch.rand(B, 17)
 
-    # Mock depth model outputs
-    depth_outputs = {
-        'delta_xyz': torch.randn(B, 17, 3) * 0.1,
+    # Mock POF model outputs
+    pof_outputs = {
+        'pof_vectors': F.normalize(torch.randn(B, 14, 3), dim=-1),
+        'reconstructed_pose': torch.randn(B, 17, 3),
         'confidence': torch.rand(B, 17),
-        'pred_limb_orientations': F.normalize(torch.randn(B, 14, 3), dim=-1),
-        'pred_azimuth': torch.rand(B) * 360,
-        'pred_elevation': (torch.rand(B) - 0.5) * 180,
     }
 
     # Mock joint model outputs
@@ -731,7 +712,7 @@ if __name__ == '__main__':
         'delta_angles': torch.randn(B, 12, 3) * 5,
     }
 
-    output = model(raw_pose, visibility, depth_outputs, joint_outputs)
+    output = model(raw_pose, visibility, pof_outputs, joint_outputs)
 
     print(f"\nOutput shapes:")
     for key, value in output.items():
@@ -739,7 +720,7 @@ if __name__ == '__main__':
 
     print(f"\nGating weights (should sum to ~1.0 per joint):")
     total_weights = (
-        output['depth_weights'] +
+        output['pof_weights'] +
         output['joint_weights'] +
         output['residual_weights']
     )

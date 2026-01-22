@@ -1,6 +1,6 @@
 # HumanPose3D - MediaPipe to Biomechanics Pipeline
 
-3D human pose estimation pipeline using MediaPipe for detection and Pose2Sim for marker augmentation, with advanced biomechanical constraint optimization.
+3D human pose estimation pipeline using MediaPipe for detection, POF (Part Orientation Fields) for 3D reconstruction, and Pose2Sim for marker augmentation.
 
 ## Prerequisites
 
@@ -55,10 +55,10 @@ uv run python scripts/viz/visualize_interactive.py data/output/pose-3d/joey/joey
 ## Features
 
 - ✅ **MediaPipe Pose Detection** - 33 landmarks → 22 Pose2Sim markers
+- ✅ **POF 3D Reconstruction** - Part Orientation Fields reconstruct 3D from 2D (bypasses MediaPipe depth errors)
 - ✅ **GPU-Accelerated LSTM Augmentation** - 22 → 64 markers (full OpenCap set) with 3-10x speedup
-- ✅ **Neural Depth Refinement** - Transformer-based depth correction trained on AIST++ motion capture
 - ✅ **Neural Joint Refinement** - Learned soft joint constraints from motion capture data
-- ✅ **MainRefiner Pipeline** - Unified neural pipeline combining depth + joint refinement
+- ✅ **MainRefiner Pipeline** - Unified neural pipeline combining POF + joint refinement
 - ✅ **Marker Estimation** - Fill missing data using anatomical symmetry
 - ✅ **Comprehensive Joint Angles** - ISB-compliant computation for all joints (pelvis, lower body, trunk, upper body)
 - ✅ **Interactive Visualization** - 3D skeleton viewer with playback controls
@@ -69,7 +69,7 @@ uv run python scripts/viz/visualize_interactive.py data/output/pose-3d/joey/joey
 
 **Benchmark** (joey.mp4, 535 frames, 20 augmentation cycles, neural refinement):
 - **Processing time**: ~60 seconds
-- **Depth accuracy**: 45% improvement with neural refinement
+- **POF accuracy**: ~11° limb orientation error (beats MediaPipe 3D at 16.3°)
 - **Marker quality**: 59/64 markers
 - **Joint angles**: 12 joint groups computed (pelvis, hip, knee, ankle, trunk, shoulder, elbow)
 - **Output**: Clean directory structure with automatic organization
@@ -92,11 +92,11 @@ uv run python scripts/viz/visualize_interactive.py data/output/pose-3d/joey/joey
 ## Pipeline Overview
 
 ```
-Video → MediaPipe → Neural Depth Refinement → TRC → GPU-Accelerated LSTM → Joint Angles → Neural Joint Refinement → Output
+Video → MediaPipe 2D → POF 3D Reconstruction → TRC → GPU-Accelerated LSTM → Joint Angles → Neural Joint Refinement → Output
 ```
 
 1. **Extraction**: MediaPipe detects 33 landmarks, mapped to 22 Pose2Sim markers
-2. **Depth Refinement**: Neural model corrects MediaPipe depth errors (with `--main-refiner`)
+2. **POF 3D Reconstruction**: Part Orientation Fields reconstruct 3D from 2D keypoints (with `--main-refiner`)
 3. **Augmentation**: GPU-accelerated Pose2Sim LSTM adds 43 markers (medial, shoulder clusters, HJC)
 4. **Joint Angles**: ISB-compliant computation for all 12 joint groups
 5. **Joint Refinement**: Neural model applies learned soft constraints (with `--main-refiner`)
@@ -115,62 +115,47 @@ data/output/pose-3d/<video>/
     └── 12 CSV files (one per joint group)
 ```
 
-## Neural Depth Refinement (Optional)
+## Neural Refinement (Optional)
 
-For advanced users, the pipeline includes a **PoseFormer-based neural depth refinement** model that learns to correct depth errors using biomechanical constraints.
+The pipeline includes **Part Orientation Fields (POF)** for 3D reconstruction and **neural joint refinement** for biomechanical constraints.
 
-### Training the Model
-
-Train on CMU Motion Capture data (professional mocap as ground truth):
+### Quick Start (Recommended)
 
 ```bash
-# 1. Install neural dependencies (PyTorch, etc.)
+# Full pipeline with POF + joint refinement
+uv run python main.py \
+  --video data/input/joey.mp4 \
+  --height 1.78 --mass 75 \
+  --estimate-missing --force-complete \
+  --augmentation-cycles 20 \
+  --main-refiner \
+  --plot-all-joint-angles
+```
+
+The `--main-refiner` flag enables:
+- **POF 3D reconstruction**: Predicts 14 per-limb 3D unit vectors from 2D keypoints
+- **Joint constraint refinement**: Applies learned soft constraints to computed angles
+
+### Training POF Model
+
+```bash
+# 1. Install neural dependencies
 uv sync --group neural
 
-# 2. Download CMU Motion Capture dataset (~2GB)
-cd data/training/cmu_mocap
-git clone https://github.com/una-dinosauria/cmu-mocap.git
-cd ../../..
+# 2. Generate training data from AIST++ dataset
+uv run python scripts/data/convert_aistpp.py --workers 8
 
-# 3. Generate training data from CMU mocap (~500MB, ~5 minutes)
-uv run --group neural python training/generate_training_data.py
-
-# 4. Train PoseFormer model (~9 hours on RTX 5080)
-uv run --group neural python scripts/train_depth_model.py \
-  --batch-size 64 \
-  --epochs 50 \
-  --workers 8 \
-  --fp16
+# 3. Train POF model
+uv run --group neural python scripts/train/pof_model.py \
+  --data data/training/aistpp_converted \
+  --epochs 50 --batch-size 256 --workers 8 --bf16 \
+  --d-model 128 --num-layers 6 --num-heads 8
 ```
 
-**Training details:**
-- **Dataset**: 208K temporal sequences from CMU mocap with simulated depth errors
-- **Architecture**: PoseFormer (25.5M parameters, Transformer-based)
-- **Training**: 6 camera angles (0-75°), 3 noise levels (30-80mm)
-- **Losses**: Bone length, ground plane, symmetry, smoothness, joint angles
-- **Output**: `models/checkpoints/best_depth_model.pth`
-
-### Applying Depth Refinement
-
-Once trained, apply the model to refine TRC files:
-
-```bash
-# Refine depth in final TRC output
-uv run --group neural python scripts/apply_depth_refinement.py \
-  --input data/output/pose-3d/joey/joey_final.trc \
-  --model models/checkpoints/best_depth_model.pth \
-  --output data/output/pose-3d/joey/joey_refined.trc
-```
-
-**What it does:**
-- Automatically estimates camera viewing angle from torso orientation
-- Applies learned depth corrections using 11-frame temporal context
-- Outputs refined TRC with improved Z-axis (depth) accuracy
-
-**When to use:**
-- Research applications requiring high depth accuracy
-- Motion capture validation and quality improvement
-- Comparative biomechanics studies
+**Model details:**
+- **Architecture**: Transformer predicting 14 per-limb 3D unit vectors
+- **Training data**: AIST++ dataset (1.2M frames, 9 camera views)
+- **Performance**: ~11° limb orientation error (beats MediaPipe 3D at 16.3°)
 
 ## Requirements
 

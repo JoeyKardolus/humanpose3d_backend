@@ -80,7 +80,8 @@ logging.getLogger('mediapipe').setLevel(logging.FATAL)
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.depth_refinement.data_utils import align_body_frames
+# Note: align_body_frames was previously used for depth refinement training
+# but is no longer needed for POF training (POF uses camera rotation matrix instead)
 
 import argparse
 import json
@@ -679,8 +680,8 @@ def process_mtc_sample(
     gt_centered = gt_pose - gt_pelvis
     mp_centered = mp_pose_3d - mp_pelvis
 
-    # Align body frames
-    mp_centered = align_body_frames(mp_centered, gt_centered)
+    # Note: align_body_frames was previously used here for depth refinement training
+    # POF training uses camera rotation matrix instead
 
     # Compute scales
     gt_scale = compute_torso_scale(gt_centered)

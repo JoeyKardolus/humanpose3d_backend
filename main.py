@@ -24,15 +24,67 @@ from src.markeraugmentation.markeraugmentation import run_pose2sim_augment
 from src.markeraugmentation.gpu_config import patch_pose2sim_gpu
 from src.mediastream.media_stream import probe_video_rotation, read_video_rgb
 from src.posedetector.pose_detector import extract_world_landmarks
+from src.posedetector import create_pose_estimator, COCO_TO_MARKER_NAME
+from src.datastream.data_stream import LandmarkRecord
 from src.visualizedata.visualize_data import VisualizeData
 from src.pipeline.refinement import (
-    apply_neural_depth_refinement,
     apply_neural_joint_refinement,
+    apply_camera_pof_reconstruction,
 )
 from src.pipeline.cleanup import cleanup_output_directory
 from src.postprocessing.temporal_smoothing import smooth_trc, hide_markers_in_trc
 
 OUTPUT_ROOT = Path("data/output")
+
+
+def pose_result_to_records(result, marker_names=COCO_TO_MARKER_NAME):
+    """Convert PoseDetectionResult to LandmarkRecords.
+
+    For 2D-only results (like RTMPose), sets z=0 as placeholder.
+    The actual 3D reconstruction happens via camera-pof.
+
+    Args:
+        result: PoseDetectionResult from pose estimator.
+        marker_names: Dict mapping COCO-17 indices to marker names.
+
+    Returns:
+        List of LandmarkRecord for downstream processing.
+    """
+    records = []
+    has_3d = result.keypoints_3d is not None
+
+    for frame_idx in range(result.num_frames):
+        timestamp = float(result.timestamps[frame_idx])
+
+        for joint_idx, marker_name in marker_names.items():
+            vis = float(result.visibility[frame_idx, joint_idx])
+
+            # Get 2D position (normalized [0,1])
+            x_2d = float(result.keypoints_2d[frame_idx, joint_idx, 0])
+            y_2d = float(result.keypoints_2d[frame_idx, joint_idx, 1])
+
+            if has_3d:
+                # Use 3D coordinates if available
+                x_m = float(result.keypoints_3d[frame_idx, joint_idx, 0])
+                y_m = float(result.keypoints_3d[frame_idx, joint_idx, 1])
+                z_m = float(result.keypoints_3d[frame_idx, joint_idx, 2])
+            else:
+                # Placeholder - 3D will be reconstructed via camera-pof
+                # Use 2D positions as X,Y; Z=0 as placeholder
+                x_m = x_2d
+                y_m = y_2d
+                z_m = 0.0
+
+            records.append(LandmarkRecord(
+                timestamp_s=timestamp,
+                landmark=marker_name,
+                x_m=x_m,
+                y_m=y_m,
+                z_m=z_m,
+                visibility=vis,
+            ))
+
+    return records
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,6 +97,22 @@ def parse_args() -> argparse.Namespace:
     # Subject parameters
     parser.add_argument("--height", type=float, default=1.78, help="Subject height in meters")
     parser.add_argument("--mass", type=float, default=75.0, help="Subject mass in kg")
+
+    # Pose estimator selection
+    parser.add_argument(
+        "--pose-estimator",
+        type=str,
+        choices=["mediapipe", "rtmpose"],
+        default="mediapipe",
+        help="Pose estimator to use (default: mediapipe). RTMPose provides better 2D accuracy but no 3D.",
+    )
+    parser.add_argument(
+        "--rtmpose-model",
+        type=str,
+        choices=["s", "m", "l"],
+        default="m",
+        help="RTMPose model size: s=small/fast, m=medium/balanced (default), l=large/accurate",
+    )
 
     # Detection settings
     parser.add_argument(
@@ -76,13 +144,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--main-refiner",
         action="store_true",
-        help="Apply MainRefiner neural pipeline (depth + joint refinement) - RECOMMENDED",
-    )
-    parser.add_argument(
-        "--depth-model-path",
-        type=str,
-        default="models/checkpoints/best_depth_model.pth",
-        help="Path to depth refinement model checkpoint",
+        help="Apply MainRefiner neural pipeline (POF 3D + joint refinement) - RECOMMENDED",
     )
     parser.add_argument(
         "--joint-model-path",
@@ -90,11 +152,18 @@ def parse_args() -> argparse.Namespace:
         default="models/checkpoints/best_joint_model.pth",
         help="Path to joint refinement model checkpoint",
     )
+
+    # Camera-space POF for 3D reconstruction
     parser.add_argument(
-        "--main-refiner-path",
+        "--camera-pof",
+        action="store_true",
+        help="Use camera-space POF for 3D reconstruction (auto-enabled by --main-refiner)",
+    )
+    parser.add_argument(
+        "--pof-model-path",
         type=str,
-        default="models/checkpoints/best_main_refiner.pth",
-        help="Path to MainRefiner model checkpoint",
+        default="models/checkpoints/best_pof_model.pth",
+        help="Path to camera-space POF model checkpoint",
     )
 
     # Joint angle computation
@@ -182,29 +251,76 @@ def main() -> None:
         if args.show_video or args.export_preview:
             preview_path = run_dir / f"{video_path.stem}_preview.mp4"
 
-        detection_output = extract_world_landmarks(
-            frames,
-            fps,
-            Path("models/pose_landmarker_heavy.task"),
-            args.visibility_min,
-            display=args.show_video,
-            return_raw_landmarks=args.plot_landmarks,
-            return_2d_landmarks=args.main_refiner,  # Need 2D coords for depth refinement
-            preview_output=preview_path,
-            preview_rotation_degrees=preview_rotation,
-        )
-
-        # Unpack detection output based on flags
+        # Handle RTMPose vs MediaPipe
         landmarks_2d = {}
         raw_landmarks = []
-        if args.plot_landmarks and args.main_refiner:
-            records, raw_landmarks, landmarks_2d = detection_output
-        elif args.plot_landmarks:
-            records, raw_landmarks = detection_output
-        elif args.main_refiner:
-            records, landmarks_2d = detection_output
+        use_rtmpose = args.pose_estimator == "rtmpose"
+
+        # Auto-enable camera-pof when main-refiner is requested
+        if args.main_refiner:
+            args.camera_pof = True
+
+        if use_rtmpose:
+            # RTMPose provides 2D only - force camera-pof for 3D reconstruction
+            args.camera_pof = True
+
+            print(f"[main] Using RTMPose-{args.rtmpose_model} (2D only, 3D via camera-pof)")
+            estimator = create_pose_estimator(
+                "rtmpose",
+                rtmpose_model_size=args.rtmpose_model,
+            )
+
+            # Run RTMPose detection
+            if args.show_video or args.export_preview:
+                result = estimator.detect_with_preview(
+                    frames, fps, args.visibility_min,
+                    preview_output=preview_path,
+                    display=args.show_video,
+                )
+            else:
+                result = estimator.detect(frames, fps, args.visibility_min)
+
+            # Convert to LandmarkRecords (with placeholder 3D)
+            records = pose_result_to_records(result)
+
+            # Store 2D landmarks for camera-pof (keyed by marker name)
+            for frame_idx in range(result.num_frames):
+                timestamp = float(result.timestamps[frame_idx])
+                for joint_idx, marker_name in COCO_TO_MARKER_NAME.items():
+                    landmarks_2d.setdefault(marker_name, []).append({
+                        "timestamp_s": timestamp,
+                        "x": float(result.keypoints_2d[frame_idx, joint_idx, 0]),
+                        "y": float(result.keypoints_2d[frame_idx, joint_idx, 1]),
+                    })
+
+            print(f"[main] RTMPose detected {result.num_frames} frames")
+
         else:
-            records = detection_output
+            # MediaPipe path (original behavior)
+            # Determine if we need 2D landmarks (for camera-pof 3D reconstruction)
+            use_2d_landmarks = args.camera_pof
+
+            detection_output = extract_world_landmarks(
+                frames,
+                fps,
+                Path("models/pose_landmarker_heavy.task"),
+                args.visibility_min,
+                display=args.show_video,
+                return_raw_landmarks=args.plot_landmarks,
+                return_2d_landmarks=use_2d_landmarks,
+                preview_output=preview_path,
+                preview_rotation_degrees=preview_rotation,
+            )
+
+            # Unpack detection output based on flags
+            if args.plot_landmarks and use_2d_landmarks:
+                records, raw_landmarks, landmarks_2d = detection_output
+            elif args.plot_landmarks:
+                records, raw_landmarks = detection_output
+            elif use_2d_landmarks:
+                records, landmarks_2d = detection_output
+            else:
+                records = detection_output
 
         # Estimate missing markers using symmetry
         if args.estimate_missing:
@@ -213,10 +329,16 @@ def main() -> None:
             estimated_count = len(records) - original_count
             print(f"[main] estimated {estimated_count} missing markers using symmetry")
 
-        # Step 1.5: Apply neural depth refinement (pre-augmentation, COCO-17)
-        if args.main_refiner:
-            records = apply_neural_depth_refinement(records, args.depth_model_path, landmarks_2d)
-            append_build_log("main step1.5 depth refinement applied")
+        # Step 1.5: Apply camera-space POF reconstruction (pre-augmentation, COCO-17)
+        if args.camera_pof:
+            # Camera-space POF reconstruction - used as PRIMARY 3D source
+            # Ignores any existing 3D (MediaPipe world coords) and reconstructs from 2D + POF
+            image_size = (frames.shape[1], frames.shape[2])  # (H, W)
+            records = apply_camera_pof_reconstruction(
+                records, args.pof_model_path, landmarks_2d, args.height,
+                image_size=image_size, is_primary_3d=True
+            )
+            append_build_log("main step1.5 camera-space POF reconstruction applied")
 
         # Step 1: Write CSV
         csv_path = run_dir / f"{video_path.stem}.csv"

@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
-from typing import Optional, Tuple, List, Union
+from typing import Optional, Tuple, List, Union, Dict
 import random
 import re
 
@@ -345,6 +345,215 @@ class CameraPOFDataset(Dataset):
         return pose_2d, visibility, limb_delta_2d, limb_length_2d, gt_pof
 
 
+class TemporalPOFDataset(Dataset):
+    """Dataset for temporal POF training with consecutive frame pairs.
+
+    Returns (current_frame, prev_frame) pairs for training with temporal context.
+    Requires data files to follow naming convention: {sequence}_f{frame_num}.npz
+
+    Returns:
+    - All fields from CameraPOFDataset, plus:
+    - prev_pof: (14, 3) previous frame's ground truth POF (or zeros if first frame)
+    - has_prev: bool indicating if prev_pof is valid
+    """
+
+    def __init__(
+        self,
+        data_dir: Union[str, Path, List[str]],
+        split: str = "train",
+        val_ratio: float = 0.1,
+        seed: int = 42,
+        augment: bool = True,
+        max_samples: Optional[int] = None,
+    ):
+        """Initialize dataset.
+
+        Args:
+            data_dir: Path or comma-separated paths to training data
+            split: 'train' or 'val'
+            val_ratio: Fraction of sequences for validation
+            seed: Random seed for reproducible splits
+            augment: Enable data augmentation (train only)
+            max_samples: Limit total samples (for debugging)
+        """
+        self.split = split
+        self.augment = augment and (split == "train")
+
+        # Support multiple data directories
+        if isinstance(data_dir, str) and "," in data_dir:
+            data_dirs = [Path(d.strip()) for d in data_dir.split(",")]
+        elif isinstance(data_dir, list):
+            data_dirs = [Path(d) for d in data_dir]
+        else:
+            data_dirs = [Path(data_dir)]
+
+        # Find all NPZ files
+        all_files = []
+        for d in data_dirs:
+            if d.exists():
+                for f in sorted(d.glob("*.npz")):
+                    if f.stat().st_size > 0:
+                        all_files.append(f)
+
+        if max_samples:
+            all_files = all_files[:max_samples]
+
+        # Build frame index: {sequence: [(frame_num, file_path), ...]}
+        self.sequence_frames: Dict[str, List[Tuple[int, Path]]] = {}
+        for f in all_files:
+            seq, frame_num = self._parse_filename(f)
+            if seq not in self.sequence_frames:
+                self.sequence_frames[seq] = []
+            self.sequence_frames[seq].append((frame_num, f))
+
+        # Sort frames within each sequence
+        for seq in self.sequence_frames:
+            self.sequence_frames[seq].sort(key=lambda x: x[0])
+
+        # Split by sequence to avoid data leakage
+        sequences = sorted(self.sequence_frames.keys())
+        rng = random.Random(seed)
+        rng.shuffle(sequences)
+
+        n_val = max(1, int(len(sequences) * val_ratio))
+        val_sequences = set(sequences[:n_val])
+        train_sequences = set(sequences[n_val:])
+
+        if split == "train":
+            selected_sequences = train_sequences
+        else:
+            selected_sequences = val_sequences
+
+        # Build flat list of (file, prev_file) pairs
+        self.samples: List[Tuple[Path, Optional[Path]]] = []
+        for seq in selected_sequences:
+            frames = self.sequence_frames[seq]
+            for i, (frame_num, file_path) in enumerate(frames):
+                if i == 0:
+                    prev_file = None
+                else:
+                    prev_file = frames[i - 1][1]
+                self.samples.append((file_path, prev_file))
+
+        print(f"[TemporalPOFDataset {split}] Loaded {len(self.samples)} samples from {len(selected_sequences)} sequences")
+
+    @staticmethod
+    def _parse_filename(path: Path) -> Tuple[str, int]:
+        """Parse sequence and frame number from filename.
+
+        Expected format: {sequence}_f{frame_num}.npz
+        """
+        stem = path.stem
+        match = re.match(r"^(.+)_f(\d+)$", stem)
+        if match:
+            return match.group(1), int(match.group(2))
+        # Fallback: treat last numeric component as frame number
+        parts = stem.split("_")
+        try:
+            frame_num = int(parts[-1])
+            seq = "_".join(parts[:-1])
+            return seq, frame_num
+        except ValueError:
+            return stem, 0
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> dict:
+        """Load and process a single sample with temporal context.
+
+        Returns dict with:
+        - pose_2d, visibility, limb_delta_2d, limb_length_2d, gt_pof (same as CameraPOFDataset)
+        - prev_pof: (14, 3) previous frame's GT POF (zeros if no previous)
+        - has_prev: bool indicating if prev_pof is valid
+        """
+        file_path, prev_file = self.samples[idx]
+
+        # Load current frame
+        data = np.load(file_path)
+        pose_2d_raw = data["pose_2d"].astype(np.float32)
+        visibility = data["visibility"].astype(np.float32)
+        ground_truth = data["ground_truth"].astype(np.float32)
+        camera_R = data["camera_R"].astype(np.float32)
+
+        # Normalize 2D pose
+        pose_2d, _, _ = normalize_pose_2d(pose_2d_raw)
+
+        # Compute 2D limb features
+        limb_delta_2d, limb_length_2d = compute_limb_features_2d(pose_2d)
+
+        # Transform GT to camera space and compute POF
+        ground_truth_camera = world_to_camera_space(ground_truth, camera_R)
+        gt_pof = compute_gt_pof_from_3d(ground_truth_camera)
+
+        # Load previous frame's POF
+        if prev_file is not None:
+            prev_data = np.load(prev_file)
+            prev_gt = prev_data["ground_truth"].astype(np.float32)
+            prev_camera_R = prev_data["camera_R"].astype(np.float32)
+            prev_gt_camera = world_to_camera_space(prev_gt, prev_camera_R)
+            prev_pof = compute_gt_pof_from_3d(prev_gt_camera)
+            has_prev = True
+        else:
+            prev_pof = np.zeros((NUM_LIMBS, 3), dtype=np.float32)
+            has_prev = False
+
+        # Data augmentation (horizontal flip) - must apply to both current and prev
+        if self.augment and random.random() > 0.5:
+            pose_2d, visibility, limb_delta_2d, limb_length_2d, gt_pof = self._flip_augment(
+                pose_2d, visibility, limb_delta_2d, limb_length_2d, gt_pof
+            )
+            if has_prev:
+                # Flip prev_pof X component and swap L/R limbs
+                prev_pof = prev_pof.copy()
+                prev_pof[:, 0] = -prev_pof[:, 0]
+                for i, j in LIMB_SWAP_PAIRS:
+                    prev_pof[[i, j]] = prev_pof[[j, i]]
+
+        return {
+            "pose_2d": torch.from_numpy(pose_2d),
+            "visibility": torch.from_numpy(visibility),
+            "limb_delta_2d": torch.from_numpy(limb_delta_2d),
+            "limb_length_2d": torch.from_numpy(limb_length_2d),
+            "gt_pof": torch.from_numpy(gt_pof),
+            "prev_pof": torch.from_numpy(prev_pof),
+            "has_prev": torch.tensor(has_prev),
+        }
+
+    def _flip_augment(
+        self,
+        pose_2d: np.ndarray,
+        visibility: np.ndarray,
+        limb_delta_2d: np.ndarray,
+        limb_length_2d: np.ndarray,
+        gt_pof: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Horizontal flip augmentation (same as CameraPOFDataset)."""
+        pose_2d = pose_2d.copy()
+        pose_2d[:, 0] = -pose_2d[:, 0]
+
+        visibility = visibility.copy()
+        for i, j in JOINT_SWAP_PAIRS:
+            pose_2d[[i, j]] = pose_2d[[j, i]]
+            visibility[[i, j]] = visibility[[j, i]]
+
+        limb_delta_2d = limb_delta_2d.copy()
+        limb_delta_2d[:, 0] = -limb_delta_2d[:, 0]
+
+        limb_length_2d = limb_length_2d.copy()
+
+        for i, j in LIMB_SWAP_PAIRS:
+            limb_delta_2d[[i, j]] = limb_delta_2d[[j, i]]
+            limb_length_2d[[i, j]] = limb_length_2d[[j, i]]
+
+        gt_pof = gt_pof.copy()
+        gt_pof[:, 0] = -gt_pof[:, 0]
+        for i, j in LIMB_SWAP_PAIRS:
+            gt_pof[[i, j]] = gt_pof[[j, i]]
+
+        return pose_2d, visibility, limb_delta_2d, limb_length_2d, gt_pof
+
+
 def create_pof_dataloaders(
     data_dir: Union[str, Path],
     batch_size: int = 256,
@@ -352,6 +561,7 @@ def create_pof_dataloaders(
     val_ratio: float = 0.1,
     seed: int = 42,
     max_samples: Optional[int] = None,
+    temporal: bool = False,
 ) -> Tuple[DataLoader, DataLoader]:
     """Create train and validation dataloaders.
 
@@ -362,11 +572,14 @@ def create_pof_dataloaders(
         val_ratio: Fraction of sequences for validation
         seed: Random seed for splits
         max_samples: Limit samples (for debugging)
+        temporal: If True, use TemporalPOFDataset (returns prev_pof)
 
     Returns:
         (train_loader, val_loader) tuple
     """
-    train_dataset = CameraPOFDataset(
+    DatasetClass = TemporalPOFDataset if temporal else CameraPOFDataset
+
+    train_dataset = DatasetClass(
         data_dir,
         split="train",
         val_ratio=val_ratio,
@@ -375,7 +588,7 @@ def create_pof_dataloaders(
         max_samples=max_samples,
     )
 
-    val_dataset = CameraPOFDataset(
+    val_dataset = DatasetClass(
         data_dir,
         split="val",
         val_ratio=val_ratio,

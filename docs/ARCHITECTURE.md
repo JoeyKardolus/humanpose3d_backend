@@ -8,9 +8,9 @@
 | `posedetector/` | MediaPipe inference (33 landmarks → 22 Pose2Sim markers) |
 | `datastream/` | CSV/TRC conversion, marker estimation |
 | `markeraugmentation/` | Pose2Sim LSTM integration (22 → 64 markers), GPU acceleration |
-| `depth_refinement/` | Neural depth correction (POF + view angle transformer) |
+| `pof/` | Part Orientation Fields (3D reconstruction from 2D) |
 | `joint_refinement/` | Neural joint constraints (cross-joint attention) |
-| `main_refinement/` | Fusion model (depth + joint gating) |
+| `main_refinement/` | Fusion model (POF + joint gating) |
 | `kinematics/` | ISB joint angles (12 joint groups, Euler decomposition) |
 | `pipeline/` | Orchestration (`refinement.py`, `cleanup.py`) |
 | `visualizedata/` | 3D Matplotlib plotting, skeleton connections |
@@ -35,11 +35,11 @@
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Step 2: NEURAL DEPTH REFINEMENT (depth_refinement) [--main-refiner]    │
-│  - Part Orientation Fields predict limb 3D vectors                      │
-│  - Camera view angle prediction from 2D pose                            │
-│  - Transformer corrects MediaPipe depth errors                          │
-│  Output: Refined 17 COCO joints                                         │
+│  Step 2: POF 3D RECONSTRUCTION (pof) [--main-refiner or --camera-pof]   │
+│  - Part Orientation Fields predict 14 per-limb 3D unit vectors          │
+│  - Least-squares solver reconstructs 3D joints from limb vectors        │
+│  - Bypasses MediaPipe depth errors entirely                             │
+│  Output: Reconstructed 17 COCO joints in 3D                             │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -103,7 +103,7 @@
 | File | Purpose |
 |------|---------|
 | `main.py` | Full pipeline orchestrator |
-| `scripts/train/depth_model.py` | Depth refinement model training |
+| `scripts/train/pof_model.py` | POF model training |
 | `scripts/train/joint_model.py` | Joint constraint model training |
 | `scripts/train/main_refiner.py` | MainRefiner fusion model training |
 | `scripts/data/convert_aistpp.py` | AIST++ training data conversion |
@@ -125,12 +125,12 @@ Final: 59-64 markers (unreliable removed)
 
 | Model | Params | Purpose |
 |-------|--------|---------|
-| Depth Refiner | ~3M | POF + view angle → depth corrections |
+| POF | ~3M | 3D reconstruction from 2D via Part Orientation Fields |
 | Joint Refiner | ~916K | Cross-joint attention → angle corrections |
-| MainRefiner | ~1.2M | Fusion gating (depth + joint) |
+| MainRefiner | ~1.2M | Fusion gating (POF + joint) |
 
 Training data: AIST++ (1.2M frames) + CMU MTC (~28K frames × 31 cameras)
 
 ---
 
-*Last updated: 2026-01-19*
+*Last updated: 2026-01-21*

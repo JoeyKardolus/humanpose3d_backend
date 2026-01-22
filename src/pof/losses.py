@@ -144,6 +144,58 @@ def symmetry_loss(pred_pof: torch.Tensor) -> torch.Tensor:
     return loss / len(LIMB_SWAP_PAIRS)
 
 
+def z_sign_loss(
+    z_sign_logits: torch.Tensor,
+    gt_pof: torch.Tensor,
+    reduction: str = "mean",
+) -> torch.Tensor:
+    """Binary cross-entropy loss for Z-sign classification.
+
+    Predicts whether each limb's Z component is positive (away from camera)
+    or negative (toward camera). This auxiliary task helps resolve the
+    depth ambiguity when limbs are foreshortened.
+
+    Args:
+        z_sign_logits: (batch, 14) raw logits for Z > 0 prediction
+        gt_pof: (batch, 14, 3) ground truth POF vectors
+        reduction: 'mean', 'sum', or 'none'
+
+    Returns:
+        Binary cross-entropy loss
+    """
+    # Ground truth: 1 if Z > 0 (limb pointing away from camera), 0 otherwise
+    z_sign_gt = (gt_pof[:, :, 2] > 0).float()  # (batch, 14)
+
+    loss = F.binary_cross_entropy_with_logits(
+        z_sign_logits, z_sign_gt, reduction="none"
+    )  # (batch, 14)
+
+    if reduction == "mean":
+        return loss.mean()
+    elif reduction == "sum":
+        return loss.sum()
+    return loss
+
+
+def z_sign_accuracy(
+    z_sign_logits: torch.Tensor,
+    gt_pof: torch.Tensor,
+) -> torch.Tensor:
+    """Compute Z-sign classification accuracy.
+
+    Args:
+        z_sign_logits: (batch, 14) raw logits
+        gt_pof: (batch, 14, 3) ground truth POF vectors
+
+    Returns:
+        Accuracy as a scalar tensor
+    """
+    with torch.no_grad():
+        z_sign_gt = (gt_pof[:, :, 2] > 0).float()
+        z_sign_pred = (torch.sigmoid(z_sign_logits) > 0.5).float()
+        return (z_sign_pred == z_sign_gt).float().mean()
+
+
 def smoothness_loss(
     pred_pof: torch.Tensor,
     prev_pof: Optional[torch.Tensor] = None,
@@ -165,6 +217,91 @@ def smoothness_loss(
     # L2 distance between consecutive predictions
     diff = pred_pof - prev_pof
     return (diff ** 2).sum(dim=-1).mean()
+
+
+class TemporalPOFLoss(nn.Module):
+    """Combined loss for temporal POF model with Z-sign auxiliary task.
+
+    Components:
+    1. Cosine similarity loss (primary POF direction)
+    2. Z-sign classification loss (depth direction)
+    3. Symmetric limb consistency (soft constraint)
+    4. Temporal smoothness (for video training)
+    """
+
+    def __init__(
+        self,
+        cosine_weight: float = 1.0,
+        z_sign_weight: float = 0.2,
+        symmetry_weight: float = 0.1,
+        smoothness_weight: float = 0.0,
+    ):
+        super().__init__()
+        self.cosine_weight = cosine_weight
+        self.z_sign_weight = z_sign_weight
+        self.symmetry_weight = symmetry_weight
+        self.smoothness_weight = smoothness_weight
+
+    def forward(
+        self,
+        pred_pof: torch.Tensor,
+        z_sign_logits: torch.Tensor,
+        gt_pof: torch.Tensor,
+        visibility: Optional[torch.Tensor] = None,
+        prev_pof: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Compute all loss components.
+
+        Args:
+            pred_pof: (batch, 14, 3) predicted POF vectors
+            z_sign_logits: (batch, 14) Z-sign classification logits
+            gt_pof: (batch, 14, 3) ground truth POF vectors
+            visibility: Optional (batch, 17) joint visibility
+            prev_pof: Optional (batch, 14, 3) previous frame for smoothness
+
+        Returns:
+            Dictionary with individual loss components and total
+        """
+        losses = {}
+
+        # Primary cosine loss
+        losses["cosine"] = pof_cosine_loss(pred_pof, gt_pof, visibility)
+
+        # Z-sign classification loss
+        if self.z_sign_weight > 0:
+            losses["z_sign"] = z_sign_loss(z_sign_logits, gt_pof)
+            losses["z_sign_acc"] = z_sign_accuracy(z_sign_logits, gt_pof)
+        else:
+            losses["z_sign"] = torch.tensor(
+                0.0, device=pred_pof.device, dtype=pred_pof.dtype
+            )
+            losses["z_sign_acc"] = torch.tensor(0.0, device=pred_pof.device)
+
+        # Symmetry regularization
+        if self.symmetry_weight > 0:
+            losses["symmetry"] = symmetry_loss(pred_pof)
+        else:
+            losses["symmetry"] = torch.tensor(
+                0.0, device=pred_pof.device, dtype=pred_pof.dtype
+            )
+
+        # Temporal smoothness (optional)
+        if self.smoothness_weight > 0 and prev_pof is not None:
+            losses["smoothness"] = smoothness_loss(pred_pof, prev_pof)
+        else:
+            losses["smoothness"] = torch.tensor(
+                0.0, device=pred_pof.device, dtype=pred_pof.dtype
+            )
+
+        # Total weighted loss
+        losses["total"] = (
+            self.cosine_weight * losses["cosine"]
+            + self.z_sign_weight * losses["z_sign"]
+            + self.symmetry_weight * losses["symmetry"]
+            + self.smoothness_weight * losses["smoothness"]
+        )
+
+        return losses
 
 
 class CameraPOFLoss(nn.Module):

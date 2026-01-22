@@ -56,16 +56,35 @@ from .bone_lengths import (
     compute_bone_lengths_from_pose,
 )
 
-# Neural network model
+# Neural network model (Transformer)
 from .model import (
     CameraPOFModel,
     create_pof_model,
     load_pof_model,
 )
 
+# Graph Neural Network models
+from .gnn_model import (
+    POFGraphModel,
+    SemGCNPOFModel,
+    SemGCNTemporalZSign,
+    TemporalPOFInference,
+    create_gnn_pof_model,
+    load_gnn_pof_model,
+)
+
+# Graph utilities
+from .graph_utils import (
+    build_joint_sharing_adj,
+    build_kinematic_adj,
+    build_symmetry_adj,
+    get_combined_adj,
+)
+
 # Dataset and training
 from .dataset import (
     CameraPOFDataset,
+    TemporalPOFDataset,
     create_pof_dataloaders,
     compute_gt_pof_from_3d,
     compute_gt_pof_from_3d_torch,
@@ -76,10 +95,13 @@ from .dataset import (
 # Loss functions
 from .losses import (
     CameraPOFLoss,
+    TemporalPOFLoss,
     LeastSquaresPOFLoss,
     pof_cosine_loss,
     pof_angular_error,
     symmetry_loss,
+    z_sign_loss,
+    z_sign_accuracy,
     projection_consistency_loss,
     scale_factor_regularization,
     solved_depth_loss,
@@ -145,12 +167,25 @@ __all__ = [
     "estimate_bone_lengths_array",
     "bone_lengths_to_array",
     "compute_bone_lengths_from_pose",
-    # Model
+    # Model (Transformer)
     "CameraPOFModel",
     "create_pof_model",
     "load_pof_model",
+    # GNN Models
+    "POFGraphModel",
+    "SemGCNPOFModel",
+    "SemGCNTemporalZSign",
+    "TemporalPOFInference",
+    "create_gnn_pof_model",
+    "load_gnn_pof_model",
+    # Graph utilities
+    "build_joint_sharing_adj",
+    "build_kinematic_adj",
+    "build_symmetry_adj",
+    "get_combined_adj",
     # Dataset
     "CameraPOFDataset",
+    "TemporalPOFDataset",
     "create_pof_dataloaders",
     "compute_gt_pof_from_3d",
     "compute_gt_pof_from_3d_torch",
@@ -158,10 +193,13 @@ __all__ = [
     "compute_limb_features_2d",
     # Loss
     "CameraPOFLoss",
+    "TemporalPOFLoss",
     "LeastSquaresPOFLoss",
     "pof_cosine_loss",
     "pof_angular_error",
     "symmetry_loss",
+    "z_sign_loss",
+    "z_sign_accuracy",
     "projection_consistency_loss",
     "scale_factor_regularization",
     "solved_depth_loss",

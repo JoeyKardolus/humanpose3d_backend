@@ -10,7 +10,7 @@ Provides functions for:
 from __future__ import annotations
 
 import math
-from typing import Dict, Literal, Optional, Tuple
+from typing import Literal, Optional
 
 import numpy as np
 from scipy.ndimage import median_filter
@@ -168,132 +168,6 @@ def median_filter_angles(
 
     else:
         raise ValueError(f"Expected 1D or 2D array, got shape {angles.shape}")
-
-
-def wrap_to_180(angles: np.ndarray) -> np.ndarray:
-    """Wrap angles to [-180, 180] range.
-
-    Args:
-        angles: Angle array in degrees (any shape)
-
-    Returns:
-        Wrapped angles in [-180, 180]
-    """
-    angles = np.asarray(angles, dtype=float)
-    # Use modulo to wrap to [0, 360], then shift to [-180, 180]
-    wrapped = ((angles + 180) % 360) - 180
-    return wrapped
-
-
-def clamp_biomechanical_angles(
-    angles: np.ndarray,
-    joint_type: Literal["hip", "knee", "ankle", "trunk", "shoulder", "elbow"],
-    dof: Literal["flex", "abd", "rot", "exo"] = "flex",
-) -> np.ndarray:
-    """Clamp angles to biomechanically reasonable ranges.
-
-    After unwrapping, angles can drift outside plausible ranges due to
-    accumulated errors. This function wraps them back into joint-specific limits.
-
-    Args:
-        angles: Angle array (N,) in degrees
-        joint_type: Joint name
-        dof: Degree of freedom
-
-    Returns:
-        Clamped angles
-    """
-    angles = np.asarray(angles, dtype=float).copy()
-
-    # Define biomechanical ranges (degrees)
-    # Based on literature for running/athletic motion:
-    # - Novacheck 1998: Running biomechanics
-    # - Schache et al. 2011: Running kinematics
-    # - Male and female runners (Taylor & Francis, 2024)
-    limits = {
-        "hip": {
-            "flex": (-40, 130),    # Hyperextension to high kick
-            "abd": (-30, 60),      # Adduction to wide abduction
-            "rot": (-45, 45),      # Internal to external rotation
-        },
-        "knee": {
-            "flex": (-10, 150),    # Slight hyperextension to full flexion
-            "abd": (-30, 30),      # Varus/valgus
-            "rot": (-40, 40),      # Tibial rotation
-        },
-        "ankle": {
-            "flex": (-50, 40),     # Generous: -50° plantarflexion, +40° dorsiflexion
-            "abd": (-45, 45),      # Generous: inversion/eversion
-            "rot": (-45, 45),      # Generous: foot rotation
-        },
-        "trunk": {
-            "flex": (-45, 90),     # Generous: extension to forward bend
-            "abd": (-45, 45),      # Generous: lateral flexion
-            "rot": (-60, 60),      # Generous: axial rotation
-        },
-        "shoulder": {
-            "exo": (-90, 90),      # Endorotation to exorotation
-            "flex": (-60, 180),    # Extension to overhead
-            "abd": (-30, 180),     # Adduction to full abduction
-        },
-        "elbow": {
-            "flex": (0, 180),      # Extended to flexed
-        },
-        "pelvis": {
-            "flex": (-15, 15),     # Running: pelvis tilt ~5-10° range
-            "abd": (-10, 10),      # Running: pelvis obliquity ~5-8° range
-            "rot": (-10, 10),      # Running: pelvis rotation ~8-12° range
-        },
-    }
-
-    if joint_type not in limits:
-        # Unknown joint - just wrap to [-180, 180]
-        return wrap_to_180(angles)
-
-    if dof not in limits[joint_type]:
-        # Unknown DOF for this joint - wrap to [-180, 180]
-        return wrap_to_180(angles)
-
-    min_angle, max_angle = limits[joint_type][dof]
-
-    # For each angle, find the equivalent ±360k representation that fits in [min, max]
-    for i in range(len(angles)):
-        val = angles[i]
-
-        if not np.isfinite(val):
-            continue
-
-        # Try all ±360k representations within ±3 rotations
-        best_val = val
-        best_dist = float('inf')
-
-        for k in range(-3, 4):
-            candidate = val + k * 360
-
-            # Check if this candidate fits in [min, max]
-            if min_angle <= candidate <= max_angle:
-                # It fits! Use it
-                best_val = candidate
-                best_dist = 0
-                break
-
-            # Otherwise, find distance to nearest boundary
-            if candidate < min_angle:
-                dist = min_angle - candidate
-            else:  # candidate > max_angle
-                dist = candidate - max_angle
-
-            if dist < best_dist:
-                best_dist = dist
-                best_val = candidate
-
-        # If no representation fits perfectly, clamp the best candidate
-        if best_dist > 0:
-            best_val = np.clip(best_val, min_angle, max_angle)
-
-        angles[i] = best_val
-
-    return angles
 
 
 def zero_angles(

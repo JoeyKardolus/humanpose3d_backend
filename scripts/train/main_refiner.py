@@ -3,7 +3,7 @@
 Training script for MainRefiner model.
 
 The MainRefiner learns to optimally combine outputs from:
-1. Depth Refinement Model (PoseAwareDepthRefiner)
+1. POF Model (CameraPOFModel) - provides 3D poses via Part Orientation Fields
 2. Joint Constraint Refinement Model (JointConstraintRefiner)
 
 Training modes:
@@ -13,7 +13,7 @@ Training modes:
 Usage:
     # Frozen training (recommended first)
     uv run --group neural python scripts/train/main_refiner.py \
-        --depth-checkpoint models/checkpoints/best_depth_model.pth \
+        --pof-checkpoint models/checkpoints/best_pof_model.pth \
         --joint-checkpoint models/checkpoints/best_joint_model.pth \
         --freeze-constraints \
         --epochs 50 --batch-size 256 --bf16
@@ -21,7 +21,7 @@ Usage:
     # End-to-end fine-tuning (after frozen training)
     uv run --group neural python scripts/train/main_refiner.py \
         --checkpoint models/checkpoints/best_main_refiner.pth \
-        --depth-checkpoint models/checkpoints/best_depth_model.pth \
+        --pof-checkpoint models/checkpoints/best_pof_model.pth \
         --joint-checkpoint models/checkpoints/best_joint_model.pth \
         --unfreeze-constraints --constraint-lr 1e-5 \
         --epochs 20 --batch-size 128
@@ -39,6 +39,7 @@ from tqdm import tqdm
 import json
 from datetime import datetime
 from typing import Dict, Optional
+import numpy as np
 
 # Add project root to path
 import sys
@@ -47,49 +48,28 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.main_refinement.model import MainRefiner, create_model
 from src.main_refinement.losses import MainRefinerLoss
 from src.main_refinement.dataset import MainRefinerDataset, create_dataloaders
-from src.depth_refinement.model import PoseAwareDepthRefiner
+from src.pof.model import CameraPOFModel, load_pof_model
+from src.pof.dataset import normalize_pose_2d, compute_limb_features_2d
+from src.pof.reconstruction import reconstruct_skeleton_least_squares
 from src.joint_refinement.model import JointConstraintRefiner
 
 
-def load_depth_model(
+def load_pof_model_frozen(
     checkpoint_path: Path,
     device: str,
     freeze: bool = True,
-) -> PoseAwareDepthRefiner:
-    """Load pretrained depth model."""
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    config = checkpoint.get('config', {})
-
-    model = PoseAwareDepthRefiner(
-        num_joints=config.get('num_joints', 17),
-        d_model=config.get('d_model', 64),
-        num_heads=config.get('num_heads', 4),
-        num_layers=config.get('num_layers', 4),
-        dim_feedforward=config.get('dim_feedforward', 256),
-        dropout=0.0 if freeze else config.get('dropout', 0.1),
-        output_confidence=config.get('output_confidence', True),
-        use_2d_pose=config.get('use_2d_pose', True),
-        use_elepose=config.get('use_elepose', False),
-        use_limb_orientations=config.get('use_limb_orientations', False),
-    )
-
-    # Handle different checkpoint formats
-    if 'model_state_dict' in checkpoint:
-        model.load_state_dict(checkpoint['model_state_dict'])
-    elif 'model' in checkpoint:
-        model.load_state_dict(checkpoint['model'])
-    else:
-        raise KeyError(f"Checkpoint has no 'model_state_dict' or 'model' key. Keys: {list(checkpoint.keys())}")
-    model.to(device)
+) -> CameraPOFModel:
+    """Load pretrained POF model."""
+    model = load_pof_model(str(checkpoint_path), device=device, verbose=True)
 
     if freeze:
         model.eval()
         for param in model.parameters():
             param.requires_grad = False
-        print(f"Loaded frozen depth model: {sum(p.numel() for p in model.parameters()):,} params")
+        print(f"Loaded frozen POF model: {sum(p.numel() for p in model.parameters()):,} params")
     else:
         model.train()
-        print(f"Loaded trainable depth model: {sum(p.numel() for p in model.parameters()):,} params")
+        print(f"Loaded trainable POF model: {sum(p.numel() for p in model.parameters()):,} params")
 
     return model
 
@@ -131,9 +111,61 @@ def load_joint_model(
     return model
 
 
+def run_pof_model(
+    pof_model: CameraPOFModel,
+    pose_2d: torch.Tensor,
+    visibility: torch.Tensor,
+    device: str,
+    freeze: bool = True,
+) -> Dict[str, torch.Tensor]:
+    """Run POF model to get limb orientations and reconstructed pose."""
+    batch_size = pose_2d.size(0)
+
+    # Process each sample in batch
+    pof_vectors_list = []
+    reconstructed_list = []
+
+    pose_2d_np = pose_2d.cpu().numpy()
+    visibility_np = visibility.cpu().numpy()
+
+    for i in range(batch_size):
+        # Normalize 2D and compute limb features
+        pose_2d_norm, _, _ = normalize_pose_2d(pose_2d_np[i])
+        limb_delta_2d, limb_length_2d = compute_limb_features_2d(pose_2d_norm)
+
+        # Convert to tensors
+        pose_2d_t = torch.from_numpy(pose_2d_norm.astype(np.float32)).unsqueeze(0).to(device)
+        vis_t = torch.from_numpy(visibility_np[i].astype(np.float32)).unsqueeze(0).to(device)
+        limb_delta_t = torch.from_numpy(limb_delta_2d.astype(np.float32)).unsqueeze(0).to(device)
+        limb_length_t = torch.from_numpy(limb_length_2d.astype(np.float32)).unsqueeze(0).to(device)
+
+        # Run POF model
+        with torch.set_grad_enabled(not freeze):
+            pof_vec = pof_model(pose_2d_t, vis_t, limb_delta_t, limb_length_t)
+
+        pof_vectors_list.append(pof_vec)
+
+        # Reconstruct 3D pose from POF
+        pof_np = pof_vec.detach().cpu().numpy()
+        reconstructed = reconstruct_skeleton_least_squares(
+            pof_np, pose_2d_np[i:i+1], None,
+            pelvis_depth=0.0, denormalize=False
+        )
+        reconstructed_list.append(torch.from_numpy(reconstructed.astype(np.float32)))
+
+    pof_vectors = torch.cat(pof_vectors_list, dim=0)
+    reconstructed_pose = torch.cat(reconstructed_list, dim=0).to(device)
+
+    return {
+        'pof_vectors': pof_vectors,
+        'reconstructed_pose': reconstructed_pose,
+        'confidence': torch.ones(batch_size, 17, device=device),
+    }
+
+
 def train_epoch(
     main_model: MainRefiner,
-    depth_model: PoseAwareDepthRefiner,
+    pof_model: CameraPOFModel,
     joint_model: JointConstraintRefiner,
     train_loader,
     optimizer,
@@ -148,7 +180,7 @@ def train_epoch(
     main_model.train()
 
     if not freeze_constraints:
-        depth_model.train()
+        pof_model.train()
         joint_model.train()
 
     total_loss = 0.0
@@ -181,14 +213,13 @@ def train_epoch(
         optimizer.zero_grad()
 
         with autocast(device_type='cuda', dtype=amp_dtype, enabled=use_amp):
-            # Run depth model
-            if 'depth_outputs' in batch:
+            # Run POF model
+            if 'pof_outputs' in batch:
                 # Pre-computed outputs
-                depth_outputs = {k: v.to(device) for k, v in batch['depth_outputs'].items()}
+                pof_outputs = {k: v.to(device) for k, v in batch['pof_outputs'].items()}
             else:
                 # Run model online
-                with torch.set_grad_enabled(not freeze_constraints):
-                    depth_outputs = depth_model(raw_pose, visibility, pose_2d=pose_2d)
+                pof_outputs = run_pof_model(pof_model, pose_2d, visibility, device, freeze_constraints)
 
             # Run joint model
             if 'joint_outputs' in batch:
@@ -202,10 +233,10 @@ def train_epoch(
                 }
 
             # Run main refiner
-            output = main_model(raw_pose, visibility, depth_outputs, joint_outputs)
+            output = main_model(raw_pose, visibility, pof_outputs, joint_outputs)
 
             # Compute losses
-            losses = loss_fn(output, raw_pose, ground_truth, depth_outputs, visibility)
+            losses = loss_fn(output, raw_pose, ground_truth, pof_outputs, visibility)
 
         # Check for NaN
         if torch.isnan(losses['total']) or torch.isinf(losses['total']):
@@ -251,7 +282,7 @@ def train_epoch(
 @torch.no_grad()
 def validate(
     main_model: MainRefiner,
-    depth_model: PoseAwareDepthRefiner,
+    pof_model: CameraPOFModel,
     joint_model: JointConstraintRefiner,
     val_loader,
     loss_fn: MainRefinerLoss,
@@ -261,7 +292,7 @@ def validate(
 ) -> Dict[str, float]:
     """Validate model."""
     main_model.eval()
-    depth_model.eval()
+    pof_model.eval()
     joint_model.eval()
 
     total_loss = 0.0
@@ -275,7 +306,7 @@ def validate(
     num_batches = 0
 
     # Also track improvement metrics
-    depth_only_error = 0.0
+    pof_only_error = 0.0
     fusion_error = 0.0
 
     for batch in tqdm(val_loader, desc='Val'):
@@ -285,11 +316,11 @@ def validate(
         pose_2d = batch['pose_2d'].to(device)
 
         with autocast(device_type='cuda', dtype=amp_dtype, enabled=use_amp):
-            # Run depth model
-            if 'depth_outputs' in batch:
-                depth_outputs = {k: v.to(device) for k, v in batch['depth_outputs'].items()}
+            # Run POF model
+            if 'pof_outputs' in batch:
+                pof_outputs = {k: v.to(device) for k, v in batch['pof_outputs'].items()}
             else:
-                depth_outputs = depth_model(raw_pose, visibility, pose_2d=pose_2d)
+                pof_outputs = run_pof_model(pof_model, pose_2d, visibility, device, freeze=True)
 
             # Run joint model
             if 'joint_outputs' in batch:
@@ -301,10 +332,10 @@ def validate(
                 }
 
             # Run main refiner
-            output = main_model(raw_pose, visibility, depth_outputs, joint_outputs)
+            output = main_model(raw_pose, visibility, pof_outputs, joint_outputs)
 
             # Compute losses
-            losses = loss_fn(output, raw_pose, ground_truth, depth_outputs, visibility)
+            losses = loss_fn(output, raw_pose, ground_truth, pof_outputs, visibility)
 
         if not torch.isnan(losses['total']):
             total_loss += losses['total'].item()
@@ -313,9 +344,9 @@ def validate(
                     loss_components[key] += losses[key].item()
             num_batches += 1
 
-            # Track improvement
-            depth_corrected = raw_pose + depth_outputs['delta_xyz']
-            depth_only_error += (depth_corrected - ground_truth).abs().mean().item()
+            # Track improvement: POF-only vs fusion
+            pof_reconstructed = pof_outputs['reconstructed_pose']
+            pof_only_error += (pof_reconstructed - ground_truth).abs().mean().item()
             fusion_error += (output['refined_pose'] - ground_truth).abs().mean().item()
 
     if num_batches == 0:
@@ -324,13 +355,13 @@ def validate(
     results = {
         'total': total_loss / num_batches,
         **{k: v / num_batches for k, v in loss_components.items()},
-        'depth_only_error': depth_only_error / num_batches,
+        'pof_only_error': pof_only_error / num_batches,
         'fusion_error': fusion_error / num_batches,
     }
 
     # Improvement ratio (lower is better)
-    if results['depth_only_error'] > 0:
-        results['improvement_ratio'] = results['fusion_error'] / results['depth_only_error']
+    if results['pof_only_error'] > 0:
+        results['improvement_ratio'] = results['fusion_error'] / results['pof_only_error']
     else:
         results['improvement_ratio'] = 1.0
 
@@ -347,8 +378,8 @@ def main():
                         help='Validation split ratio')
 
     # Model checkpoints
-    parser.add_argument('--depth-checkpoint', type=str, required=True,
-                        help='Path to pretrained depth model')
+    parser.add_argument('--pof-checkpoint', type=str, required=True,
+                        help='Path to pretrained POF model')
     parser.add_argument('--joint-checkpoint', type=str, required=True,
                         help='Path to pretrained joint model')
     parser.add_argument('--checkpoint', type=str, default=None,
@@ -371,7 +402,7 @@ def main():
 
     # Constraint model training
     parser.add_argument('--freeze-constraints', action='store_true',
-                        help='Freeze depth and joint models (default)')
+                        help='Freeze POF and joint models (default)')
     parser.add_argument('--unfreeze-constraints', action='store_true',
                         help='Fine-tune constraint models')
     parser.add_argument('--constraint-lr', type=float, default=1e-5,
@@ -405,8 +436,8 @@ def main():
     freeze_constraints = args.freeze_constraints or not args.unfreeze_constraints
 
     # Load constraint models
-    depth_model = load_depth_model(
-        Path(args.depth_checkpoint),
+    pof_model = load_pof_model_frozen(
+        Path(args.pof_checkpoint),
         device,
         freeze=freeze_constraints,
     )
@@ -440,7 +471,7 @@ def main():
         num_workers=args.workers,
         val_ratio=args.val_ratio,
         max_samples=args.max_samples,
-        depth_model=depth_model if not freeze_constraints else None,
+        pof_model=pof_model if not freeze_constraints else None,
         joint_model=joint_model if not freeze_constraints else None,
         device=device,
     )
@@ -452,7 +483,7 @@ def main():
     else:
         optimizer = AdamW([
             {'params': main_model.parameters(), 'lr': args.lr},
-            {'params': depth_model.parameters(), 'lr': args.constraint_lr},
+            {'params': pof_model.parameters(), 'lr': args.constraint_lr},
             {'params': joint_model.parameters(), 'lr': args.constraint_lr},
         ], weight_decay=0.01)
 
@@ -497,7 +528,7 @@ def main():
 
         # Train
         train_losses = train_epoch(
-            main_model, depth_model, joint_model,
+            main_model, pof_model, joint_model,
             train_loader, optimizer, loss_fn, device,
             scaler=scaler, use_amp=use_amp, amp_dtype=amp_dtype,
             freeze_constraints=freeze_constraints,
@@ -505,7 +536,7 @@ def main():
 
         # Validate
         val_losses = validate(
-            main_model, depth_model, joint_model,
+            main_model, pof_model, joint_model,
             val_loader, loss_fn, device,
             use_amp=use_amp, amp_dtype=amp_dtype,
         )
@@ -519,7 +550,7 @@ def main():
         print(f"  Val Pose Loss: {val_losses['pose']:.4f}")
         if 'improvement_ratio' in val_losses:
             print(f"  Improvement Ratio: {val_losses['improvement_ratio']:.3f} "
-                  f"({'better' if val_losses['improvement_ratio'] < 1 else 'worse'} than depth-only)")
+                  f"({'better' if val_losses['improvement_ratio'] < 1 else 'worse'} than POF-only)")
 
         # Save best model
         if val_losses['total'] < best_val_loss and not torch.isnan(torch.tensor(val_losses['total'])):
