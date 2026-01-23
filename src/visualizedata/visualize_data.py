@@ -296,15 +296,19 @@ class VisualizeData:
         )
 
         if export_path:
+            export_path = Path(export_path)
             export_path.parent.mkdir(parents=True, exist_ok=True)
             writer: PillowWriter | FFMpegWriter
             chosen_writer = "pillow"
             try:
                 writer = FFMpegWriter(fps=20)
+                anim["animation"].save(str(export_path), writer=writer)
                 chosen_writer = "ffmpeg"
-            except RuntimeError:
+            except (RuntimeError, FileNotFoundError):
+                # PillowWriter can't save MP4, use GIF instead
+                export_path = export_path.with_suffix(".gif")
                 writer = PillowWriter(fps=10)
-            anim["animation"].save(str(export_path), writer=writer)
+                anim["animation"].save(str(export_path), writer=writer)
             print(f"[visualize] saved animation ({chosen_writer}) to {export_path}")
 
         backend = matplotlib.get_backend().lower()
