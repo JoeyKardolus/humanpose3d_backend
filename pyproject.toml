@@ -17,6 +17,7 @@ dependencies = [
     "tensorflow>=2.13.0",
     "onnxruntime-gpu>=1.23.0",
     "django>=6.0.1",
+    "PySide6 ; sys_platform == 'win32'",
     "torch>=2.9.1",
 ]
 
@@ -27,3 +28,11 @@ neural = [
     "torchvision>=0.24.1",
     "tqdm>=4.66.0",
 ]
+
+  [tool.uv]
+  override-dependencies = [
+      "pyqt5 ; sys_platform != 'win32'",
+      "pyqt5-qt5 ; sys_platform != 'win32'",
+      "pyqt5-sip ; sys_platform != 'win32'",
+  ]
+
