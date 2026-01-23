@@ -16,7 +16,19 @@ def run(cmd, shell=False, check=True, **kwargs):
 
 
 def uv_exists() -> bool:
-    return shutil.which("uv") is not None
+    """Check if uv is available, including common installation paths."""
+    if shutil.which("uv") is not None:
+        return True
+
+    # Direct check for common installation locations
+    home = os.path.expanduser("~")
+    candidates = [
+        os.path.join(home, ".local", "bin", "uv.exe"),  # Windows
+        os.path.join(home, ".local", "bin", "uv"),  # Unix
+        os.path.join(home, ".cargo", "bin", "uv.exe"),  # Windows (older)
+        os.path.join(home, ".cargo", "bin", "uv"),  # Unix (older)
+    ]
+    return any(os.path.isfile(c) for c in candidates)
 
 
 def install_uv_windows():
@@ -36,11 +48,40 @@ def install_uv_macos_linux():
 
 
 def ensure_uv_available_in_path():
-    # uv is often installed into ~/.cargo/bin
+    """Add common uv installation directories to PATH if they exist."""
     home = os.path.expanduser("~")
-    cargo_bin = os.path.join(home, ".cargo", "bin")
-    if os.path.isdir(cargo_bin) and cargo_bin not in os.environ.get("PATH", ""):
-        os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + cargo_bin
+    current_path = os.environ.get("PATH", "")
+
+    # Common uv installation paths by platform
+    candidate_paths = [
+        os.path.join(home, ".cargo", "bin"),  # macOS/Linux (older)
+        os.path.join(home, ".local", "bin"),  # Windows and modern uv
+    ]
+
+    for candidate in candidate_paths:
+        if os.path.isdir(candidate) and candidate not in current_path:
+            os.environ["PATH"] = current_path + os.pathsep + candidate
+            current_path = os.environ["PATH"]
+
+
+def get_uv_executable() -> str | None:
+    """Return the path to the uv executable, or None if not found."""
+    which_result = shutil.which("uv")
+    if which_result:
+        return which_result
+
+    # Direct check for common installation locations
+    home = os.path.expanduser("~")
+    candidates = [
+        os.path.join(home, ".local", "bin", "uv.exe"),  # Windows
+        os.path.join(home, ".local", "bin", "uv"),  # Unix
+        os.path.join(home, ".cargo", "bin", "uv.exe"),  # Windows (older)
+        os.path.join(home, ".cargo", "bin", "uv"),  # Unix (older)
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    return None
 
 
 def fail_if_uv_missing():
@@ -71,9 +112,18 @@ def ensure_uv_installed():
     print("✅ uv installed and available.")
 
 
+def get_uv_command() -> str:
+    """Return the uv command to use (full path if not in PATH)."""
+    uv_path = get_uv_executable()
+    if uv_path is None:
+        raise RuntimeError("uv executable not found")
+    return uv_path
+
+
 def uv_sync():
     print("\nRunning uv sync...")
-    run(["uv", "sync"])
+    uv = get_uv_command()
+    run([uv, "sync"])
 
 
 def is_port_open(host: str, port: int, timeout: float = 0.3) -> bool:
@@ -104,27 +154,30 @@ def open_server_page(host: str, port: int):
 
 def runserver_console(host: str, port: int):
     print("\nStarting Django dev server (console mode)...")
+    uv = get_uv_command()
     # This blocks until server exits
-    run(["uv", "run", "python", "manage.py", "runserver", f"{host}:{port}"])
+    run([uv, "run", "python", "manage.py", "runserver", f"{host}:{port}"])
 
 
 def runserver_spawn_windows(host: str, port: int):
     print("\nStarting Django dev server (spawn new console)...")
+    uv = get_uv_command()
     CREATE_NEW_CONSOLE = 0x00000010
     # Returns immediately
     subprocess.Popen(
-        ["uv", "run", "python", "manage.py", "runserver", f"{host}:{port}"],
+        [uv, "run", "python", "manage.py", "runserver", f"{host}:{port}"],
         creationflags=CREATE_NEW_CONSOLE,
     )
 
 
 def runserver_log(host: str, port: int, log_path: Path):
     print(f"\nStarting Django dev server (logging to {log_path})...")
+    uv = get_uv_command()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     f = open(log_path, "a", encoding="utf-8")
 
     p = subprocess.Popen(
-        ["uv", "run", "python", "manage.py", "runserver", f"{host}:{port}"],
+        [uv, "run", "python", "manage.py", "runserver", f"{host}:{port}"],
         stdout=f,
         stderr=subprocess.STDOUT,
         text=True,
@@ -160,11 +213,13 @@ def main():
     # Start server
     server_proc = None
 
+    uv = get_uv_command()
+
     if args.mode == "console":
         # In console mode we need to open browser BEFORE blocking,
         # so we start server in background, open browser, then wait.
         server_proc = subprocess.Popen(
-            ["uv", "run", "python", "manage.py", "runserver", f"{host}:{port}"]
+            [uv, "run", "python", "manage.py", "runserver", f"{host}:{port}"]
         )
 
     elif args.mode == "spawn":
@@ -173,7 +228,7 @@ def main():
                 "⚠️ spawn mode is mainly for Windows. Falling back to console-mode background start."
             )
             server_proc = subprocess.Popen(
-                ["uv", "run", "python", "manage.py", "runserver", f"{host}:{port}"]
+                [uv, "run", "python", "manage.py", "runserver", f"{host}:{port}"]
             )
         else:
             runserver_spawn_windows(host, port)
