@@ -85,16 +85,72 @@ def wait_for_port(host: str, port: int, timeout_seconds: int = 30) -> bool:
     return False
 
 
+def install_uv_windows() -> bool:
+    """Install uv on Windows using the official installer."""
+    print("Installing uv...")
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "irm https://astral.sh/uv/install.ps1 | iex",
+            ],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"Failed to install uv: {result.stderr}")
+            return False
+
+        # Refresh PATH to pick up the new installation
+        refresh_path_windows()
+        return uv_installed()
+    except Exception as e:
+        print(f"Error installing uv: {e}")
+        return False
+
+
+def refresh_path_windows() -> None:
+    """Refresh PATH environment variable on Windows to pick up new installations."""
+    # uv installs to %USERPROFILE%\.local\bin on Windows
+    local_bin = Path.home() / ".local" / "bin"
+    if local_bin.exists():
+        current_path = os.environ.get("PATH", "")
+        if str(local_bin) not in current_path:
+            os.environ["PATH"] = f"{local_bin}{os.pathsep}{current_path}"
+
+    # Also check %USERPROFILE%\.cargo\bin (alternative location)
+    cargo_bin = Path.home() / ".cargo" / "bin"
+    if cargo_bin.exists():
+        current_path = os.environ.get("PATH", "")
+        if str(cargo_bin) not in current_path:
+            os.environ["PATH"] = f"{cargo_bin}{os.pathsep}{current_path}"
+
+
 def ensure_uv() -> None:
-    """Ensure uv is installed or exit with instructions."""
+    """Ensure uv is installed, auto-installing on Windows if needed."""
     if uv_installed():
         print("uv is already installed. Skipping.")
         return
 
+    if sys.platform == "win32":
+        print("uv is not installed. Attempting automatic installation...")
+        if install_uv_windows():
+            print("uv installed successfully.")
+            return
+        print("Automatic installation failed.")
+
     print("uv is not installed.")
     print("Install it first:")
-    print("  curl -LsSf https://astral.sh/uv/install.sh | sh")
-    print("  source ~/.local/bin/env")
+    if sys.platform == "win32":
+        print("  powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"")
+    else:
+        print("  curl -LsSf https://astral.sh/uv/install.sh | sh")
+        print("  source ~/.local/bin/env")
     sys.exit(1)
 
 
@@ -115,7 +171,11 @@ def ensure_dependencies() -> None:
         return
 
     print("Creating virtual environment and installing dependencies...")
+    print("This may take several minutes on first run (downloading ~2GB of packages).")
+    print("")
     run_command(["uv", "sync"], cwd=REPO_ROOT)
+    print("")
+    print("Dependencies installed successfully.")
 
 
 def start_server() -> subprocess.Popen[str]:

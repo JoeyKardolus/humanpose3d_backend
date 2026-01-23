@@ -29,10 +29,15 @@ neural = [
     "tqdm>=4.66.0",
 ]
 
-  [tool.uv]
-  override-dependencies = [
-      "pyqt5 ; sys_platform != 'win32'",
-      "pyqt5-qt5 ; sys_platform != 'win32'",
-      "pyqt5-sip ; sys_platform != 'win32'",
-  ]
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.0.0",
+]
+
+[tool.uv]
+override-dependencies = [
+    "pyqt5 ; sys_platform != 'win32'",
+    "pyqt5-qt5 ; sys_platform != 'win32'",
+    "pyqt5-sip ; sys_platform != 'win32'",
+]
 
