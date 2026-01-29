@@ -125,6 +125,8 @@ document.addEventListener("DOMContentLoaded", () => {
     : null;
   const plotContainer = document.getElementById("statsPlot3d");
   const plotEmpty = document.getElementById("statsPlotEmpty");
+  const plotLoading = document.getElementById("statsPlotLoading");
+  const plotError = document.getElementById("statsPlotError");
 
   const plotState = {
     ready: false,
@@ -318,9 +320,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const resolvePlotIndex = (timeValue) => {
     const frames = plotState.data?.frames || [];
+    const times = plotState.data?.times || [];
     if (!frames.length) {
       return 0;
     }
+    // Use actual timestamp lookup if available (fixes sync with joint angle charts)
+    if (times.length === frames.length) {
+      const index = findClosestIndex(times, timeValue);
+      return index >= 0 ? index : 0;
+    }
+    // Fallback to linear interpolation if no times array
     if (timelineDuration <= 0) {
       return 0;
     }
@@ -486,9 +495,31 @@ document.addEventListener("DOMContentLoaded", () => {
     if (plotControls) {
       plotControls.classList.toggle("d-none", isVideo || !plotState.hasData);
     }
-    if (plotContainer && plotEmpty) {
-      plotContainer.parentElement?.classList.toggle("d-none", !plotState.hasData);
-      plotEmpty.classList.toggle("d-none", plotState.hasData);
+    // Hide all plot states initially
+    if (plotContainer) {
+      plotContainer.parentElement?.classList.add("d-none");
+    }
+    if (plotEmpty) {
+      plotEmpty.classList.add("d-none");
+    }
+    if (plotLoading) {
+      plotLoading.classList.add("d-none");
+    }
+    if (plotError) {
+      plotError.classList.add("d-none");
+    }
+    // Show appropriate state
+    if (!isVideo) {
+      if (plotState.hasData) {
+        // Show loading state while Plotly loads
+        if (!plotState.ready && plotLoading) {
+          plotLoading.classList.remove("d-none");
+        } else if (plotContainer) {
+          plotContainer.parentElement?.classList.remove("d-none");
+        }
+      } else if (plotEmpty) {
+        plotEmpty.classList.remove("d-none");
+      }
     }
     visualToggleVideo.classList.toggle("btn-primary", isVideo);
     visualToggleVideo.classList.toggle("btn-outline-primary", !isVideo);
@@ -511,12 +542,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!isVideo && plotState.hasData && plotContainer && !plotState.ready) {
       loadPlotly()
         .then(() => {
+          // Hide loading, show plot container
+          if (plotLoading) {
+            plotLoading.classList.add("d-none");
+          }
+          if (plotContainer) {
+            plotContainer.parentElement?.classList.remove("d-none");
+          }
           const currentValue = Number.parseFloat(slider.value || "0");
           plotState.relayoutBound = false;
           renderPlotFrame(timelineStart + currentValue);
         })
         .catch(() => {
-          // Plot container remains empty if Plotly fails to load.
+          // Show error state if Plotly fails to load
+          if (plotLoading) {
+            plotLoading.classList.add("d-none");
+          }
+          if (plotError) {
+            plotError.classList.remove("d-none");
+          }
         });
     }
   };

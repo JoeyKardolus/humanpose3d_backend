@@ -304,10 +304,11 @@ def _infer_rotation_from_landmarks(
     """Infer rotation from the relative pose orientation in image space."""
     if not landmarks:
         return 0
+    # Use numeric indices directly (NOSE=0, LEFT_HIP=23, RIGHT_HIP=24)
     try:
-        nose = landmarks[mp.solutions.pose.PoseLandmark.NOSE.value]
-        left_hip = landmarks[mp.solutions.pose.PoseLandmark.LEFT_HIP.value]
-        right_hip = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_HIP.value]
+        nose = landmarks[0]
+        left_hip = landmarks[23]
+        right_hip = landmarks[24]
     except (IndexError, AttributeError):
         return 0
     hip_x = (left_hip.x + right_hip.x) / 2.0

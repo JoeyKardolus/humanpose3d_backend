@@ -27,10 +27,10 @@ from src.mediastream.media_stream import (
     read_video_rgb,
 )
 from src.posedetector.pose_detector import extract_world_landmarks
-from src.postprocessing.temporal_smoothing import hide_markers_in_trc, smooth_trc
+from src.datastream import hide_markers_in_trc, smooth_trc
 from src.pipeline.cleanup import cleanup_output_directory
 from src.pipeline.refinement import (
-    apply_neural_depth_refinement,
+    apply_camera_pof_reconstruction,
     apply_neural_joint_refinement,
 )
 from src.visualizedata.visualize_data import VisualizeData
@@ -71,27 +71,21 @@ def add_pipeline_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
     parser.add_argument(
-        "--main-refiner",
+        "--camera-pof",
         action="store_true",
-        help="Apply MainRefiner neural pipeline (depth + joint refinement) - RECOMMENDED",
+        help="Use POF 3D reconstruction from 2D keypoints (replaces MediaPipe depth)",
     )
     parser.add_argument(
-        "--depth-model-path",
+        "--pof-model-path",
         type=str,
-        default=str(_STORAGE_PATHS.checkpoints_root / "best_depth_model.pth"),
-        help="Path to depth refinement model checkpoint",
+        default=str(_STORAGE_PATHS.checkpoints_root / "best_pof_semgcn-temporal_model.pth"),
+        help="Path to POF model checkpoint",
     )
     parser.add_argument(
         "--joint-model-path",
         type=str,
         default=str(_STORAGE_PATHS.checkpoints_root / "best_joint_model.pth"),
         help="Path to joint refinement model checkpoint",
-    )
-    parser.add_argument(
-        "--main-refiner-path",
-        type=str,
-        default=str(_STORAGE_PATHS.checkpoints_root / "best_main_refiner.pth"),
-        help="Path to MainRefiner model checkpoint",
     )
 
     parser.add_argument(
@@ -195,18 +189,18 @@ def run_pipeline(args: argparse.Namespace) -> None:
             args.visibility_min,
             display=args.show_video,
             return_raw_landmarks=args.plot_landmarks,
-            return_2d_landmarks=args.main_refiner,
+            return_2d_landmarks=args.camera_pof,
             preview_output=preview_path,
             preview_rotation_degrees=preview_rotation,
         )
 
         landmarks_2d = {}
         raw_landmarks = []
-        if args.plot_landmarks and args.main_refiner:
+        if args.plot_landmarks and args.camera_pof:
             records, raw_landmarks, landmarks_2d = detection_output
         elif args.plot_landmarks:
             records, raw_landmarks = detection_output
-        elif args.main_refiner:
+        elif args.camera_pof:
             records, landmarks_2d = detection_output
         else:
             records = detection_output
@@ -217,9 +211,11 @@ def run_pipeline(args: argparse.Namespace) -> None:
             estimated_count = len(records) - original_count
             print(f"[main] estimated {estimated_count} missing markers using symmetry")
 
-        if args.main_refiner:
-            records = apply_neural_depth_refinement(records, args.depth_model_path, landmarks_2d)
-            append_build_log("main step1.5 depth refinement applied")
+        if args.camera_pof:
+            records = apply_camera_pof_reconstruction(
+                records, args.pof_model_path, landmarks_2d, args.height
+            )
+            append_build_log("main step1.5 POF 3D reconstruction applied")
 
         csv_path = run_dir / f"{video_path.stem}.csv"
         row_count = write_landmark_csv(csv_path, records)
@@ -253,7 +249,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             append_build_log(f"main step3.5 complete {final_output}")
             print(f"[main] step3.5 force-complete -> {final_output}")
 
-        if args.compute_all_joint_angles or args.main_refiner:
+        if args.compute_all_joint_angles or args.camera_pof:
             try:
                 print("\n" + "=" * 60)
                 print("Computing Comprehensive Joint Angles (ISB Standards)")
@@ -268,7 +264,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
                     verbose=True,
                 )
 
-                if args.main_refiner:
+                if args.camera_pof:
                     angle_results = apply_neural_joint_refinement(
                         angle_results,
                         args.joint_model_path,

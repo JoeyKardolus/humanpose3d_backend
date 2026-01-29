@@ -53,6 +53,67 @@ from src.application.validators.path_validator import PathValidator
 from src.application.validators.run_request_validator import RunRequestValidator
 
 
+def _parse_pipeline_error(
+    return_code: int, stderr_text: str, stdout_text: str
+) -> tuple[list[str], str]:
+    """Parse pipeline error output into user-friendly messages and technical details.
+
+    Returns a tuple of (user_messages, technical_details).
+    """
+    output_text = stderr_text or stdout_text or ""
+    output_lower = output_text.lower()
+
+    # Common error patterns and their user-friendly messages
+    user_messages: list[str] = []
+
+    if "video duration exceeds" in output_lower or "video is too long" in output_lower:
+        user_messages.append(
+            "Video is too long. Please upload a video under 1 minute."
+        )
+    elif "ffprobe" in output_lower and ("not found" in output_lower or "no such file" in output_lower):
+        user_messages.append(
+            "Video processing tools are not installed on the server. "
+            "Please contact the administrator."
+        )
+    elif "out of memory" in output_lower or "memory" in output_lower and "error" in output_lower:
+        user_messages.append(
+            "Server ran out of memory processing this video. "
+            "Try a shorter or lower-resolution video."
+        )
+    elif "no landmarks detected" in output_lower or "no pose detected" in output_lower:
+        user_messages.append(
+            "Could not detect a person in the video. "
+            "Ensure the subject is fully visible and well-lit."
+        )
+    elif "cuda" in output_lower and "error" in output_lower:
+        user_messages.append(
+            "GPU processing failed. The server will retry with CPU."
+        )
+    elif "permission denied" in output_lower:
+        user_messages.append(
+            "Server file permission error. Please contact the administrator."
+        )
+    elif "invalid video" in output_lower or "corrupt" in output_lower:
+        user_messages.append(
+            "The video file appears to be invalid or corrupted. "
+            "Please try a different video."
+        )
+    else:
+        user_messages.append(
+            "Pipeline failed to complete. This may be due to video quality issues."
+        )
+
+    # Add exit code hint only if non-standard
+    if return_code not in (0, 1):
+        user_messages.append(f"Process exited with code {return_code}.")
+
+    # Build technical details for collapsible section
+    tail_lines = output_text.splitlines()[-20:]
+    technical_details = "\n".join(tail_lines) if tail_lines else "No output captured."
+
+    return user_messages, technical_details
+
+
 # Module-level wiring keeps view classes thin and testable.
 _APP_PATHS = AppPaths.from_anchor(Path(__file__))
 _PATH_VALIDATOR = PathValidator()
@@ -140,25 +201,17 @@ class HomeView(View):
             )
 
         if result.return_code != 0:
-            log_path = spec.pipeline_run_dir / "pipeline_error.log"
-            try:
-                log_display = str(log_path.relative_to(_APP_PATHS.repo_root))
-            except ValueError:
-                log_display = str(log_path)
-            tail_lines = (result.stderr_text or result.stdout_text).splitlines()[-12:]
-            tail_text = "\n".join(tail_lines)
+            user_messages, technical_details = _parse_pipeline_error(
+                result.return_code,
+                result.stderr_text or "",
+                result.stdout_text or "",
+            )
             return render(
                 request,
                 "home.html",
                 self._build_context(
-                    errors=[
-                        "Pipeline failed to run. Check the server logs for details.",
-                        f"Exit code: {result.return_code}",
-                        f"Log file: {log_display}",
-                        f"Last output:\n{tail_text}"
-                        if tail_text
-                        else "No output captured.",
-                    ]
+                    errors=user_messages,
+                    error_details=technical_details,
                 ),
             )
 

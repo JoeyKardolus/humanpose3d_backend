@@ -89,7 +89,7 @@ def run_pose2sim_augment(
         trc_path: Path to input TRC file
         out_dir: Output directory
         height: Subject height in meters
-        mass: Subject mass in kg
+        weight: Subject weight in kg
         augmentation_cycles: Number of cycles for averaging (default 1)
         camera_space: If True, transform camera-space input to Pose2Sim convention
                      before augmentation, and transform output back to camera-space.
@@ -124,7 +124,7 @@ def run_pose2sim_augment(
     if augmentation_cycles == 1:
         # Single cycle - use original fast path
         augmented_output = _run_single_augmentation_cycle(
-            working_trc, out_dir, height, mass, cycle_num=0
+            working_trc, out_dir, height, weight, cycle_num=0
         )
     else:
         # Multi-cycle averaging approach
@@ -135,7 +135,7 @@ def run_pose2sim_augment(
             print(f"[augment] cycle {cycle_num + 1}/{augmentation_cycles}")
             try:
                 cycle_output = _run_single_augmentation_cycle(
-                    working_trc, out_dir, height, mass, cycle_num
+                    working_trc, out_dir, height, weight, cycle_num
                 )
                 cycle_results.append(cycle_output)
             except Exception as exc:

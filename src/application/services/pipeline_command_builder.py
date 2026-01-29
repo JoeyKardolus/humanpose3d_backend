@@ -38,11 +38,10 @@ class PipelineCommandBuilder:
 
         # Core parameters
         _add_flag("--height", form_data.get("height"), default="1.78")
-        _add_flag("--mass", form_data.get("weight"), default="75.0")
+        _add_flag("--weight", form_data.get("weight"), default="75.0")
         _add_flag("--visibility-min", form_data.get("visibility_min"), default="0.1")
-        _add_flag("--depth-model-path", form_data.get("depth_model_path"))
+        _add_flag("--pof-model-path", form_data.get("pof_model_path"))
         _add_flag("--joint-model-path", form_data.get("joint_model_path"))
-        _add_flag("--main-refiner-path", form_data.get("main_refiner_path"))
         _add_flag(
             "--augmentation-cycles", form_data.get("augmentation_cycles"), default="20"
         )

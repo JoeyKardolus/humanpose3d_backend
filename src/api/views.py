@@ -135,32 +135,62 @@ class ModelDownloadJob:
     started_at: float = field(default_factory=time)
 
 
+def _get_repo_root() -> Path:
+    """Resolve the repository root directory."""
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "models").exists() and (parent / "src").exists():
+            return parent
+    return current.parents[3]
+
+
+def _resolve_model_path(
+    name: str, source_path: str, storage_path: Path, repo_models: Path
+) -> ModelAsset:
+    """Resolve model path, preferring repo location if exists."""
+    repo_path = repo_models / Path(source_path).relative_to("models")
+    target = repo_path if repo_path.exists() else storage_path
+    return ModelAsset(name=name, source_path=source_path, target_path=target)
+
+
 def _get_model_assets(storage_paths: StoragePaths) -> list[ModelAsset]:
+    """Get required model assets - only core models needed for basic pipeline.
+
+    Note: GRU.h5 is bundled with Pose2Sim (FLK package) and doesn't need separate download.
+    Only pose_landmarker_heavy.task needs to be downloaded from Google's model garden.
+    """
+    repo_models = _get_repo_root() / "models"
+
+    # Core models required for basic pipeline
+    # GRU.h5 is installed with Pose2Sim via the FLK package, no need to distribute separately
     return [
-        ModelAsset(
-            name="pose_landmarker_heavy.task",
-            source_path="models/pose_landmarker_heavy.task",
-            target_path=storage_paths.models_root / "pose_landmarker_heavy.task",
+        _resolve_model_path(
+            "pose_landmarker_heavy.task",
+            "models/pose_landmarker_heavy.task",
+            storage_paths.models_root / "pose_landmarker_heavy.task",
+            repo_models,
         ),
-        ModelAsset(
-            name="GRU.h5",
-            source_path="models/GRU.h5",
-            target_path=storage_paths.models_root / "GRU.h5",
+    ]
+
+
+def _get_optional_model_assets(storage_paths: StoragePaths) -> list[ModelAsset]:
+    """Get optional model assets for experimental features (POF, joint refinement)."""
+    repo_models = _get_repo_root() / "models"
+
+    return [
+        # POF model - only needed when --camera-pof is enabled
+        _resolve_model_path(
+            "best_pof_semgcn-temporal_model.pth",
+            "models/checkpoints/best_pof_semgcn-temporal_model.pth",
+            storage_paths.checkpoints_root / "best_pof_semgcn-temporal_model.pth",
+            repo_models,
         ),
-        ModelAsset(
-            name="best_depth_model.pth",
-            source_path="models/checkpoints/best_depth_model.pth",
-            target_path=storage_paths.checkpoints_root / "best_depth_model.pth",
-        ),
-        ModelAsset(
-            name="best_joint_model.pth",
-            source_path="models/checkpoints/best_joint_model.pth",
-            target_path=storage_paths.checkpoints_root / "best_joint_model.pth",
-        ),
-        ModelAsset(
-            name="best_main_refiner.pth",
-            source_path="models/checkpoints/best_main_refiner.pth",
-            target_path=storage_paths.checkpoints_root / "best_main_refiner.pth",
+        # Joint refinement model - only needed when --joint-refinement is enabled
+        _resolve_model_path(
+            "best_joint_model.pth",
+            "models/checkpoints/best_joint_model.pth",
+            storage_paths.checkpoints_root / "best_joint_model.pth",
+            repo_models,
         ),
     ]
 
