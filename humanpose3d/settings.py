@@ -13,6 +13,17 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 
 ALLOWED_HOSTS = ["*"]
 
+# Trust ngrok and common dev origins for CSRF
+CSRF_TRUSTED_ORIGINS = [
+    "https://amari-off-collin.ngrok-free.dev",
+    "https://*.ngrok-free.dev",
+    "https://*.ngrok.io",
+    "http://localhost:8000",
+    "http://localhost:8001",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:8001",
+]
+
 DJANGO_APPS = [
     "django.contrib.staticfiles",
 ]
