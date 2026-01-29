@@ -1,10 +1,13 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
-build/
+bin/
 dist/
 wheels/
 *.egg-info
+
+# Launcher (auto-generated)
+HumanPose3D.sh
 
 # Virtual environments
 .venv

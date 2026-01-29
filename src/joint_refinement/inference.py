@@ -4,7 +4,7 @@ Inference module for joint constraint refinement.
 Usage:
     from src.joint_refinement.inference import JointRefiner
 
-    refiner = JointRefiner('models/checkpoints/best_joint_model.pth')
+    refiner = JointRefiner('~/.humanpose3d/models/checkpoints/best_joint_model.pth')
     refined_angles = refiner.refine(angles, visibility)
 
 The refiner loads the trained model and applies soft learned constraints
@@ -16,6 +16,7 @@ import torch
 from pathlib import Path
 from typing import Optional, Union
 
+from src.application.config.paths import StoragePaths
 from .model import create_model, JointConstraintRefiner
 
 
@@ -192,7 +193,7 @@ class JointRefiner:
 
 
 def load_refiner(
-    model_path: Union[str, Path] = 'models/checkpoints/best_joint_model.pth',
+    model_path: Union[str, Path] = StoragePaths.load().checkpoints_root / "best_joint_model.pth",
     device: str = 'auto',
 ) -> JointRefiner:
     """
@@ -212,7 +213,7 @@ if __name__ == '__main__':
     import sys
 
     # Test inference
-    model_path = Path('models/checkpoints/best_joint_model.pth')
+    model_path = StoragePaths.load().checkpoints_root / "best_joint_model.pth"
 
     if not model_path.exists():
         print(f"Model not found: {model_path}")

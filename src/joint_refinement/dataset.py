@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 import random
 
+from src.application.config.paths import StoragePaths
 
 # Joint names and their indices
 JOINT_NAMES = [
@@ -278,7 +279,7 @@ def create_dataloaders(
 
 if __name__ == '__main__':
     # Test dataset
-    data_dir = Path('data/training/aistpp_joint_angles')
+    data_dir = StoragePaths.load().training_root / "aistpp_joint_angles"
 
     if not data_dir.exists():
         print(f"Data directory not found: {data_dir}")

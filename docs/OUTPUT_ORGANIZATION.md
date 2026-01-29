@@ -8,7 +8,7 @@
 ## Directory Structure
 
 ```
-data/output/pose-3d/<video_name>/
+~/.humanpose3d/output/<video_name>/
 ├── <video>_final.trc               # Final multi-constraint optimized skeleton (65 markers)
 ├── <video>_initial.trc             # Initial TRC from MediaPipe (22 markers)
 ├── <video>_raw_landmarks.csv       # Raw MediaPipe landmarks (CSV format)
@@ -110,9 +110,9 @@ Old runs and deprecated feature outputs are moved to `old_runs/`:
 The cleanup happens **after** the main pipeline completes:
 
 ```bash
-uv run python main.py \
-  --video data/input/<video>.mp4 \
-  --height 1.78 --mass 75 \
+uv run python manage.py run_pipeline \
+  --video ~/.humanpose3d/input/<video>.mp4 \
+  --height 1.78 --weight 75 \
   --estimate-missing --force-complete \
   --augmentation-cycles 20 \
   --main-refiner \
@@ -132,7 +132,7 @@ uv run python main.py \
 To clean up output directory manually:
 
 ```bash
-cd data/output/pose-3d/<video_name>/
+cd ~/.humanpose3d/output/<video_name>/
 ./cleanup.sh  # If script exists
 
 # Or manually:
@@ -161,4 +161,3 @@ mv *_angles_*.csv *_all_joint_angles.png joint_angles/
 - Right-side data may have fewer frames due to marker visibility (check CSV for NaN)
 - Some unreliable augmented markers may be filtered (typical: 4-6 markers removed)
 - Old runs are preserved for 1 session, then manually cleaned
-

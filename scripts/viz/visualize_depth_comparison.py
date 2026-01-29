@@ -22,6 +22,7 @@ from collections import defaultdict
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from src.application.config.paths import StoragePaths
 from src.datastream.data_stream import LandmarkRecord
 from src.depth_refinement.inference import DepthRefiner
 
@@ -310,8 +311,9 @@ def main():
         video_name = 'joey'
 
     # Paths
-    csv_path = Path(f'data/output/{video_name}/{video_name}_raw_landmarks.csv')
-    model_path = Path('models/checkpoints/best_depth_model.pth')
+    storage_paths = StoragePaths.load()
+    csv_path = storage_paths.output_root / video_name / f"{video_name}_raw_landmarks.csv"
+    model_path = storage_paths.checkpoints_root / "best_depth_model.pth"
 
     if not csv_path.exists():
         print(f"Error: CSV not found: {csv_path}")

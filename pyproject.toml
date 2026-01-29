@@ -3,7 +3,7 @@ name = "humanpose"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = "==3.12.*"
 dependencies = [
     "jupyter>=1.1.1",
     "mediapipe>=0.10.21",
@@ -11,23 +11,33 @@ dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.24.0",
     "matplotlib>=3.7.0",
+    "pillow>=10.2.0",
+    "pytesseract>=0.3.13",
     "pose2sim>=0.10.0",
     "tensorflow>=2.13.0",
     "onnxruntime-gpu>=1.23.0",
     "django>=6.0.1",
+    "PySide6 ; sys_platform == 'win32'",
     "torch>=2.9.1",
 ]
 
-[dependency-groups]
-dev = [
-    "ruff>=0.14.13",
-]
 neural = [
     "einops>=0.8.1",
     "ezc3d>=1.5.0",
     "tensorboard>=2.18.0",
-    "torch>=2.9.1",
     "torchvision>=0.24.1",
     "tqdm>=4.66.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.0.0",
+]
+
+[tool.uv]
+override-dependencies = [
+    "pyqt5 ; sys_platform != 'win32'",
+    "pyqt5-qt5 ; sys_platform != 'win32'",
+    "pyqt5-sip ; sys_platform != 'win32'",
 ]
 

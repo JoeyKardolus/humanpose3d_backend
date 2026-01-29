@@ -18,6 +18,7 @@ from typing import Optional, Tuple, Dict, Union
 import random
 import re
 
+from src.application.config.paths import StoragePaths
 
 class MainRefinerDataset(Dataset):
     """Dataset that provides constraint model outputs for fusion training.
@@ -436,7 +437,7 @@ def create_dataloaders(
 
 if __name__ == '__main__':
     # Test dataset (without models)
-    data_dir = Path('data/training/aistpp_converted')
+    data_dir = StoragePaths.load().training_root / "aistpp_converted"
 
     if not data_dir.exists():
         print(f"Data directory not found: {data_dir}")

@@ -8,7 +8,7 @@
 ```bash
 uv run python main.py \
   --video data/input/joey.mp4 \
-  --height 1.78 --mass 75 --age 30 --sex male \
+  --height 1.78 --weight 75 --age 30 --sex male \
   --anatomical-constraints \
   --bone-length-constraints \
   --estimate-missing \
@@ -182,7 +182,7 @@ uv run python main.py \
 ### 3.1 Core Input (REQUIRED)
 ✅ `--video` - Input video file
 ✅ `--height` - Subject height
-✅ `--mass` - Subject mass
+✅ `--weight` - Subject weight
 ✅ `--age` - Subject age
 ✅ `--sex` - Subject sex
 

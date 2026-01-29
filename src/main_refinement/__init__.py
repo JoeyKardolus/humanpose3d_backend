@@ -15,8 +15,8 @@ Example usage:
 
     # Training: load individual models, create combined dataset
     pipeline = MainRefinerPipeline(
-        depth_checkpoint='models/checkpoints/best_depth_model.pth',
-        joint_checkpoint='models/checkpoints/best_joint_model.pth',
+        depth_checkpoint='~/.humanpose3d/models/checkpoints/best_depth_model.pth',
+        joint_checkpoint='~/.humanpose3d/models/checkpoints/best_joint_model.pth',
     )
     refined_pose = pipeline.refine(pose_3d, visibility, pose_2d)
 

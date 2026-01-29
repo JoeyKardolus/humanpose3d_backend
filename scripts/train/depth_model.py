@@ -12,7 +12,7 @@ Usage:
     uv run --group neural python scripts/train_depth_model.py
 
 Options:
-    --data        Path to training data (default: data/training/aistpp_converted)
+    --data        Path to training data (default: ~/.humanpose3d/training/aistpp_converted)
     --epochs      Number of epochs (default: 50)
     --batch-size  Batch size (default: 64)
     --lr          Learning rate (default: 1e-4)
@@ -37,6 +37,8 @@ from torch.amp import autocast, GradScaler
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, OneCycleLR
 from tqdm import tqdm
+
+from src.application.config.paths import StoragePaths
 
 # Compact logging mode (disable tqdm progress bars when piped to file)
 IS_TTY = sys.stdout.isatty()
@@ -690,9 +692,14 @@ def validate(
 
 
 def main():
+    storage_paths = StoragePaths.load()
     parser = argparse.ArgumentParser(description='Train depth refinement model')
-    parser.add_argument('--data', type=str, default='data/training/aistpp_converted',
-                        help='Path to training data (or comma-separated paths for multiple datasets, e.g., "data/training/aistpp_converted,data/training/mtc_converted")')
+    parser.add_argument(
+        '--data',
+        type=str,
+        default=str(storage_paths.training_root / "aistpp_converted"),
+        help='Path to training data (or comma-separated paths for multiple datasets)',
+    )
     parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
     parser.add_argument('--batch-size', type=int, default=64, help='Batch size')
     parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
@@ -702,8 +709,12 @@ def main():
     parser.add_argument('--checkpoint', type=str, help='Resume from checkpoint')
     parser.add_argument('--reset-scheduler', action='store_true',
                         help='Reset LR scheduler when resuming from checkpoint (start fresh schedule)')
-    parser.add_argument('--save-dir', type=str, default='models/checkpoints',
-                        help='Directory to save checkpoints')
+    parser.add_argument(
+        '--save-dir',
+        type=str,
+        default=str(storage_paths.checkpoints_root),
+        help='Directory to save checkpoints',
+    )
     # Model architecture
     parser.add_argument('--d-model', type=int, default=64, help='Model hidden dimension')
     parser.add_argument('--num-layers', type=int, default=4, help='Number of transformer layers')

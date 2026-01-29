@@ -20,20 +20,20 @@ This script:
 
 Usage:
     # First, explore the dataset structure
-    python scripts/convert_cmu_mtc_to_training.py --explore --mtc-dir data/mtc
+    python scripts/convert_cmu_mtc_to_training.py --explore --mtc-dir ~/.humanpose3d/training/mtc
 
     # Download and convert (full dataset ~270GB)
-    python scripts/convert_cmu_mtc_to_training.py --download --mtc-dir data/mtc
+    python scripts/convert_cmu_mtc_to_training.py --download --mtc-dir ~/.humanpose3d/training/mtc
 
     # Convert already downloaded dataset
     python scripts/convert_cmu_mtc_to_training.py --mtc-dir /path/to/mtc_dataset
 
     # Quick test with limited sequences
-    python scripts/convert_cmu_mtc_to_training.py --mtc-dir data/mtc --max-sequences 5
+    python scripts/convert_cmu_mtc_to_training.py --mtc-dir ~/.humanpose3d/training/mtc --max-sequences 5
 
 Download manually (recommended for 270GB):
     wget -c http://domedb.perception.cs.cmu.edu/data/mtc/mtc_dataset.tar.gz
-    tar -xzf mtc_dataset.tar.gz -C data/mtc
+    tar -xzf mtc_dataset.tar.gz -C ~/.humanpose3d/training/mtc
 """
 
 import os
@@ -80,6 +80,7 @@ logging.getLogger('mediapipe').setLevel(logging.FATAL)
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from src.application.config.paths import StoragePaths
 from src.depth_refinement.data_utils import align_body_frames
 
 import argparse
@@ -1374,10 +1375,11 @@ def _explore_dir_recursive(path: Path, depth: int = 0, max_depth: int = 3):
 
 
 def main():
+    storage_paths = StoragePaths.load()
     parser = argparse.ArgumentParser(description="Convert CMU MTC dataset to training data")
-    parser.add_argument("--mtc-dir", type=str, default="data/mtc",
+    parser.add_argument("--mtc-dir", type=str, default=str(storage_paths.training_root / "mtc"),
                         help="Path to MTC dataset directory")
-    parser.add_argument("--output-dir", type=str, default="data/training/mtc_converted",
+    parser.add_argument("--output-dir", type=str, default=str(storage_paths.training_root / "mtc_converted"),
                         help="Output directory for training samples")
     parser.add_argument("--download", action="store_true",
                         help="Download dataset if not present")

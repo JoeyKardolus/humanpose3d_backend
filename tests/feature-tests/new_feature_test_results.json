@@ -20,7 +20,7 @@
       "total": 43,
       "percentage": 18.6046511627907
     },
-    "output_file": "data/output/pose-3d/joey/joey_LSTM.trc"
+    "output_file": "~/.humanpose3d/output/joey/joey_LSTM.trc"
   },
   {
     "config_id": "config_12_ground_plane_bone",
@@ -43,7 +43,7 @@
       "total": 43,
       "percentage": 18.6046511627907
     },
-    "output_file": "data/output/pose-3d/joey/joey_LSTM.trc"
+    "output_file": "~/.humanpose3d/output/joey/joey_LSTM.trc"
   },
   {
     "config_id": "config_13_force_complete",
@@ -66,7 +66,7 @@
       "total": 43,
       "percentage": 100.0
     },
-    "output_file": "data/output/pose-3d/joey/joey_LSTM.trc"
+    "output_file": "~/.humanpose3d/output/joey/joey_LSTM.trc"
   },
   {
     "config_id": "config_14_recommended_plus_ground",
@@ -89,6 +89,6 @@
       "total": 43,
       "percentage": 100.0
     },
-    "output_file": "data/output/pose-3d/joey/joey_LSTM.trc"
+    "output_file": "~/.humanpose3d/output/joey/joey_LSTM.trc"
   }
 ]

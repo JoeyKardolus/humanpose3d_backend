@@ -67,6 +67,52 @@ def probe_video_rotation(video_path: Path) -> int:
     return 0
 
 
+def detect_frame_rotation(frame_rgb: np.ndarray) -> int:
+    """Attempt to infer rotation using OCR orientation detection."""
+    try:
+        import pytesseract
+    except ImportError:
+        return 0
+    if not shutil.which("tesseract"):
+        print("[media] tesseract not found; skipping OCR-based rotation detection")
+        return 0
+    try:
+        from PIL import Image
+    except ImportError:
+        return 0
+
+    height, width = frame_rgb.shape[:2]
+    if max(height, width) > 720:
+        scale = 720 / float(max(height, width))
+        resized = cv.resize(
+            frame_rgb, (int(width * scale), int(height * scale)), interpolation=cv.INTER_AREA
+        )
+    else:
+        resized = frame_rgb
+
+    try:
+        osd = pytesseract.image_to_osd(Image.fromarray(resized), output_type=pytesseract.Output.DICT)
+    except (pytesseract.TesseractError, ValueError, TypeError):
+        return 0
+
+    try:
+        confidence = float(osd.get("orientation_conf", 0))
+    except (TypeError, ValueError):
+        confidence = 0
+    if confidence < 10:
+        return 0
+
+    try:
+        rotation = int(osd.get("rotate", 0))
+    except (TypeError, ValueError):
+        return 0
+
+    rotation = rotation % 360
+    if rotation in {0, 90, 180, 270}:
+        return rotation
+    return 0
+
+
 
 
 class MediaStream:

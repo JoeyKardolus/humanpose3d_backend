@@ -25,6 +25,8 @@ import random
 import re
 from collections import defaultdict
 
+from src.application.config.paths import StoragePaths
+
 
 def _project_3d_to_2d_torch(
     points_3d: torch.Tensor,
@@ -762,7 +764,7 @@ def create_dataloaders(
 
 if __name__ == '__main__':
     # Test dataset
-    data_dir = Path('data/training/aistpp_converted')
+    data_dir = StoragePaths.load().training_root / "aistpp_converted"
 
     if not data_dir.exists():
         print(f"Data directory not found: {data_dir}")

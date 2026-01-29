@@ -2,10 +2,11 @@
 # Monitor data generation and start training at 1M samples
 
 TARGET=1000000
-DATA_DIR="data/training/aistpp_converted"
-LOG_FILE="logs/monitor_training.log"
+HUMANPOSE_HOME="${HUMANPOSE3D_HOME:-$HOME/.humanpose3d}"
+DATA_DIR="${HUMANPOSE_HOME}/training/aistpp_converted"
+LOG_FILE="${HUMANPOSE_HOME}/logs/monitor_training.log"
 
-mkdir -p logs
+mkdir -p "${HUMANPOSE_HOME}/logs"
 
 echo "$(date): Starting monitor - waiting for ${TARGET} samples..." | tee -a $LOG_FILE
 

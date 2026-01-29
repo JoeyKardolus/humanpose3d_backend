@@ -13,16 +13,16 @@ Training modes:
 Usage:
     # Frozen training (recommended first)
     uv run --group neural python scripts/train/main_refiner.py \
-        --depth-checkpoint models/checkpoints/best_depth_model.pth \
-        --joint-checkpoint models/checkpoints/best_joint_model.pth \
+        --depth-checkpoint ~/.humanpose3d/models/checkpoints/best_depth_model.pth \
+        --joint-checkpoint ~/.humanpose3d/models/checkpoints/best_joint_model.pth \
         --freeze-constraints \
         --epochs 50 --batch-size 256 --bf16
 
     # End-to-end fine-tuning (after frozen training)
     uv run --group neural python scripts/train/main_refiner.py \
-        --checkpoint models/checkpoints/best_main_refiner.pth \
-        --depth-checkpoint models/checkpoints/best_depth_model.pth \
-        --joint-checkpoint models/checkpoints/best_joint_model.pth \
+        --checkpoint ~/.humanpose3d/models/checkpoints/best_main_refiner.pth \
+        --depth-checkpoint ~/.humanpose3d/models/checkpoints/best_depth_model.pth \
+        --joint-checkpoint ~/.humanpose3d/models/checkpoints/best_joint_model.pth \
         --unfreeze-constraints --constraint-lr 1e-5 \
         --epochs 20 --batch-size 128
 """
@@ -44,6 +44,7 @@ from typing import Dict, Optional
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from src.application.config.paths import StoragePaths
 from src.main_refinement.model import MainRefiner, create_model
 from src.main_refinement.losses import MainRefinerLoss
 from src.main_refinement.dataset import MainRefinerDataset, create_dataloaders
@@ -341,8 +342,12 @@ def main():
     parser = argparse.ArgumentParser(description='Train MainRefiner model')
 
     # Data
-    parser.add_argument('--data', type=str, default='data/training/aistpp_converted',
-                        help='Path to training data (comma-separated for multiple)')
+    parser.add_argument(
+        '--data',
+        type=str,
+        default=str(StoragePaths.load().training_root / "aistpp_converted"),
+        help='Path to training data (comma-separated for multiple)',
+    )
     parser.add_argument('--val-ratio', type=float, default=0.1,
                         help='Validation split ratio')
 
@@ -389,7 +394,11 @@ def main():
     parser.add_argument('--bf16', action='store_true', help='Use BF16 mixed precision')
 
     # Output
-    parser.add_argument('--output-dir', type=str, default='models/checkpoints')
+    parser.add_argument(
+        '--output-dir',
+        type=str,
+        default=str(StoragePaths.load().checkpoints_root),
+    )
     parser.add_argument('--max-samples', type=int, default=None,
                         help='Limit training samples (for debugging)')
 

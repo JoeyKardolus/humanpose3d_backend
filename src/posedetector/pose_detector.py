@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import shutil
 import subprocess
 from typing import Dict, List
@@ -12,6 +13,7 @@ from mediapipe.framework.formats import landmark_pb2
 from mediapipe.tasks.python import vision
 
 from src.datastream.data_stream import LandmarkRecord
+from src.mediastream.media_stream import detect_frame_rotation
 
 POSE_NAME_MAP: Dict[int, str] = {
     mp.solutions.pose.PoseLandmark.NOSE.value: "Nose",
@@ -75,6 +77,8 @@ def extract_world_landmarks(
     preview_writer = None
     preview_failed = False
     wrote_preview = False
+    rotation_degrees = preview_rotation_degrees
+    rotation_determined = False
 
     def write_preview(frame_rgb: np.ndarray) -> None:
         nonlocal preview_writer, preview_failed, wrote_preview
@@ -104,6 +108,19 @@ def extract_world_landmarks(
             result = detector.detect_for_video(mp_image, int(timestamp * 1000))
             world_landmarks = result.pose_world_landmarks or []
             vis_landmarks = result.pose_landmarks or []
+            if (
+                preview_output is not None
+                and rotation_degrees == 0
+                and not rotation_determined
+                and vis_landmarks
+            ):
+                rotation_guess = _infer_rotation_from_landmarks(vis_landmarks[0])
+                rotation_determined = True
+                if rotation_guess:
+                    rotation_degrees = rotation_guess
+                    print(
+                        f"[pose] preview rotation detected from landmarks: {rotation_degrees} degrees"
+                    )
 
             if not world_landmarks:
                 if display:
@@ -194,7 +211,7 @@ def extract_world_landmarks(
             preview_writer.release()
         if preview_output is not None:
             if wrote_preview:
-                _transcode_preview(preview_output, preview_rotation_degrees)
+                _transcode_preview(preview_output, rotation_degrees)
             else:
                 try:
                     preview_output.unlink(missing_ok=True)
@@ -217,6 +234,8 @@ def _transcode_preview(preview_output: Path, rotation_degrees: int) -> None:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg or not preview_output.exists():
         return
+    if rotation_degrees == 0:
+        rotation_degrees = _detect_preview_rotation(preview_output)
     temp_path = preview_output.with_suffix(".h264.mp4")
     command = [
         ffmpeg,
@@ -256,6 +275,8 @@ def _transcode_preview(preview_output: Path, rotation_degrees: int) -> None:
             temp_path.unlink(missing_ok=True)
         except OSError:
             pass
+        return
+    _write_preview_metadata(preview_output, rotation_degrees)
 
 
 def _rotation_filter(rotation_degrees: int) -> str | None:
@@ -266,3 +287,52 @@ def _rotation_filter(rotation_degrees: int) -> str | None:
     if rotation_degrees == 270:
         return "transpose=2"
     return None
+
+
+def _infer_rotation_from_landmarks(
+    landmarks: landmark_pb2.NormalizedLandmarkList | list[landmark_pb2.NormalizedLandmark],
+) -> int:
+    """Infer rotation from the relative pose orientation in image space."""
+    if not landmarks:
+        return 0
+    try:
+        nose = landmarks[mp.solutions.pose.PoseLandmark.NOSE.value]
+        left_hip = landmarks[mp.solutions.pose.PoseLandmark.LEFT_HIP.value]
+        right_hip = landmarks[mp.solutions.pose.PoseLandmark.RIGHT_HIP.value]
+    except (IndexError, AttributeError):
+        return 0
+    hip_x = (left_hip.x + right_hip.x) / 2.0
+    hip_y = (left_hip.y + right_hip.y) / 2.0
+    dx = nose.x - hip_x
+    dy = nose.y - hip_y
+    if abs(dx) <= abs(dy):
+        return 0
+    return 270 if dx > 0 else 90
+
+
+def _detect_preview_rotation(preview_output: Path) -> int:
+    """Inspect the rendered preview for OCR-based rotation when metadata is missing."""
+    cap = cv2.VideoCapture(str(preview_output))
+    if not cap.isOpened():
+        return 0
+    ret, frame_bgr = cap.read()
+    cap.release()
+    if not ret or frame_bgr is None:
+        return 0
+    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    rotation = detect_frame_rotation(frame_rgb)
+    if rotation:
+        print(f"[pose] preview rotation detected via OCR: {rotation} degrees")
+    return rotation
+
+
+def _write_preview_metadata(preview_output: Path, rotation_degrees: int) -> None:
+    """Persist preview rotation metadata for downstream consumers."""
+    metadata_path = preview_output.with_suffix(".json")
+    payload = {
+        "rotation_degrees": rotation_degrees,
+    }
+    try:
+        metadata_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except OSError:
+        return

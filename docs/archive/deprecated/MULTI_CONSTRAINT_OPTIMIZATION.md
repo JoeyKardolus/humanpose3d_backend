@@ -112,7 +112,7 @@ Early attempts used "locking" (freezing marker positions):
 uv run python main.py \
   --video data/input/video.mp4 \
   --height 1.78 \
-  --mass 75 \
+  --weight 75 \
   --age 30 \
   --sex male \
   --anatomical-constraints \

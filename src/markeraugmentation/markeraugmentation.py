@@ -51,13 +51,19 @@ def _resolve_pose2sim_command(config_path: Path) -> list[str]:
         return shlex.split(cmd_env) + [str(config_path)]
 
     repo_root = Path(__file__).resolve().parents[2]
-    local_cli = repo_root / ".venv" / "bin" / "pose2sim"
+    scripts_dir = "Scripts" if sys.platform == "win32" else "bin"
+    local_cli = repo_root / ".venv" / scripts_dir / "pose2sim"
+    if sys.platform == "win32":
+        local_cli = local_cli.with_suffix(".exe")
     if local_cli.is_file():
         return [str(local_cli), "augment_markers_all", str(config_path)]
 
-    local_py = repo_root / ".venv" / "bin" / "python"
+    local_py = repo_root / ".venv" / scripts_dir / ("python.exe" if sys.platform == "win32" else "python")
+
     shim = (
-        "import sys,pathlib,tomllib;"
+        "import sys;from unittest.mock import MagicMock;m=MagicMock();"
+        "sys.modules.update({k:m for k in ['matplotlib.backends.backend_qt5agg','PyQt5','PyQt5.QtWidgets','PyQt5.QtCore','PyQt5.QtGui']});"
+        "import pathlib,tomllib;"
         "from Pose2Sim import markerAugmentation;"
         "cfg=pathlib.Path(sys.argv[1]);"
         "config=tomllib.load(cfg.open('rb'));"
@@ -73,7 +79,7 @@ def run_pose2sim_augment(
     trc_path: Path,
     out_dir: Path,
     height: float,
-    mass: float,
+    weight: float,
     augmentation_cycles: int = 1,
 ) -> Path:
     """Invoke Pose2Sim's augment_markers_all with multi-cycle averaging for better results."""
@@ -83,7 +89,7 @@ def run_pose2sim_augment(
     if augmentation_cycles == 1:
         # Single cycle - use original fast path
         return _run_single_augmentation_cycle(
-            trc_path, out_dir, height, mass, cycle_num=0
+            trc_path, out_dir, height, weight, cycle_num=0
         )
 
     # Multi-cycle averaging approach
@@ -94,7 +100,7 @@ def run_pose2sim_augment(
         print(f"[augment] cycle {cycle_num + 1}/{augmentation_cycles}")
         try:
             cycle_output = _run_single_augmentation_cycle(
-                trc_path, out_dir, height, mass, cycle_num
+                trc_path, out_dir, height, weight, cycle_num
             )
             cycle_results.append(cycle_output)
         except Exception as exc:
@@ -136,7 +142,7 @@ def _run_single_augmentation_cycle(
     trc_path: Path,
     out_dir: Path,
     height: float,
-    mass: float,
+    weight: float,
     cycle_num: int,
 ) -> Path:
     """Run a single Pose2Sim augmentation cycle."""
@@ -159,9 +165,9 @@ def _run_single_augmentation_cycle(
         dedent(
             f"""
             [project]
-            project_dir = "{project_dir}"
+            project_dir = "{project_dir.as_posix()}"
             participant_height = {height}
-            participant_mass = {mass}
+            participant_weight = {weight}
             frame_range = "all"
 
             [markerAugmentation]
@@ -182,14 +188,20 @@ def _run_single_augmentation_cycle(
 
     command = _resolve_pose2sim_command(config_path)
 
+    env = os.environ.copy()
+    env["MPLBACKEND"] = "Agg"
+
     try:
-        subprocess.run(command, check=True, capture_output=True)
+        subprocess.run(command, check=True, capture_output=True, text=True, env=env)
     except FileNotFoundError as exc:
         raise RuntimeError(
             "Pose2Sim CLI not found. Install pose2sim, set POSE2SIM_CMD, or provide "
             "a local `.venv/bin/pose2sim` executable."
         ) from exc
     except subprocess.CalledProcessError as exc:
+        print(f"[augment] command: {command}")
+        print(f"[augment] stdout: {exc.stdout}")
+        print(f"[augment] stderr: {exc.stderr}")
         raise RuntimeError(
             f"Pose2Sim invocation failed (cycle {cycle_num}). "
             "Ensure pose2sim is installed in `.venv`, declared in pyproject, or override POSE2SIM_CMD."

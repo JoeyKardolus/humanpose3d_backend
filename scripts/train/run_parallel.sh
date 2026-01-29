@@ -12,7 +12,8 @@ echo "Running 4 cameras at a time"
 echo ""
 
 # Log file
-LOG_DIR="logs"
+HUMANPOSE_HOME="${HUMANPOSE3D_HOME:-$HOME/.humanpose3d}"
+LOG_DIR="${HUMANPOSE_HOME}/logs"
 mkdir -p "$LOG_DIR"
 
 # Cameras that need processing (c02 is complete)
@@ -28,7 +29,7 @@ for cam in c01 c03 c04 c05; do
 done
 
 echo ""
-echo "Batch 1 running. Monitor with: tail -f logs/c01.log"
+echo "Batch 1 running. Monitor with: tail -f ${LOG_DIR}/c01.log"
 echo "Waiting for batch 1 to complete..."
 wait
 
@@ -40,7 +41,7 @@ for cam in c06 c07 c08 c09; do
 done
 
 echo ""
-echo "Batch 2 running. Monitor with: tail -f logs/c06.log"
+echo "Batch 2 running. Monitor with: tail -f ${LOG_DIR}/c06.log"
 echo "Waiting for batch 2 to complete..."
 wait
 
@@ -53,6 +54,6 @@ echo "============================================="
 echo ""
 echo "Final sample counts:"
 for cam in c01 c02 c03 c04 c05 c06 c07 c08 c09; do
-    count=$(find data/training/aistpp_converted -name "*_${cam}_f*.npz" 2>/dev/null | wc -l)
+    count=$(find "${HUMANPOSE_HOME}/training/aistpp_converted" -name "*_${cam}_f*.npz" 2>/dev/null | wc -l)
     echo "  $cam: $count"
 done

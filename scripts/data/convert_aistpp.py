@@ -38,6 +38,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import json
+from src.application.config.paths import StoragePaths
 import pickle
 import numpy as np
 from tqdm import tqdm
@@ -562,6 +563,7 @@ def process_sequence(
 
 def main():
     """Convert AIST++ dataset to training pairs."""
+    storage_paths = StoragePaths.load()
     parser = argparse.ArgumentParser(description='Convert AIST++ to depth refinement training data')
     parser.add_argument('--workers', type=int, default=1, help='Number of parallel workers (default: 1)')
     parser.add_argument('--max-frames', type=int, default=180, help='Max frames per video (default: 180)')
@@ -577,12 +579,12 @@ def main():
     print()
 
     # Paths
-    aistpp_dir = Path("data/AIST++")
+    aistpp_dir = storage_paths.training_root / "AIST++"
     annotations_dir = aistpp_dir / "annotations"
     videos_dir = aistpp_dir / "videos"
     cameras_dir = annotations_dir / "cameras"
     mapping_file = cameras_dir / "mapping.txt"
-    output_dir = Path("data/training/aistpp_converted")
+    output_dir = storage_paths.training_root / "aistpp_converted"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Check directories
