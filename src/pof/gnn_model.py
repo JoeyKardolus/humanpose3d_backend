@@ -13,7 +13,7 @@ Both use the same input format as CameraPOFModel for drop-in replacement.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 from .constants import NUM_JOINTS, NUM_LIMBS, LIMB_DEFINITIONS
 from .graph_utils import (
@@ -23,122 +23,128 @@ from .graph_utils import (
     get_combined_adj,
 )
 
+# Import shared NN layers (GCNLayer, GATLayer defined in shared module)
+from src.shared.nn_layers import GCNLayer, GATLayer
 
-class GCNLayer(nn.Module):
-    """Graph Convolutional layer with residual connection.
 
-    Uses normalized adjacency (D^-1 A) for message passing.
+def build_orientation_from_geometry(
+    z_sign_logits: torch.Tensor,
+    delta_2d: torch.Tensor,
+    bone_lengths: torch.Tensor,
+    z_sign_threshold: float = 0.5,
+) -> torch.Tensor:
+    """DEPRECATED: This approach is flawed.
+
+    This function assumed |Z| could be computed from geometry:
+        |Z| = sqrt(bone_length² - ||delta_2d||²)
+
+    This is WRONG because delta_2d from 2D keypoints ≠ 3D (Δx, Δy) projection.
+    Perspective distorts: x_2d = f * X_3d / Z_3d
+    So ||delta_2d|| ≠ ||(Δx, Δy)_3d|| - you cannot compute |Z| geometrically from 2D.
+
+    The model must LEARN the full 3D orientation from 2D appearance.
+    Use the POFHead output directly instead.
+
+    Args:
+        z_sign_logits: (batch, 14) logits for P(Z > 0)
+        delta_2d: (batch, 14, 2) observed 2D limb displacements (normalized scale)
+        bone_lengths: (14,) or (batch, 14) bone lengths (same scale as delta_2d)
+        z_sign_threshold: Threshold for Z-sign classification (default 0.5)
+
+    Returns:
+        (batch, 14, 3) unit orientation vectors
     """
+    import warnings
+    warnings.warn(
+        "build_orientation_from_geometry is deprecated. "
+        "The geometric approach is flawed due to perspective distortion. "
+        "Use the model's POF output directly instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    batch_size = z_sign_logits.size(0)
+    device = z_sign_logits.device
+    dtype = z_sign_logits.dtype
 
-    def __init__(
-        self,
-        in_dim: int,
-        out_dim: int,
-        dropout: float = 0.1,
-        use_residual: bool = True,
-    ):
-        super().__init__()
-        self.use_residual = use_residual and (in_dim == out_dim)
+    # Get Z signs from logits
+    z_sign_prob = torch.sigmoid(z_sign_logits)  # (batch, 14)
+    z_signs = torch.where(
+        z_sign_prob > z_sign_threshold,
+        torch.ones_like(z_sign_prob),
+        -torch.ones_like(z_sign_prob),
+    )  # (batch, 14)
 
-        self.linear = nn.Linear(in_dim, out_dim)
-        self.norm = nn.LayerNorm(out_dim)
-        self.dropout = nn.Dropout(dropout)
+    # Handle bone_lengths shape
+    if bone_lengths.dim() == 1:
+        bone_lengths = bone_lengths.unsqueeze(0).expand(batch_size, -1)
 
-    def forward(self, x: torch.Tensor, adj: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: (batch, num_nodes, in_dim) node features
-            adj: (num_nodes, num_nodes) adjacency matrix
+    # Compute ||delta_2d||²
+    delta_2d_len_sq = (delta_2d ** 2).sum(dim=-1)  # (batch, 14)
 
-        Returns:
-            (batch, num_nodes, out_dim) updated node features
-        """
-        # Normalize adjacency: D^-1 A (row normalization)
-        deg = adj.sum(dim=-1, keepdim=True).clamp(min=1)
-        adj_norm = adj / deg
+    # Compute |delta_z|² = bone_length² - ||delta_2d||²
+    bone_len_sq = bone_lengths ** 2
+    delta_z_sq = bone_len_sq - delta_2d_len_sq
 
-        # Message passing: aggregate neighbor features
-        h = torch.matmul(adj_norm, x)  # (batch, num_nodes, in_dim)
+    # Handle case where 2D displacement exceeds bone length (noise/error)
+    # In this case, limb is nearly perpendicular to camera, |Z| ≈ 0
+    delta_z_sq = torch.clamp(delta_z_sq, min=0.0)
 
-        # Transform
-        h = self.linear(h)
-        h = self.norm(h)
-        h = F.gelu(h)
-        h = self.dropout(h)
+    # |delta_z|
+    delta_z_mag = torch.sqrt(delta_z_sq)  # (batch, 14)
 
-        # Residual connection
-        if self.use_residual:
-            h = h + x
+    # Apply sign
+    delta_z = z_signs * delta_z_mag  # (batch, 14)
 
-        return h
+    # Build 3D displacement: [delta_x, delta_y, delta_z]
+    delta_3d = torch.cat([delta_2d, delta_z.unsqueeze(-1)], dim=-1)  # (batch, 14, 3)
+
+    # Convert to unit orientation by dividing by bone length
+    # (with safety for zero bone lengths)
+    safe_bone_len = torch.clamp(bone_lengths, min=1e-6).unsqueeze(-1)  # (batch, 14, 1)
+    orientation = delta_3d / safe_bone_len
+
+    # Re-normalize for numerical safety
+    orientation = F.normalize(orientation, dim=-1, eps=1e-6)
+
+    return orientation
 
 
-class GATLayer(nn.Module):
-    """Graph Attention layer (simplified version).
+# Keep old name as alias for backward compatibility during transition
+def build_orientation_from_z_magnitude(
+    z_magnitudes: torch.Tensor,
+    z_sign_logits: torch.Tensor,
+    delta_2d: torch.Tensor,
+    z_sign_threshold: float = 0.5,
+) -> torch.Tensor:
+    """DEPRECATED: Use build_orientation_from_geometry instead.
 
-    Learns attention weights for neighbors instead of using fixed adjacency.
+    This function is kept for backward compatibility but |Z| should be
+    computed from geometry, not predicted by a model.
     """
+    # Get Z signs from logits
+    z_sign_prob = torch.sigmoid(z_sign_logits)
+    z_signs = torch.where(
+        z_sign_prob > z_sign_threshold,
+        torch.ones_like(z_sign_prob),
+        -torch.ones_like(z_sign_prob),
+    )
 
-    def __init__(
-        self,
-        in_dim: int,
-        out_dim: int,
-        num_heads: int = 4,
-        dropout: float = 0.1,
-    ):
-        super().__init__()
-        self.num_heads = num_heads
-        self.head_dim = out_dim // num_heads
-        assert out_dim % num_heads == 0
+    z_magnitudes = torch.clamp(z_magnitudes, 0.0, 1.0)
+    xy_magnitude_sq = torch.clamp(1.0 - z_magnitudes ** 2, min=0.0)
+    xy_magnitude = torch.sqrt(xy_magnitude_sq)
 
-        self.q_proj = nn.Linear(in_dim, out_dim)
-        self.k_proj = nn.Linear(in_dim, out_dim)
-        self.v_proj = nn.Linear(in_dim, out_dim)
-        self.out_proj = nn.Linear(out_dim, out_dim)
+    delta_2d_norm = F.normalize(delta_2d, dim=-1, eps=1e-6)
+    orient_xy = delta_2d_norm * xy_magnitude.unsqueeze(-1)
+    orient_z = z_magnitudes * z_signs
 
-        self.norm = nn.LayerNorm(out_dim)
-        self.dropout = nn.Dropout(dropout)
+    orientation = torch.cat([orient_xy, orient_z.unsqueeze(-1)], dim=-1)
+    orientation = F.normalize(orientation, dim=-1, eps=1e-6)
 
-    def forward(self, x: torch.Tensor, adj: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: (batch, num_nodes, in_dim)
-            adj: (num_nodes, num_nodes) - used as attention mask
+    return orientation
 
-        Returns:
-            (batch, num_nodes, out_dim)
-        """
-        batch_size, num_nodes, _ = x.shape
 
-        # Project to Q, K, V
-        q = self.q_proj(x).view(batch_size, num_nodes, self.num_heads, self.head_dim)
-        k = self.k_proj(x).view(batch_size, num_nodes, self.num_heads, self.head_dim)
-        v = self.v_proj(x).view(batch_size, num_nodes, self.num_heads, self.head_dim)
 
-        # (batch, heads, nodes, head_dim)
-        q = q.transpose(1, 2)
-        k = k.transpose(1, 2)
-        v = v.transpose(1, 2)
-
-        # Attention scores
-        scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dim ** 0.5)
-
-        # Mask non-neighbors (where adj == 0)
-        mask = (adj == 0).unsqueeze(0).unsqueeze(0)  # (1, 1, nodes, nodes)
-        scores = scores.masked_fill(mask, float('-inf'))
-
-        attn = F.softmax(scores, dim=-1)
-        attn = self.dropout(attn)
-
-        # Aggregate
-        out = torch.matmul(attn, v)  # (batch, heads, nodes, head_dim)
-        out = out.transpose(1, 2).contiguous().view(batch_size, num_nodes, -1)
-        out = self.out_proj(out)
-
-        # Residual + norm
-        out = self.norm(out + x)
-
-        return out
+# GCNLayer and GATLayer imported from src.shared.nn_layers
 
 
 class LimbFeatureBuilder(nn.Module):
@@ -199,10 +205,13 @@ class LimbFeatureBuilder(nn.Module):
 
 
 class POFHead(nn.Module):
-    """Predict POF unit vectors for each limb.
+    """Predict POF unit vectors for each limb (legacy).
 
     Shared initial layer + per-limb specialized heads.
     Output is normalized to unit vectors.
+
+    NOTE: This is the legacy head that predicts full 3D vectors.
+    For new models, use ZMagnitudeHead which only predicts |Z| foreshortening.
     """
 
     def __init__(self, d_model: int = 128):
@@ -246,6 +255,8 @@ class POFHead(nn.Module):
         pof = F.normalize(pof, dim=-1, eps=1e-6)
 
         return pof
+
+
 
 
 class POFGraphModel(nn.Module):
@@ -461,18 +472,22 @@ class SemGCNPOFModel(nn.Module):
 
 
 class SemGCNTemporalZSign(nn.Module):
-    """Semantic GCN with Z-sign classification head and temporal context.
+    """Semantic GCN Z-sign classifier with temporal context.
 
-    Extends SemGCN with:
-    1. Z-sign auxiliary head: Binary classification for each limb's Z direction
-       (toward camera = 0, away from camera = 1)
-    2. Temporal context: Previous frame's POF vectors inform current prediction
-       to resolve depth ambiguity in foreshortened limbs
+    This model predicts ONLY the Z sign (depth direction) for each limb.
+    Everything else is determined by observations + geometry:
+
+    | Component | Source |
+    |-----------|--------|
+    | XY position | 2D observations |
+    | |Z| magnitude | geometry: sqrt(bone_length² - ||delta_2d||²) |
+    | Z sign | THIS MODEL (the only ambiguity) |
 
     Key insight: When a limb appears short in 2D (foreshortened), it could be
     pointing toward (+Z) or away (-Z) from camera. Both project identically.
-    The temporal context helps because arms don't teleport: if frame 10 shows
-    arm forward, frame 11 is probably still forward.
+    The Z sign is the ONLY thing we can't derive from observations.
+
+    Temporal context helps resolve ambiguity (arms don't teleport between frames).
     """
 
     def __init__(
@@ -527,7 +542,8 @@ class SemGCNTemporalZSign(nn.Module):
         )
         self.combine = nn.Linear(d_model * 2, d_model)
 
-        # Temporal context: encode previous frame's POF (14×3=42 features)
+        # Temporal context: encode previous frame's reconstructed POF (14×3=42 features)
+        # We use full POF for temporal context because that's what we reconstruct
         self.prev_encoder = nn.Sequential(
             nn.Linear(NUM_LIMBS * 3, d_model),
             nn.LayerNorm(d_model),
@@ -537,16 +553,18 @@ class SemGCNTemporalZSign(nn.Module):
         # Gate to combine current + temporal features
         self.temporal_combine = nn.Linear(d_model * 2, d_model)
 
-        # Z-sign classification head (14 limbs)
+        # POF prediction head (predicts full 3D unit vectors)
+        # The model learns to predict orientation from 2D appearance
+        self.pof_head = POFHead(d_model)
+
+        # Z-sign classification head (auxiliary task)
         # Predicts probability that limb Z > 0 (pointing away from camera)
+        # This provides explicit supervision for depth direction disambiguation
         self.z_sign_head = nn.Sequential(
             nn.Linear(d_model, d_model // 2),
             nn.GELU(),
             nn.Linear(d_model // 2, NUM_LIMBS),
         )
-
-        # POF prediction head
-        self.pof_head = POFHead(d_model)
 
     def _encode_with_semgcn(
         self,
@@ -597,55 +615,91 @@ class SemGCNTemporalZSign(nn.Module):
         limb_delta_2d: torch.Tensor,    # (batch, 14, 2)
         limb_length_2d: torch.Tensor,   # (batch, 14)
         prev_pof: Optional[torch.Tensor] = None,  # (batch, 14, 3) previous frame POF
-    ) -> tuple:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predict POF unit vectors and Z-sign logits.
+
+        The model learns to predict full 3D orientation from 2D appearance.
+        Z-sign is an auxiliary task that helps disambiguate depth direction.
 
         Args:
             pose_2d: (batch, 17, 2) normalized 2D joint positions
             visibility: (batch, 17) per-joint visibility scores
             limb_delta_2d: (batch, 14, 2) normalized 2D displacement vectors
             limb_length_2d: (batch, 14) 2D lengths (foreshortening indicator)
-            prev_pof: (batch, 14, 3) previous frame's POF vectors (optional)
+            prev_pof: (batch, 14, 3) previous frame's POF vectors (temporal context)
 
         Returns:
-            tuple of:
-            - pof: (batch, 14, 3) predicted unit vectors for each limb
+            Tuple of:
+            - pof: (batch, 14, 3) predicted unit orientation vectors
             - z_sign_logits: (batch, 14) logits for Z > 0 classification
         """
         # Get SemGCN features
         h = self._encode_with_semgcn(pose_2d, visibility, limb_delta_2d, limb_length_2d)
         # h: (batch, 14, d_model)
 
-        # Add temporal context if available
-        if prev_pof is not None:
-            prev_flat = prev_pof.reshape(prev_pof.size(0), -1)  # (batch, 42)
-            prev_feat = self.prev_encoder(prev_flat)  # (batch, d_model)
-            prev_broadcast = prev_feat.unsqueeze(1).expand(-1, NUM_LIMBS, -1)
-            h = self.temporal_combine(torch.cat([h, prev_broadcast], dim=-1))
+        # ALWAYS apply temporal context (use zeros if prev_pof is None)
+        # This is critical because the model learned weights expecting temporal_combine
+        # to always transform the hidden features. Skipping it produces garbage.
+        if prev_pof is None:
+            prev_pof = torch.zeros(pose_2d.size(0), NUM_LIMBS, 3, device=pose_2d.device)
 
-        # Predict POF
+        prev_flat = prev_pof.reshape(prev_pof.size(0), -1)  # (batch, 42)
+        prev_feat = self.prev_encoder(prev_flat)  # (batch, d_model)
+        prev_broadcast = prev_feat.unsqueeze(1).expand(-1, NUM_LIMBS, -1)
+        h = self.temporal_combine(torch.cat([h, prev_broadcast], dim=-1))
+
+        # Predict POF unit vectors (the main output)
         pof = self.pof_head(h)  # (batch, 14, 3)
 
-        # Predict Z-sign (global pooling over limbs for classification)
+        # Predict Z-sign as auxiliary task (global pooling over limbs)
         z_sign_logits = self.z_sign_head(h.mean(dim=1))  # (batch, 14)
 
         return pof, z_sign_logits
 
-    def forward_pof_only(
+    def forward_with_zsign_correction(
         self,
         pose_2d: torch.Tensor,
         visibility: torch.Tensor,
         limb_delta_2d: torch.Tensor,
         limb_length_2d: torch.Tensor,
         prev_pof: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        """Forward pass returning only POF (for compatibility with standard interface).
+        z_sign_threshold: float = 0.5,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass with optional Z-sign correction.
+
+        Predicts POF and optionally corrects the Z direction if the POF
+        prediction disagrees with the Z-sign classification head.
+
+        Args:
+            pose_2d: (batch, 17, 2) normalized 2D joint positions
+            visibility: (batch, 17) per-joint visibility scores
+            limb_delta_2d: (batch, 14, 2) normalized 2D displacement vectors
+            limb_length_2d: (batch, 14) 2D lengths
+            prev_pof: (batch, 14, 3) previous frame's POF vectors
+            z_sign_threshold: Threshold for Z-sign correction (default 0.5)
 
         Returns:
-            (batch, 14, 3) predicted unit vectors
+            tuple of:
+            - pof: (batch, 14, 3) POF unit vectors (optionally Z-corrected)
+            - z_sign_logits: (batch, 14) logits for Z > 0 classification
         """
-        pof, _ = self.forward(pose_2d, visibility, limb_delta_2d, limb_length_2d, prev_pof)
-        return pof
+        pof, z_sign_logits = self.forward(
+            pose_2d, visibility, limb_delta_2d, limb_length_2d, prev_pof
+        )
+
+        # Optional Z-sign correction: flip POF.z if it disagrees with z_sign_head
+        z_sign_prob = torch.sigmoid(z_sign_logits)
+        z_should_be_positive = z_sign_prob > z_sign_threshold
+        z_is_positive = pof[:, :, 2] > 0
+        needs_flip = z_should_be_positive != z_is_positive
+
+        pof_corrected = pof.clone()
+        pof_corrected[:, :, 2] = torch.where(
+            needs_flip, -pof[:, :, 2], pof[:, :, 2]
+        )
+        pof_corrected = F.normalize(pof_corrected, dim=-1, eps=1e-6)
+
+        return pof_corrected, z_sign_logits
 
     def num_parameters(self) -> int:
         """Count trainable parameters."""
@@ -668,10 +722,23 @@ class TemporalPOFInference:
     for video sequences.
     """
 
-    def __init__(self, model: SemGCNTemporalZSign, device: str = "cpu"):
+    def __init__(
+        self,
+        model: SemGCNTemporalZSign,
+        device: str = "cpu",
+        use_zsign_correction: bool = True,
+    ):
+        """Initialize inference wrapper.
+
+        Args:
+            model: Trained SemGCNTemporalZSign model
+            device: Device to run inference on
+            use_zsign_correction: If True, correct POF.z based on z_sign_head
+        """
         self.model = model
         self.model.eval()
         self.device = device
+        self.use_zsign_correction = use_zsign_correction
         self.prev_pof: Optional[torch.Tensor] = None
 
     def predict(
@@ -693,15 +760,51 @@ class TemporalPOFInference:
             (batch, 14, 3) predicted POF vectors
         """
         with torch.no_grad():
-            pof, _ = self.model(
+            pof, z_sign_logits = self.model(
                 pose_2d.to(self.device),
                 visibility.to(self.device),
                 limb_delta_2d.to(self.device),
                 limb_length_2d.to(self.device),
                 prev_pof=self.prev_pof,
             )
+
+            # Optional Z-sign correction
+            if self.use_zsign_correction:
+                z_sign_prob = torch.sigmoid(z_sign_logits)
+                z_should_be_positive = z_sign_prob > 0.5
+                z_is_positive = pof[:, :, 2] > 0
+                needs_flip = z_should_be_positive != z_is_positive
+                pof = pof.clone()
+                pof[:, :, 2] = torch.where(needs_flip, -pof[:, :, 2], pof[:, :, 2])
+                pof = F.normalize(pof, dim=-1, eps=1e-6)
+
             self.prev_pof = pof.detach()  # Store for next frame
             return pof
+
+    def predict_with_zsign(
+        self,
+        pose_2d: torch.Tensor,
+        visibility: torch.Tensor,
+        limb_delta_2d: torch.Tensor,
+        limb_length_2d: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Predict POF and Z-sign logits for current frame.
+
+        Returns:
+            Tuple of:
+            - pof: (batch, 14, 3) predicted POF vectors
+            - z_sign_logits: (batch, 14) Z-sign classification logits
+        """
+        with torch.no_grad():
+            pof, z_sign_logits = self.model(
+                pose_2d.to(self.device),
+                visibility.to(self.device),
+                limb_delta_2d.to(self.device),
+                limb_length_2d.to(self.device),
+                prev_pof=self.prev_pof,
+            )
+            self.prev_pof = pof.detach()
+            return pof, z_sign_logits
 
     def reset(self):
         """Reset temporal state. Call at start of new video."""

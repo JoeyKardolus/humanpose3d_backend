@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>KinetIQ</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -22,21 +23,16 @@
           </div>
         </div>
         <div class="modal-body">
-          <p class="fst-italic">Thanks for using this application to quantify human movement. This application uses computer vision to identify and key anatomical landmarks in estimated 3D space.</p>
-          <p class="label fw-medium">Quality of tracking is heavily affected by the following factors</p>
-          <ul>
-            <li>Let the subject wear tight and short clothes — tighter and shorter is better.</li>
-            <li>Be sure to record clips in high frame rates (fps). Slower movements can be captured with 30fps; very fast movements, use up to 120fps.</li>
-            <li>Higher definition recording will positively influence the results, but processing will take longer. 4K recording is not required.</li>
-            <li>If possible, set shutter speed at roughly double the frame rate (for example, 1/60s when recording at 30fps).</li>
-            <li>Be sure the object has high contrast with the environment; avoid black clothes.</li>
-            <li>Be sure lighting is good; poor lighting will lead to poorer results.</li>
-            <li>Avoid multiple human subjects (or images with humans depicted) in the background; they negatively affect results.</li>
-            <li>Match camera view to the plane of interest; ~45° frontal-lateral works well if you want both sagittal and frontal views.</li>
-            <li>Be sure the whole body is captured; missing limbs (e.g., raised arms) will heavily affect results.</li>
-            <li>Be sure that the camera is not tilted or moving during capture.</li>
-            <li>Position your camera in landscape.</li>
-            <li>Limit your capture time to about 1 minute.</li>
+          <p class="fst-italic">This application uses computer vision to identify anatomical landmarks in estimated 3D space.</p>
+          <p class="label fw-medium">Recording Tips</p>
+          <ul class="mb-0">
+            <li><strong>Clothing:</strong> Tight, short, high-contrast</li>
+            <li><strong>Lighting:</strong> Bright, even illumination</li>
+            <li><strong>Resolution:</strong> HD is fine, 4K not needed</li>
+            <li><strong>Framing:</strong> Landscape, full body visible, camera level and steady</li>
+            <li><strong>Background:</strong> No other people visible</li>
+            <li><strong>Angle:</strong> ~45° frontal-lateral for best coverage</li>
+            <li><strong>Duration:</strong> Max 1 minute</li>
           </ul>
         </div>
         <div class="modal-footer justify-content-between flex-wrap">
@@ -62,14 +58,17 @@
           </div>
         </div>
         <div class="modal-body">
-          <p>Using a video recording to analyse a human’s body can contain privacy-sensitive information. Be sure that the subject gives informed consent for the recording and analysis of the movement. For each new analysis, you are required to tick the box related to this privacy statement. In addition, when analysis is done according to your satisfaction, remove the videos that contain privacy-sensitive information from your device.</p>
-          <p>Do not completely rely on the outcomes of the analysis. There are limitations. The code that was used to process, filter and analyze the data is available here and has limitations.</p>
+          <ul class="mb-0">
+            <li>Obtain <strong>informed consent</strong> from the recorded subject</li>
+            <li>Delete videos after analysis if they contain sensitive data</li>
+            <li>Results are estimates — <strong>do not use for clinical decisions</strong></li>
+          </ul>
         </div>
         <div class="modal-footer justify-content-between flex-wrap">
           <div class="form-check">
             <input class="form-check-input" type="checkbox" value="" id="privacy-check">
             <label class="form-check-label" for="privacy-check">
-              I agree to the ethics and privacy instructions.
+              I confirm participant consent was obtained.
             </label>
           </div>
           <button class="btn btn-primary" data-close="notice">Continue</button>
@@ -120,12 +119,10 @@
               <div class="card-body">
                 <p class="text-uppercase text-success fw-semibold small mb-2">Before you upload</p>
                 <h2 class="h4 fw-semibold mb-3">Capture checklist for best results</h2>
-                <ul class="mb-0 text-muted">
-                  <li>Use a stable, landscape camera angle that captures the full body without tilting.</li>
-                  <li>Prefer high frame rates (30–120fps) with good lighting and high contrast clothing.</li>
-                  <li>Keep the background clear of other people and avoid camera movement during recording.</li>
-                  <li>Short, tight clothing improves landmark detection; avoid dark outfits on dark backgrounds.</li>
-                  <li>Limit clips to around one minute to keep processing fast.</li>
+                <ul class="mb-0 text-muted small">
+                  <li>Landscape, steady camera · Full body visible</li>
+                  <li>30–120fps · Good lighting · High-contrast clothing</li>
+                  <li>No other people in background · Max 1 minute</li>
                 </ul>
               </div>
             </div>
@@ -161,24 +158,14 @@
                 <h2 class="h4 mb-3">Participant details</h2>
                 <div class="row row-cols-1 row-cols-md-2 g-3">
                   <div class="col">
-                    <label for="sex" class="form-label">Sex</label>
-                    <select class="form-select" id="sex" name="sex">
-                      <option disabled selected value="">Choose...</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                    </select>
-                  </div>
-                  <div class="col">
-                    <label for="age" class="form-label">Age (years)</label>
-                    <input type="number" class="form-control" id="age" name="age" min="0" step="1" placeholder="e.g. 30">
-                  </div>
-                  <div class="col">
                     <label for="height" class="form-label">Height (m)</label>
                     <input type="number" class="form-control" id="height" name="height" min="0" step="0.01" placeholder="e.g. 1.78">
+                    <div class="form-text text-muted">Required for metric scale output (meters).</div>
                   </div>
                   <div class="col">
                     <label for="weight" class="form-label">Weight (kg)</label>
                     <input type="number" class="form-control" id="weight" name="weight" min="0" step="0.1" placeholder="e.g. 75">
+                    <div class="form-text text-muted">Used for biomechanics calculations.</div>
                   </div>
                 </div>
               </div>
@@ -192,7 +179,7 @@
                   <div>
                     <p class="text-uppercase text-success fw-semibold small mb-1">Pipeline</p>
                     <h2 class="h4 mb-0">Pipeline settings</h2>
-                    <p class="text-muted small mb-0">Recommended: leave defaults unless you know what you're doing.</p>
+                    <p class="text-muted small mb-0">Recommended defaults are pre-selected for best results.</p>
                   </div>
                   <button class="btn btn-link text-primary p-0" type="button" data-bs-toggle="collapse" data-bs-target="#pipelineOptions" aria-expanded="false" aria-controls="pipelineOptions" data-collapse-toggle data-label-show="Show pipeline settings" data-label-hide="Hide pipeline settings" data-icon-collapsed="bi-chevron-down" data-icon-expanded="bi-chevron-up" aria-label="Show pipeline settings">
                     <i class="bi bi-chevron-down fs-4" aria-hidden="true" data-collapse-icon></i>
@@ -204,102 +191,53 @@
                     <div class="col">
                       <label for="visibilityMin" class="form-label">Visibility threshold</label>
                       <input type="number" class="form-control" id="visibilityMin" name="visibility_min" min="0" max="1" step="0.01" value="0.1">
+                      <div class="form-text text-muted">Lower = accept less confident landmarks (0.1 recommended).</div>
                     </div>
                     <div class="col">
                       <label for="augmentationCycles" class="form-label">Augmentation cycles</label>
                       <input type="number" class="form-control" id="augmentationCycles" name="augmentation_cycles" min="1" step="1" value="20">
+                      <div class="form-text text-muted">Multi-cycle averaging for stable output.</div>
                     </div>
                     <div class="col">
                       <label for="jointAngleSmooth" class="form-label">Joint angle smooth window</label>
                       <input type="number" class="form-control" id="jointAngleSmooth" name="joint_angle_smooth_window" min="1" step="1" value="9">
+                      <div class="form-text text-muted">Savitzky-Golay filter window size.</div>
                     </div>
                   </div>
                   <div class="row row-cols-1 row-cols-md-2 g-3 mt-2">
                     <div class="col">
-                      <div class="form-check">
+                      <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="cameraPof" name="camera_pof">
+                        <label class="form-check-label" for="cameraPof">POF 3D reconstruction (experimental)</label>
+                        <div class="form-text text-muted">Use Part Orientation Fields for 3D pose estimation instead of MediaPipe depth.</div>
+                      </div>
+                      <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="jointRefinement" name="joint_refinement">
+                        <label class="form-check-label" for="jointRefinement">Joint constraint refinement (experimental)</label>
+                        <div class="form-text text-muted">Neural model corrects joint angles using learned constraints from motion capture.</div>
+                      </div>
+                      <div class="form-check mb-2">
                         <input class="form-check-input" type="checkbox" id="estimateMissing" name="estimate_missing" checked>
-                        <label class="form-check-label" for="estimateMissing">Estimate missing input markers</label>
+                        <label class="form-check-label" for="estimateMissing">Estimate missing markers</label>
+                        <div class="form-text text-muted">Mirror occluded limbs from visible side.</div>
                       </div>
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="forceComplete" name="force_complete" checked>
-                        <label class="form-check-label" for="forceComplete">Force-complete augmented markers</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="anatomicalConstraints" name="anatomical_constraints" checked>
-                        <label class="form-check-label" for="anatomicalConstraints">Apply anatomical constraints</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="boneLengthConstraints" name="bone_length_constraints" checked>
-                        <label class="form-check-label" for="boneLengthConstraints">Apply bone length constraints</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="multiConstraint" name="multi_constraint_optimization" checked>
-                        <label class="form-check-label" for="multiConstraint">Multi-constraint optimization</label>
+                        <input class="form-check-input" type="checkbox" id="forceComplete" name="force_complete">
+                        <label class="form-check-label" for="forceComplete">Force-complete markers</label>
+                        <div class="form-text text-muted">Estimate shoulder clusters + hip joint centers.</div>
                       </div>
                     </div>
                     <div class="col">
-                      <div class="form-check">
+                      <div class="form-check mb-2">
                         <input class="form-check-input" type="checkbox" id="computeAllAngles" name="compute_all_joint_angles" checked>
                         <label class="form-check-label" for="computeAllAngles">Compute all joint angles</label>
+                        <div class="form-text text-muted">12 ISB-compliant joint angle groups.</div>
                       </div>
                       <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="fixHeader" name="fix_header">
-                        <label class="form-check-label" for="fixHeader">Fix TRC header metadata</label>
+                        <input class="form-check-input" type="checkbox" id="plotAllAngles" name="plot_all_joint_angles" checked>
+                        <label class="form-check-label" for="plotAllAngles">Generate joint angle plots</label>
+                        <div class="form-text text-muted">Multi-panel PNG visualizations.</div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-12">
-            <div class="card panel-card border-0 rounded-4 shadow">
-              <div class="card-body">
-                <div class="d-flex align-items-center justify-content-between gap-3">
-                  <div>
-                    <p class="text-uppercase text-success fw-semibold small mb-1">Advanced</p>
-                    <h2 class="h4 mb-0">Constraint tuning</h2>
-                    <p class="text-muted small mb-0">Recommended: adjust only if you know what you're doing.</p>
-                  </div>
-                  <button class="btn btn-link text-primary p-0" type="button" data-bs-toggle="collapse" data-bs-target="#constraintTuning" aria-expanded="false" aria-controls="constraintTuning" data-collapse-toggle data-label-show="Show constraint tuning" data-label-hide="Hide constraint tuning" data-icon-collapsed="bi-chevron-down" data-icon-expanded="bi-chevron-up" aria-label="Show constraint tuning">
-                    <i class="bi bi-chevron-down fs-4" aria-hidden="true" data-collapse-icon></i>
-                    <span class="visually-hidden" data-collapse-label>Show constraint tuning</span>
-                  </button>
-                </div>
-                <div class="collapse mt-3" id="constraintTuning">
-                  <div class="row row-cols-1 row-cols-md-3 g-3">
-                    <div class="col">
-                      <label for="boneSmoothWindow" class="form-label">Anatomical smooth window</label>
-                      <input type="number" class="form-control" id="boneSmoothWindow" name="bone_smooth_window" min="1" step="1" value="21">
-                    </div>
-                    <div class="col">
-                      <label for="groundPercentile" class="form-label">Ground percentile</label>
-                      <input type="number" class="form-control" id="groundPercentile" name="ground_percentile" min="0" max="100" step="0.1" value="5.0">
-                    </div>
-                    <div class="col">
-                      <label for="groundMargin" class="form-label">Ground margin (m)</label>
-                      <input type="number" class="form-control" id="groundMargin" name="ground_margin" step="0.001" value="0.02">
-                    </div>
-                    <div class="col">
-                      <label for="boneLengthTolerance" class="form-label">Bone length tolerance</label>
-                      <input type="number" class="form-control" id="boneLengthTolerance" name="bone_length_tolerance" min="0" step="0.01" value="0.15">
-                    </div>
-                    <div class="col">
-                      <label for="boneDepthWeight" class="form-label">Bone depth weight</label>
-                      <input type="number" class="form-control" id="boneDepthWeight" name="bone_depth_weight" min="0" max="1" step="0.01" value="0.8">
-                    </div>
-                    <div class="col">
-                      <label for="boneLengthIterations" class="form-label">Bone length iterations</label>
-                      <input type="number" class="form-control" id="boneLengthIterations" name="bone_length_iterations" min="1" step="1" value="3">
-                    </div>
-                    <div class="col">
-                      <label for="multiConstraintIterations" class="form-label">Multi-constraint iterations</label>
-                      <input type="number" class="form-control" id="multiConstraintIterations" name="multi_constraint_iterations" min="1" step="1" value="10">
-                    </div>
-                    <div class="col">
-                      <label for="gaussianSmooth" class="form-label">Gaussian smooth sigma</label>
-                      <input type="number" class="form-control" id="gaussianSmooth" name="gaussian_smooth" min="0" step="0.1" value="0">
                     </div>
                   </div>
                 </div>
@@ -345,6 +283,44 @@
                   </div>
                 </div>
                 <p class="small text-muted mt-3 mb-0 {% if previous_runs %}d-none{% endif %}" id="previousRunsEmpty">No previous runs found yet.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="card panel-card border-0 rounded-4 shadow">
+              <div class="card-body">
+                <p class="text-uppercase text-success fw-semibold small mb-2">References</p>
+                <h2 class="h4 mb-3">Open Source & Research</h2>
+                <div class="row">
+                  <div class="col-md-6">
+                    <p class="small text-muted mb-2">This application uses the following open source projects:</p>
+                    <ul class="small mb-0">
+                      <li><a href="https://github.com/google-ai-edge/mediapipe" target="_blank">MediaPipe</a> — Pose detection (Apache 2.0)</li>
+                      <li><a href="https://github.com/perfanalytics/pose2sim" target="_blank">Pose2Sim</a> — Marker augmentation (BSD 3-Clause)</li>
+                      <li><a href="https://aistdancedb.ongaaccel.jp/" target="_blank">AIST++ Dataset</a> — Neural model training (CC BY 4.0)</li>
+                    </ul>
+                  </div>
+                  <div class="col-md-6">
+                    <p class="small text-muted mb-2">Research documentation:</p>
+                    <div class="d-flex align-items-start gap-3">
+                      <div class="flex-shrink-0 text-danger">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" class="bi bi-file-earmark-pdf" viewBox="0 0 16 16">
+                          <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2M9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5z"/>
+                          <path d="M4.603 14.087a.8.8 0 0 1-.438-.42c-.195-.388-.13-.776.08-1.102.198-.307.526-.568.897-.787a7.7 7.7 0 0 1 1.482-.645 20 20 0 0 0 1.062-2.227 7.3 7.3 0 0 1-.43-1.295c-.086-.4-.119-.796-.046-1.136.075-.354.274-.672.65-.823.192-.077.4-.12.602-.077a.7.7 0 0 1 .477.365c.088.164.12.356.127.538.007.188-.012.396-.047.614-.084.51-.27 1.134-.52 1.794a11 11 0 0 0 .98 1.686 5.8 5.8 0 0 1 1.334.05c.364.066.734.195.96.465.12.144.193.32.2.518.007.192-.047.382-.138.563a1.04 1.04 0 0 1-.354.416.86.86 0 0 1-.51.138c-.331-.014-.654-.196-.933-.417a5.7 5.7 0 0 1-.911-.95 11.7 11.7 0 0 0-1.997.406 11.3 11.3 0 0 1-1.02 1.51c-.292.35-.609.656-.927.787a.8.8 0 0 1-.58.029"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p class="small fw-semibold mb-1">HumanPose3D</p>
+                        <p class="small text-muted mb-1">Monocular Markerless 3D Pose Analysis for Healthcare</p>
+                        <p class="small text-muted mb-2">Joey Kardolus & Max Jansen — Hogeschool Utrecht, 2026</p>
+                        <a href="{% static 'research_report.pdf' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                          Download PDF
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

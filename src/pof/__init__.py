@@ -5,7 +5,6 @@ This module provides a camera-space approach to 3D pose estimation from
 coordinates without requiring azimuth/elevation prediction.
 
 Key components:
-- FacingDirection: Detect person's facing direction from ear/nose visibility
 - AnatomicalProportions: Estimate bone lengths from body height
 - CameraPOFModel: Neural network to predict POF unit vectors
 - CameraPOFInference: Easy-to-use inference wrapper
@@ -36,17 +35,6 @@ from .constants import (
     HEIGHT_TO_TORSO_RATIO,
 )
 
-# Facing direction detection
-from .facing import (
-    FacingDirection,
-    detect_facing_direction,
-    detect_facing_from_pose,
-    facing_to_one_hot,
-    detect_facing_direction_batch,
-    facing_batch_to_one_hot,
-    interpret_forward_direction,
-)
-
 # Bone length estimation
 from .bone_lengths import (
     AnatomicalProportions,
@@ -71,6 +59,8 @@ from .gnn_model import (
     TemporalPOFInference,
     create_gnn_pof_model,
     load_gnn_pof_model,
+    build_orientation_from_geometry,
+    build_orientation_from_z_magnitude,  # Deprecated
 )
 
 # Graph utilities
@@ -96,12 +86,16 @@ from .dataset import (
 from .losses import (
     CameraPOFLoss,
     TemporalPOFLoss,
+    ZSignOnlyLoss,
+    CleanSeparationPOFLoss,  # Deprecated
     LeastSquaresPOFLoss,
     pof_cosine_loss,
     pof_angular_error,
     symmetry_loss,
     z_sign_loss,
     z_sign_accuracy,
+    z_magnitude_loss,
+    z_magnitude_l1_loss,
     projection_consistency_loss,
     scale_factor_regularization,
     solved_depth_loss,
@@ -114,6 +108,8 @@ from .least_squares import (
     normalize_2d_for_pof,
     denormalize_pose_3d,
     solve_with_denormalization,
+    compute_limb_delta_2d,
+    build_orientation_from_z_magnitude_and_logits,
 )
 
 # Reconstruction
@@ -153,14 +149,6 @@ __all__ = [
     "KINEMATIC_CHAINS",
     "RECONSTRUCTION_ORDER",
     "HEIGHT_TO_TORSO_RATIO",
-    # Facing
-    "FacingDirection",
-    "detect_facing_direction",
-    "detect_facing_from_pose",
-    "facing_to_one_hot",
-    "detect_facing_direction_batch",
-    "facing_batch_to_one_hot",
-    "interpret_forward_direction",
     # Bone lengths
     "AnatomicalProportions",
     "estimate_bone_lengths_from_height",
@@ -178,6 +166,8 @@ __all__ = [
     "TemporalPOFInference",
     "create_gnn_pof_model",
     "load_gnn_pof_model",
+    "build_orientation_from_geometry",
+    "build_orientation_from_z_magnitude",  # Deprecated
     # Graph utilities
     "build_joint_sharing_adj",
     "build_kinematic_adj",
@@ -194,12 +184,16 @@ __all__ = [
     # Loss
     "CameraPOFLoss",
     "TemporalPOFLoss",
+    "ZSignOnlyLoss",
+    "CleanSeparationPOFLoss",  # Deprecated
     "LeastSquaresPOFLoss",
     "pof_cosine_loss",
     "pof_angular_error",
     "symmetry_loss",
     "z_sign_loss",
     "z_sign_accuracy",
+    "z_magnitude_loss",
+    "z_magnitude_l1_loss",
     "projection_consistency_loss",
     "scale_factor_regularization",
     "solved_depth_loss",
@@ -209,6 +203,8 @@ __all__ = [
     "normalize_2d_for_pof",
     "denormalize_pose_3d",
     "solve_with_denormalization",
+    "compute_limb_delta_2d",
+    "build_orientation_from_z_magnitude_and_logits",
     # Reconstruction
     "reconstruct_skeleton_from_pof",
     "reconstruct_skeleton_batch",

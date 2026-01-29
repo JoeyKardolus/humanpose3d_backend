@@ -5,20 +5,22 @@
 ## Quick Start
 
 ```bash
-# Full pipeline with neural refinement (RECOMMENDED)
+# Baseline pipeline (stable)
 uv run python main.py \
   --video data/input/joey.mp4 \
   --height 1.78 --mass 75 \
-  --estimate-missing --force-complete \
+  --estimate-missing \
   --augmentation-cycles 20 \
+  --compute-all-joint-angles \
   --plot-all-joint-angles \
-  --visibility-min 0.1 \
-  --main-refiner
+  --visibility-min 0.1
 ```
 
-**Results**: ~60s processing, POF 3D reconstruction + joint refinement, 59/64 markers, 12 joint groups computed.
+**Results**: ~60s processing, 59/64 markers, 12 joint groups computed.
 
-The `--main-refiner` flag enables the full neural refinement pipeline using POF (Part Orientation Fields) for 3D reconstruction and learned joint constraints trained on AIST++ motion capture data.
+**Experimental neural options** (independent, off by default):
+- `--camera-pof`: POF 3D reconstruction from 2D keypoints (replaces MediaPipe depth)
+- `--joint-refinement`: Neural joint constraint correction (requires `--compute-all-joint-angles`)
 
 ## Pipeline Steps
 
@@ -44,16 +46,18 @@ data/output/pose-3d/<video>/
 
 | Flag | Description |
 |------|-------------|
-| `--main-refiner` | **Recommended**: Full neural pipeline (POF 3D + joint refinement) |
 | `--height 1.78` | Subject height in meters (enables true metric scale output) |
 | `--mass 75` | Subject mass in kg (used for Pose2Sim biomechanics) |
 | `--estimate-missing` | Mirror occluded limbs from visible side |
 | `--force-complete` | Estimate shoulder clusters + hip joint centers |
 | `--augmentation-cycles N` | Multi-cycle averaging (default 20) |
+| `--compute-all-joint-angles` | Compute 12 ISB-compliant joint groups |
 | `--plot-all-joint-angles` | Multi-panel visualization |
 | `--visibility-min 0.1` | Landmark confidence threshold (default 0.3, use 0.1 to prevent marker dropout) |
+| `--camera-pof` | Experimental: POF 3D reconstruction from 2D keypoints |
+| `--joint-refinement` | Experimental: Neural joint constraint correction |
 
-**Note**: Legacy flags (`--neural-depth-refinement`, `--joint-constraint-refinement`, `--multi-constraint-optimization`, `--anatomical-constraints`, `--bone-length-constraints`, `--age`, `--sex`) have been removed. Use `--main-refiner` for the recommended neural pipeline.
+**Note**: Legacy flags (`--neural-depth-refinement`, `--multi-constraint-optimization`, `--anatomical-constraints`, `--bone-length-constraints`, `--age`, `--sex`, `--main-refiner`) have been removed. Neural options are now independent.
 
 ## Module Structure
 
@@ -67,7 +71,6 @@ data/output/pose-3d/<video>/
 | `visualizedata/` | 3D plotting, skeleton connections |
 | `pof/` | POF models (Transformer, GCN, SemGCN-Temporal), LS solver, metric scale |
 | `joint_refinement/` | Neural joint constraint model |
-| `main_refinement/` | Fusion model combining POF + joint |
 | `pipeline/` | Orchestration (refinement, cleanup) |
 | `application/` | Django web interface |
 
@@ -92,8 +95,8 @@ Automatic CPU fallback if GPU unavailable.
 |-------|----------|
 | Right arm missing | Use `--estimate-missing` to mirror from left |
 | "No trc files found" | Check Pose2Sim project structure |
-| Depth errors / front-back confusion | Use `--main-refiner` (POF 3D reconstruction) |
-| Joint angle spikes | Use `--main-refiner` (learned joint constraints) |
+| Depth errors / front-back confusion | Try `--camera-pof` (experimental POF 3D reconstruction) |
+| Joint angle spikes | Try `--joint-refinement` (experimental learned constraints) |
 | Markers disappear mid-video | Use `--visibility-min 0.1` (MediaPipe confidence drops below default 0.3 threshold) |
 
 ## Setup
@@ -154,12 +157,14 @@ uv run python scripts/viz/visualize_interactive.py [file.trc]  # 3D viewer
 ### POF (Part Orientation Fields) 3D Reconstruction
 Reconstructs 3D poses from 2D keypoints using Part Orientation Fields. Based on MonocularTotalCapture (CVPR 2019). Trains on AIST++ dataset (1.2M frames) with real MediaPipe 2D detections paired with motion capture ground truth.
 
-**Architecture**: Transformer predicting 14 per-limb 3D unit vectors
-- Predicts limb orientation from 2D foreshortening (key insight: foreshortening encodes depth)
+**Architecture**: Neural network predicting 14 per-limb 3D unit vectors
+- **Learns** full 3D orientation from 2D appearance (cannot be derived geometrically due to perspective)
 - MTC-style least-squares solver ensures 3D is consistent with 2D observations
 - Bypasses MediaPipe's broken depth estimation entirely
 
-**Model**: ~3M params (d_model=128, 6 layers, 8 heads)
+**Model Options**:
+- Transformer: ~3M params (d_model=128, 6 layers, 8 heads) - ~11° error
+- **SemGCN-Temporal**: ~1.7M params (d_model=256, 4 GCN layers) - **~7° error** (recommended)
 
 **14 Limbs** (COCO-17 indices):
 | Limb | Parent → Child | Limb | Parent → Child |
@@ -204,29 +209,36 @@ uv run --group neural python scripts/train/pof_model.py \
 
 ### SemGCN-Temporal POF (Recommended)
 
-Graph Neural Network with Z-sign classification and temporal context. Achieves **~7° error** vs 11° for transformer, 16° for MediaPipe.
+Graph Neural Network that **learns full 3D orientation** from 2D appearance. Achieves **~7° error** vs 11° for transformer, 16° for MediaPipe.
 
-**Key insight**: When a limb appears short in 2D (foreshortened), it could be pointing toward (+Z) or away (-Z) from camera. Both project identically. The model solves this with:
+**Core insight**: The model must learn to predict the full 3D orientation vector from 2D keypoint appearance - this cannot be derived geometrically due to perspective distortion. When a limb appears foreshortened in 2D, its depth direction is ambiguous, but the model learns to resolve this from visual context.
+
+**Architecture**:
 
 1. **Semantic Graph Convolution**: Uses skeleton structure as inductive bias
    - Joint-sharing edges: limbs connected at same joint
    - Kinematic edges: parent→child limb dependencies
    - Symmetry edges: left↔right limb pairs
 
-2. **Z-Sign Classification Head**: Binary classifier for each limb's depth direction
-   - Predicts P(Z > 0) for all 14 limbs
-   - Auxiliary loss helps disambiguate foreshortening
-   - Achieves **94-95% accuracy** on Z-sign prediction
+2. **POF Prediction Head**: Predicts full 3D unit vectors for each limb
+   - Main output: 14 × 3 unit orientation vectors
+   - Trained with cosine similarity loss against ground truth
 
-3. **Temporal Context**: Previous frame's POF informs current prediction
+3. **Z-Sign Classification Head** (auxiliary task)
+   - Predicts P(Z > 0) for all 14 limbs
+   - Provides explicit depth direction supervision
+   - Achieves **94% accuracy** - helps disambiguate foreshortening
+   - Optional post-processing: correct POF.z if it disagrees with z_sign prediction
+
+4. **Temporal Context**: Previous frame's POF informs current prediction
    - "Arm was forward in frame N → probably still forward in frame N+1"
    - Arms don't teleport between frames
 
-**Architecture**: ~1.7M params (d_model=256, 4 GCN layers)
+**Model**: ~1.7M params (d_model=256, 4 GCN layers)
 - 3 parallel GCN stacks (joint/kinematic/symmetry edges)
 - Fusion layer combines edge-type outputs
 - Temporal encoder for previous frame's POF
-- Z-sign head + POF head
+- POF head (main) + Z-sign head (auxiliary)
 
 **Training**:
 ```bash
@@ -242,9 +254,9 @@ uv run --group neural python scripts/train/pof_gnn_model.py \
 **Training Results** (1.15M samples, 6867 sequences):
 | Epoch | Val Error | Z-Sign Acc | Notes |
 |-------|-----------|------------|-------|
-| 1 | 7.58° | 93.8% | Already beats transformer |
-| 2 | 7.36° | 94.1% | Rapid convergence |
-| 50 | ~6-7° | ~95% | Final (expected) |
+| 1 | 7.62° | 93.8% | Already beats transformer |
+| 5 | ~7.0° | 94.5% | Rapid convergence |
+| 50 | ~6-7° | ~95% | Final |
 
 **Model Variants**:
 | Model | Params | Error | Use Case |
@@ -297,7 +309,7 @@ uv run --group neural python scripts/train/joint_model.py \
   --d-model 128 --n-layers 4
 
 # Use in pipeline
---joint-constraint-refinement
+--joint-refinement --compute-all-joint-angles
 
 # Visualize refinement on real video (3D skeleton with color-coded corrections)
 uv run --group neural python visualize_joint_refinement.py
@@ -316,44 +328,23 @@ uv run python compare_joint_interactive.py
 
 **Visualization**: Red dashed = raw MediaPipe, Blue solid = refined, Joint colors = correction magnitude (green=small, red=large)
 
-### MainRefiner (Fusion Model)
+### Using Both Models Together
 
-Combines POF and joint constraint models into a unified two-stage pipeline:
+The POF and joint refinement models can be used together or separately:
 
-**Stage 1 - Pre-augmentation (17 COCO joints)**:
-- POF reconstructs 3D from 2D keypoints
-- Runs before marker augmentation
-
-**Stage 2 - Post-augmentation (64 markers)**:
-- Joint angles computed from augmented markers (ASIS, PSIS, etc.)
-- Joint constraint model refines computed angles
-
-**Model**: 1.2M params (d_model=128, 4 heads, 2 layers)
-- Learns optimal fusion of POF + joint outputs via gating
-- Cross-attention between POF and joint features
-- Per-joint confidence estimation
-
-**Training**:
 ```bash
-# Train MainRefiner (requires pre-trained POF + joint models)
-uv run --group neural python scripts/train/main_refiner.py \
-  --data "data/training/aistpp_converted,data/training/mtc_converted" \
-  --pof-checkpoint models/checkpoints/best_pof_model.pth \
-  --joint-checkpoint models/checkpoints/best_joint_model.pth \
-  --epochs 50 --batch-size 256 --workers 8 --bf16
-```
+# POF 3D reconstruction only
+uv run python main.py --video input.mp4 --camera-pof \
+  --height 1.78 --estimate-missing --augmentation-cycles 20
 
-**Inference** (total ~4.8M params, <10ms per frame on CPU):
-```bash
-# Full pipeline with main-refiner
-uv run python main.py --video input.mp4 --main-refiner \
-  --estimate-missing --force-complete --augmentation-cycles 20
-```
+# Joint refinement only (requires joint angles)
+uv run python main.py --video input.mp4 --joint-refinement \
+  --compute-all-joint-angles --height 1.78 --estimate-missing
 
-The `--main-refiner` flag auto-enables:
-- `--camera-pof` (POF 3D reconstruction)
-- `--compute-all-joint-angles` (required for joint model)
-- Joint constraint refinement (late stage)
+# Both models together
+uv run python main.py --video input.mp4 --camera-pof --joint-refinement \
+  --compute-all-joint-angles --height 1.78 --estimate-missing --augmentation-cycles 20
+```
 
 ## Technical Details
 

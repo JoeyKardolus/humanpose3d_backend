@@ -1,11 +1,17 @@
 """
 Inference module for joint constraint refinement.
 
+Supports both transformer-based and GNN-based models with auto-detection.
+
 Usage:
     from src.joint_refinement.inference import JointRefiner
 
+    # Auto-detect model type from checkpoint
     refiner = JointRefiner('models/checkpoints/best_joint_model.pth')
     refined_angles = refiner.refine(angles, visibility)
+
+    # Explicit model type
+    refiner = JointRefiner('models/checkpoints/best_joint_gnn_model.pth', model_type='semgcn-temporal')
 
 The refiner loads the trained model and applies soft learned constraints
 to refine joint angles computed by the validated ISB kinematics.
@@ -17,6 +23,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 from .model import create_model, JointConstraintRefiner
+from .gnn_model import create_gnn_joint_model, SemGCNTemporalJointRefiner
 
 
 # Joint order (must match training)
@@ -30,14 +37,15 @@ JOINT_NAMES = [
 class JointRefiner:
     """Joint constraint refinement inference wrapper.
 
-    Loads a trained JointConstraintRefiner model and provides
-    easy-to-use methods for refining joint angles.
+    Supports both transformer-based and GNN-based models.
+    Auto-detects model type from checkpoint if not specified.
     """
 
     def __init__(
         self,
         model_path: Union[str, Path],
         device: str = 'auto',
+        model_type: str = 'auto',
     ):
         """
         Initialize the refiner.
@@ -45,8 +53,10 @@ class JointRefiner:
         Args:
             model_path: Path to trained model checkpoint
             device: 'cuda', 'cpu', or 'auto' (auto-detect)
+            model_type: 'auto', 'transformer', 'gcn', 'semgcn', or 'semgcn-temporal'
         """
         self.model_path = Path(model_path)
+        self.model_type_requested = model_type
 
         # Device setup
         if device == 'auto':
@@ -55,26 +65,57 @@ class JointRefiner:
             self.device = device
 
         # Load model
-        self.model = self._load_model()
+        self.model, self.model_type = self._load_model()
         self.model.eval()
 
-        print(f"[JointRefiner] Loaded model from {model_path}")
+        # For temporal models, track previous angles
+        self.prev_angles = None
+
+        print(f"[JointRefiner] Loaded {self.model_type} model from {model_path}")
         print(f"[JointRefiner] Device: {self.device}")
+        print(f"[JointRefiner] Parameters: {sum(p.numel() for p in self.model.parameters()):,}")
 
-    def _load_model(self) -> JointConstraintRefiner:
-        """Load trained model from checkpoint."""
-        checkpoint = torch.load(self.model_path, map_location=self.device)
+    def _load_model(self):
+        """Load trained model from checkpoint with auto-detection."""
+        checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
 
-        # Extract model config from checkpoint if available
-        d_model = checkpoint.get('d_model', 128)
-        n_layers = checkpoint.get('n_layers', 4)
+        # Detect model type
+        if self.model_type_requested == 'auto':
+            # Check for config in checkpoint
+            config = checkpoint.get('config', {})
+            model_type = config.get('model_type', None)
 
-        # Create model
-        model = create_model(d_model=d_model, n_layers=n_layers)
+            if model_type is None:
+                # Fallback: check for d_model vs num_layers naming
+                if 'd_model' in checkpoint and 'n_layers' in checkpoint:
+                    model_type = 'transformer'
+                elif 'config' in checkpoint:
+                    model_type = checkpoint['config'].get('model_type', 'transformer')
+                else:
+                    model_type = 'transformer'
+        else:
+            model_type = self.model_type_requested
+
+        # Create model based on type
+        if model_type == 'transformer':
+            d_model = checkpoint.get('d_model', 128)
+            n_layers = checkpoint.get('n_layers', 4)
+            model = create_model(d_model=d_model, n_layers=n_layers)
+        else:
+            # GNN models
+            config = checkpoint.get('config', {})
+            model = create_gnn_joint_model(
+                model_type=model_type,
+                d_model=config.get('d_model', 192),
+                num_layers=config.get('num_layers', 4),
+                use_gat=config.get('use_gat', False),
+                verbose=False,
+            )
+
         model.load_state_dict(checkpoint['model_state_dict'])
         model = model.to(self.device)
 
-        return model
+        return model, model_type
 
     def refine(
         self,
@@ -83,6 +124,9 @@ class JointRefiner:
     ) -> np.ndarray:
         """
         Refine joint angles using learned constraints.
+
+        For temporal models (semgcn-temporal), maintains internal state
+        to track previous frame angles for context.
 
         Args:
             angles: (12, 3) or (N, 12, 3) joint angles in degrees
@@ -108,7 +152,17 @@ class JointRefiner:
 
         # Run model
         with torch.no_grad():
-            refined, delta = self.model(angles_t, visibility_t)
+            if self.model_type == 'semgcn-temporal':
+                # Temporal model with previous frame context
+                refined, delta, _ = self.model(angles_t, visibility_t, self.prev_angles)
+                # Update state for next frame
+                self.prev_angles = refined.detach()
+            elif self.model_type in ('gcn', 'semgcn'):
+                # GNN models without temporal
+                refined, delta = self.model(angles_t, visibility_t)
+            else:
+                # Transformer model
+                refined, delta = self.model(angles_t, visibility_t)
 
         # Convert back to numpy
         result = refined.cpu().numpy()
@@ -117,6 +171,10 @@ class JointRefiner:
             result = result[0]
 
         return result
+
+    def reset(self):
+        """Reset temporal state. Call at start of new video sequence."""
+        self.prev_angles = None
 
     def refine_batch(
         self,
@@ -194,6 +252,7 @@ class JointRefiner:
 def load_refiner(
     model_path: Union[str, Path] = 'models/checkpoints/best_joint_model.pth',
     device: str = 'auto',
+    model_type: str = 'auto',
 ) -> JointRefiner:
     """
     Load a joint refiner from checkpoint.
@@ -201,11 +260,12 @@ def load_refiner(
     Args:
         model_path: Path to trained model
         device: Device to use
+        model_type: 'auto', 'transformer', 'gcn', 'semgcn', or 'semgcn-temporal'
 
     Returns:
         JointRefiner instance
     """
-    return JointRefiner(model_path, device)
+    return JointRefiner(model_path, device, model_type)
 
 
 if __name__ == '__main__':

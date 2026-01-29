@@ -4,35 +4,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from src.application.build_log import append_build_log
-from src.datastream.data_stream import (
-    ORDER_22,
-    csv_to_trc_strict,
-    write_landmark_csv,
-)
-from src.datastream.marker_estimation import estimate_missing_markers
-from src.datastream.post_augmentation_estimation import (
-    estimate_shoulder_clusters_and_hjc,
-)
-from src.kinematics.comprehensive_joint_angles import compute_all_joint_angles
-from src.kinematics.visualize_comprehensive_angles import (
-    plot_comprehensive_joint_angles,
-    plot_side_by_side_comparison,
-    save_comprehensive_angles_csv,
-)
-from src.markeraugmentation.markeraugmentation import run_pose2sim_augment
-from src.markeraugmentation.gpu_config import patch_pose2sim_gpu
-from src.mediastream.media_stream import probe_video_rotation, read_video_rgb
-from src.posedetector.pose_detector import extract_world_landmarks
-from src.posedetector import create_pose_estimator, COCO_TO_MARKER_NAME
+# Lightweight imports only - heavy deps (mediapipe, torch, matplotlib) deferred to main()
+from src.posedetector.base import COCO_TO_MARKER_NAME
 from src.datastream.data_stream import LandmarkRecord
-from src.visualizedata.visualize_data import VisualizeData
-from src.pipeline.refinement import (
-    apply_neural_joint_refinement,
-    apply_camera_pof_reconstruction,
-)
-from src.pipeline.cleanup import cleanup_output_directory
-from src.postprocessing.temporal_smoothing import smooth_trc, hide_markers_in_trc
 
 OUTPUT_ROOT = Path("data/output")
 
@@ -140,12 +114,6 @@ def parse_args() -> argparse.Namespace:
         help="Number of Pose2Sim augmentation cycles to average (default 20)",
     )
 
-    # Neural refinement (recommended)
-    parser.add_argument(
-        "--main-refiner",
-        action="store_true",
-        help="Apply MainRefiner neural pipeline (POF 3D + joint refinement) - RECOMMENDED",
-    )
     parser.add_argument(
         "--joint-model-path",
         type=str,
@@ -153,16 +121,23 @@ def parse_args() -> argparse.Namespace:
         help="Path to joint refinement model checkpoint",
     )
 
-    # Camera-space POF for 3D reconstruction
+    # Camera-space POF for 3D reconstruction (experimental)
     parser.add_argument(
         "--camera-pof",
         action="store_true",
-        help="Use camera-space POF for 3D reconstruction (auto-enabled by --main-refiner)",
+        help="Use camera-space POF for 3D reconstruction instead of MediaPipe depth (experimental)",
+    )
+
+    # Joint constraint refinement (experimental)
+    parser.add_argument(
+        "--joint-refinement",
+        action="store_true",
+        help="Apply neural joint constraint refinement (experimental, requires --compute-all-joint-angles)",
     )
     parser.add_argument(
         "--pof-model-path",
         type=str,
-        default="models/checkpoints/best_pof_model.pth",
+        default="models/checkpoints/best_pof_semgcn-temporal_model.pth",
         help="Path to camera-space POF model checkpoint",
     )
 
@@ -176,7 +151,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--compute-all-joint-angles",
         action="store_true",
-        help="Compute all joint angles (auto-enabled with --main-refiner)",
+        help="Compute all ISB-compliant joint angles (12 joint groups)",
     )
     parser.add_argument(
         "--plot-all-joint-angles",
@@ -236,13 +211,29 @@ def main() -> None:
         print(f"[main] video not found: {video_path}", file=sys.stderr)
         sys.exit(1)
 
+    # Import heavy dependencies only when actually running (not for --help)
+    from src.application.build_log import append_build_log
+    from src.datastream.data_stream import ORDER_22, csv_to_trc_strict, write_landmark_csv
+    from src.datastream.marker_estimation import estimate_missing_markers
+    from src.datastream.post_augmentation_estimation import estimate_shoulder_clusters_and_hjc
+    from src.datastream.trc_processing import smooth_trc, hide_markers_in_trc
+    from src.markeraugmentation.markeraugmentation import run_pose2sim_augment
+    from src.markeraugmentation.gpu_config import patch_pose2sim_gpu
+    from src.mediastream.media_stream import probe_video_rotation, read_video_rgb
+    from src.posedetector.pose_detector import extract_world_landmarks
+    from src.posedetector import create_pose_estimator
+    from src.pipeline.refinement import apply_neural_joint_refinement, apply_camera_pof_reconstruction
+    from src.pipeline.cleanup import cleanup_output_directory
+
     run_dir = OUTPUT_ROOT / video_path.stem
     run_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        visualizer: VisualizeData | None = (
-            VisualizeData() if args.plot_landmarks or args.plot_augmented else None
-        )
+        # Lazy import for visualization (only if needed)
+        visualizer = None
+        if args.plot_landmarks or args.plot_augmented:
+            from src.visualizedata.visualize_data import VisualizeData
+            visualizer = VisualizeData()
 
         # Step 1: Extract landmarks from video
         frames, fps = read_video_rgb(video_path)
@@ -254,11 +245,8 @@ def main() -> None:
         # Handle RTMPose vs MediaPipe
         landmarks_2d = {}
         raw_landmarks = []
-        use_rtmpose = args.pose_estimator == "rtmpose"
 
-        # Auto-enable camera-pof when main-refiner is requested
-        if args.main_refiner:
-            args.camera_pof = True
+        use_rtmpose = args.pose_estimator == "rtmpose"
 
         if use_rtmpose:
             # RTMPose provides 2D only - force camera-pof for 3D reconstruction
@@ -347,7 +335,10 @@ def main() -> None:
         print(f"[main] step1 CSV -> {csv_path}")
 
         if args.plot_landmarks and raw_landmarks:
-            (visualizer or VisualizeData()).plot_landmarks(raw_landmarks)
+            if visualizer is None:
+                from src.visualizedata.visualize_data import VisualizeData
+                visualizer = VisualizeData()
+            visualizer.plot_landmarks(raw_landmarks)
         if preview_path and preview_path.exists():
             print(f"[main] preview video saved to {preview_path}")
 
@@ -365,6 +356,7 @@ def main() -> None:
             height=args.height,
             mass=args.mass,
             augmentation_cycles=args.augmentation_cycles,
+            camera_space=args.camera_pof,  # Transform coords for POF input
         )
         append_build_log(f"main step3 augment {lstm_path}")
         print(f"[main] step3 augment -> {lstm_path}")
@@ -376,8 +368,12 @@ def main() -> None:
             append_build_log(f"main step3.5 complete {final_output}")
             print(f"[main] step3.5 force-complete -> {final_output}")
 
-        # Step 4: Compute joint angles (auto-enabled with --main-refiner)
-        if args.compute_all_joint_angles or args.main_refiner:
+        # Step 4: Compute joint angles
+        if args.compute_all_joint_angles:
+            # Lazy import for joint angle computation (loads pandas, scipy)
+            from src.kinematics.comprehensive_joint_angles import compute_all_joint_angles
+            from src.kinematics.visualize_comprehensive_angles import save_comprehensive_angles_csv
+
             try:
                 print("\n" + "=" * 60)
                 print("Computing Comprehensive Joint Angles (ISB Standards)")
@@ -392,8 +388,8 @@ def main() -> None:
                     verbose=True,
                 )
 
-                # Apply neural joint constraint refinement
-                if args.main_refiner:
+                # Apply neural joint constraint refinement (experimental)
+                if args.joint_refinement:
                     angle_results = apply_neural_joint_refinement(
                         angle_results,
                         args.joint_model_path,
@@ -406,8 +402,9 @@ def main() -> None:
                     basename=video_path.stem,
                 )
 
-                # Create visualizations
+                # Create visualizations (lazy import matplotlib only when needed)
                 if args.plot_all_joint_angles:
+                    from src.kinematics.visualize_comprehensive_angles import plot_comprehensive_joint_angles
                     plot_path = run_dir / f"{video_path.stem}_all_joint_angles.png"
                     plot_comprehensive_joint_angles(
                         angle_results,
@@ -417,6 +414,7 @@ def main() -> None:
                     )
 
                 if args.save_angle_comparison:
+                    from src.kinematics.visualize_comprehensive_angles import plot_side_by_side_comparison
                     comparison_path = run_dir / f"{video_path.stem}_joint_angles_comparison.png"
                     plot_side_by_side_comparison(
                         angle_results,
@@ -436,10 +434,11 @@ def main() -> None:
 
         # Visualize augmented output
         if args.plot_augmented:
+            if visualizer is None:
+                from src.visualizedata.visualize_data import VisualizeData
+                visualizer = VisualizeData()
             aug_preview = run_dir / f"{final_output.stem}_preview.mp4"
-            (visualizer or VisualizeData()).plot_trc_file(
-                final_output, export_path=aug_preview, block=True
-            )
+            visualizer.plot_trc_file(final_output, export_path=aug_preview, block=True)
 
         # Cleanup and organize
         cleanup_output_directory(run_dir, video_path.stem)

@@ -13,8 +13,29 @@ import numpy as np
 from collections import defaultdict
 
 from src.datastream.data_stream import LandmarkRecord
-from src.joint_refinement.inference import JointRefiner
-from src.pof.inference import CameraPOFInference
+
+# Lazy imports for neural models - only loaded when actually used
+# This avoids loading torch/models when neural features are disabled
+JointRefiner = None
+CameraPOFInference = None
+
+
+def _get_joint_refiner():
+    """Lazy import for JointRefiner to avoid loading torch when not needed."""
+    global JointRefiner
+    if JointRefiner is None:
+        from src.joint_refinement.inference import JointRefiner as _JointRefiner
+        JointRefiner = _JointRefiner
+    return JointRefiner
+
+
+def _get_camera_pof_inference():
+    """Lazy import for CameraPOFInference to avoid loading torch when not needed."""
+    global CameraPOFInference
+    if CameraPOFInference is None:
+        from src.pof.inference import CameraPOFInference as _CameraPOFInference
+        CameraPOFInference = _CameraPOFInference
+    return CameraPOFInference
 
 # Mapping from OpenCap/MediaPipe marker names to COCO 17 joint indices
 # COCO 17: nose, left_eye, right_eye, left_ear, right_ear, left_shoulder, right_shoulder,
@@ -194,7 +215,8 @@ def apply_neural_joint_refinement(
         'elbow_R', 'elbow_L',
     ]
 
-    refiner = JointRefiner(model_path)
+    JointRefinerClass = _get_joint_refiner()
+    refiner = JointRefinerClass(model_path)
 
     # Get number of frames from first available joint
     n_frames = None
@@ -297,7 +319,8 @@ def apply_camera_pof_reconstruction(
         return records
 
     try:
-        pof_inference = CameraPOFInference(model_path)
+        CameraPOFInferenceClass = _get_camera_pof_inference()
+        pof_inference = CameraPOFInferenceClass(model_path)
     except Exception as e:
         print(f"[pof] WARNING: Failed to load POF model: {e}")
         return records

@@ -52,6 +52,12 @@ class PreparePipelineRunUseCase:
         run_key = self._run_key_service.build_run_key(output_location, safe_run_id)
         upload_path = self._upload_service.save_upload(uploaded, safe_run_id)
 
+        # Check video duration limit
+        duration_error = self._upload_service.check_video_duration(upload_path)
+        if duration_error:
+            self._upload_service.remove_upload(safe_run_id)
+            return PipelinePreparationResult(errors=[duration_error], prepared=None)
+
         output_dirs, output_errors = self._output_directory_service.prepare_directories(
             safe_run_id,
             run_key,

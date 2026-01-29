@@ -87,38 +87,23 @@ def ensure_continuity(
 ) -> np.ndarray:
     """Ensure coordinate system continuity across frames.
 
-    Prevents axis flipping by checking dot product with previous frame.
-    Note: We cannot simply flip all axes as that would create a left-handed
-    system. Instead, we only flip if it maintains right-handedness.
+    DISABLED: The original implementation flipped all axes when score < 0,
+    which changed det(R) from +1 to -1, creating left-handed coordinate
+    systems. This caused scipy's Rotation.from_matrix to fail or produce
+    incorrect Euler angles.
+
+    Instead, we now return the axes unchanged and rely on Euler angle
+    unwrapping (in angle_processing.py) to handle any discontinuities.
+    This maintains valid right-handed coordinate systems throughout.
 
     Args:
         current_axes: Current frame axes (3x3)
         previous_axes: Previous frame axes (3x3) or None
 
     Returns:
-        Continuous axes (3x3)
+        Current axes unchanged (3x3)
     """
-    if previous_axes is None:
-        return current_axes
-
-    if np.isnan(current_axes).any() or np.isnan(previous_axes).any():
-        return current_axes
-
-    # Score = sum of dot products of corresponding axes
-    score = (
-        np.dot(current_axes[:, 0], previous_axes[:, 0]) +
-        np.dot(current_axes[:, 1], previous_axes[:, 1]) +
-        np.dot(current_axes[:, 2], previous_axes[:, 2])
-    )
-
-    # If all axes point opposite direction (score < 0), flip ALL axes
-    # This prevents 180° discontinuities in Euler angles.
-    # Note: Flipping all 3 axes changes det(R) from +1 to -1, but the
-    # euler_xyz() function handles this by orthonormalizing the matrix
-    # before extracting angles. This matches the professor's approach.
-    if score < 0:
-        return -current_axes
-
+    # Simply return current axes - rely on Euler angle unwrapping instead
     return current_axes
 
 
@@ -187,6 +172,14 @@ def build_segment_frame(
     z = axes[:, 1]  # lateral (re-orthogonalized)
 
     result = np.column_stack([x, y, z])
+
+    # Verify right-handedness after reordering
+    # Negating Y can create left-handed system - fix by flipping X
+    det = np.linalg.det(result)
+    if det < 0:
+        x = -x
+        result = np.column_stack([x, y, z])
+
     return ensure_continuity(result, previous)
 
 
@@ -201,26 +194,27 @@ def pelvis_axes(
 
     ISB-inspired pelvis frame following Wu et al. 2002:
     - X: Anterior (cross product of Y×Z, points forward)
-    - Y: Superior (PSIS midpoint -> ASIS midpoint, primary axis)
-    - Z: Right (RASIS -> LASIS, medial-lateral axis)
+    - Y: Superior (upward direction)
+    - Z: Right (LASIS -> RASIS, medial-lateral axis)
 
-    This matches the reference implementation exactly:
-    - Y (superior) is PRIMARY axis (preserved direction)
-    - Z (right) is SECONDARY hint
-    - X (anterior) is derived from Y×Z cross product
+    ROBUSTNESS FIX: Pose2Sim LSTM can output ASIS/PSIS markers at incorrect
+    relative heights, which would make the ISB-standard PSIS→ASIS direction
+    point downward instead of upward. To handle this, we use world-up (0,1,0)
+    as the primary Y reference and only use ASIS markers for the lateral axis.
 
     Args:
         rasis: Right ASIS position (3,) or None
         lasis: Left ASIS position (3,) or None
-        rpsis: Right PSIS position (3,) or None
-        lpsis: Left PSIS position (3,) or None
+        rpsis: Right PSIS position (3,) or None (used for anterior/posterior)
+        lpsis: Left PSIS position (3,) or None (used for anterior/posterior)
         previous: Previous frame axes for continuity (3x3) or None
 
     Returns:
         Rotation matrix (3x3) with columns [X, Y, Z] or None if invalid markers
 
-    Note: pelvis_axes uses a custom construction (Y primary, Z secondary) rather than
-    build_segment_frame() because it follows ISB pelvis-specific conventions.
+    Note: pelvis_axes uses a custom construction that prioritizes correct
+    orientation over strict ISB marker-based definition to handle noisy
+    marker data from ML-based augmentation.
     """
     if not markers_valid(rasis, lasis, rpsis, lpsis):
         return None
@@ -228,21 +222,30 @@ def pelvis_axes(
     asis_mid = 0.5 * (rasis + lasis)
     psis_mid = 0.5 * (rpsis + lpsis)
 
-    # Z axis: medial-lateral (right pointing)
+    # Z axis: medial-lateral (pointing to subject's right)
     # From left ASIS to right ASIS
-    z = normalize(rasis - lasis)
+    z_raw = normalize(rasis - lasis)
 
-    # Y axis: inferior-superior (primary axis)
-    # From PSIS midpoint to ASIS midpoint (pointing up)
-    y_temp = normalize(asis_mid - psis_mid)
+    # World up reference (in Y-up coordinate system)
+    world_up = np.array([0.0, 1.0, 0.0])
 
-    # X axis: anterior (derived from Y×Z cross product)
-    # Points forward (perpendicular to pelvis plane)
-    x = normalize(np.cross(y_temp, z))
+    # X axis: anterior direction
+    # Use ASIS/PSIS for anterior hint, then orthogonalize
+    # ASIS should be anterior to PSIS (more negative Z in camera space for person facing camera)
+    anterior_hint = normalize(asis_mid - psis_mid)
 
-    # Re-orthogonalize Y to ensure perfect orthogonality
-    # Y = Z × X (maintains Y close to original direction)
-    y = normalize(np.cross(z, x))
+    # Build coordinate system with world-up as Y reference
+    # X = component of anterior_hint orthogonal to world_up, then orthogonal to Z
+    # First, get a robust Z by making it orthogonal to world_up
+    z_temp = z_raw - np.dot(z_raw, world_up) * world_up
+    z = normalize(z_temp)
+
+    # Y = world_up component orthogonal to Z
+    y_temp = world_up - np.dot(world_up, z) * z
+    y = normalize(y_temp)
+
+    # X = Y × Z (right-handed)
+    x = normalize(np.cross(y, z))
 
     # Check for NaN axes
     if np.isnan(x).any() or np.isnan(y).any() or np.isnan(z).any():
@@ -254,15 +257,17 @@ def pelvis_axes(
     # Verify right-handedness (det = +1)
     det = np.linalg.det(result)
     if det < 0:
-        # Left-handed system - something went wrong in construction
-        # Re-orthogonalize more carefully
-        z = normalize(rasis - lasis)
-        y_temp = normalize(asis_mid - psis_mid)
-        # Ensure Y and Z are not parallel
-        if abs(np.dot(y_temp, z)) > 0.99:
-            return None  # Degenerate case
-        x = normalize(np.cross(y_temp, z))
-        y = normalize(np.cross(z, x))
+        # Left-handed system - flip Z to fix
+        z = -z
+        x = normalize(np.cross(y, z))
+        result = np.column_stack([x, y, z])
+
+    # Ensure X points forward (anterior) using ASIS/PSIS hint
+    # For person facing camera, anterior = negative Z direction (toward camera)
+    # If X·anterior_hint < 0, X is pointing backward, flip X and Z
+    if np.dot(x, anterior_hint) < 0:
+        x = -x
+        z = -z
         result = np.column_stack([x, y, z])
 
     # Axis continuity check (matching reference implementation)

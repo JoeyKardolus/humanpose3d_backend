@@ -119,13 +119,22 @@ def parse_args():
     )
 
     # Loss weights
-    parser.add_argument("--cosine-weight", type=float, default=1.0)
-    parser.add_argument("--symmetry-weight", type=float, default=0.1)
+    parser.add_argument("--cosine-weight", type=float, default=1.0,
+        help="Weight for cosine loss (legacy models only)")
+    parser.add_argument("--symmetry-weight", type=float, default=0.1,
+        help="Weight for symmetry loss (legacy models only)")
     parser.add_argument(
         "--z-sign-weight",
         type=float,
         default=0.2,
-        help="Weight for Z-sign classification loss (temporal model only)",
+        help="Weight for Z-sign classification loss",
+    )
+    # DEPRECATED: z-mag-weight is no longer used (|Z| is computed from geometry)
+    parser.add_argument(
+        "--z-mag-weight",
+        type=float,
+        default=1.0,
+        help="DEPRECATED: No longer used. |Z| is computed from geometry, not predicted.",
     )
 
     # Mixed precision
@@ -160,7 +169,12 @@ def train_epoch(
     amp_dtype: torch.dtype,
     temporal: bool = False,
 ) -> dict:
-    """Train for one epoch."""
+    """Train for one epoch.
+
+    Args:
+        temporal: If True, model outputs (pof, z_sign_logits) tuple and uses
+            temporal context from previous frames.
+    """
     model.train()
     total_loss = 0.0
     total_cosine = 0.0
@@ -189,10 +203,11 @@ def train_epoch(
 
         with autocast("cuda", enabled=use_amp, dtype=amp_dtype):
             if temporal:
-                # Temporal model returns (pof, z_sign_logits)
+                # Temporal model outputs (pof, z_sign_logits) tuple
                 pred_pof, z_sign_logits = model(pose_2d, visibility, limb_delta_2d, limb_length_2d, prev_pof)
                 losses = criterion(pred_pof, z_sign_logits, gt_pof, visibility)
             else:
+                # Non-temporal models output only POF
                 pred_pof = model(pose_2d, visibility, limb_delta_2d, limb_length_2d)
                 losses = criterion(pred_pof, gt_pof, visibility)
             loss = losses["total"]
@@ -209,9 +224,10 @@ def train_epoch(
             optimizer.step()
 
         total_loss += loss.item()
-        total_cosine += losses["cosine"].item()
-        total_symmetry += losses.get("symmetry", torch.tensor(0.0)).item()
 
+        # Track loss components
+        total_cosine += losses.get("cosine", torch.tensor(0.0)).item()
+        total_symmetry += losses.get("symmetry", torch.tensor(0.0)).item()
         if temporal:
             total_z_sign += losses.get("z_sign", torch.tensor(0.0)).item()
             total_z_sign_acc += losses.get("z_sign_acc", torch.tensor(0.0)).item()
@@ -225,10 +241,11 @@ def train_epoch(
 
     result = {
         "loss": total_loss / num_batches,
+        "angular_error_deg": total_angular_error / num_batches,
         "cosine": total_cosine / num_batches,
         "symmetry": total_symmetry / num_batches,
-        "angular_error_deg": total_angular_error / num_batches,
     }
+
     if temporal:
         result["z_sign"] = total_z_sign / num_batches
         result["z_sign_acc"] = total_z_sign_acc / num_batches
@@ -244,7 +261,11 @@ def validate(
     device: str,
     temporal: bool = False,
 ) -> dict:
-    """Validate model."""
+    """Validate model.
+
+    Args:
+        temporal: If True, model outputs (pof, z_sign_logits) tuple.
+    """
     model.eval()
     total_loss = 0.0
     total_cosine = 0.0
@@ -267,15 +288,17 @@ def validate(
             prev_pof = prev_pof * has_prev.unsqueeze(-1).unsqueeze(-1).float()
 
         if temporal:
+            # Temporal model outputs (pof, z_sign_logits) tuple
             pred_pof, z_sign_logits = model(pose_2d, visibility, limb_delta_2d, limb_length_2d, prev_pof)
             losses = criterion(pred_pof, z_sign_logits, gt_pof, visibility)
             total_z_sign_acc += losses.get("z_sign_acc", torch.tensor(0.0)).item()
         else:
+            # Non-temporal models output only POF
             pred_pof = model(pose_2d, visibility, limb_delta_2d, limb_length_2d)
             losses = criterion(pred_pof, gt_pof, visibility)
 
         total_loss += losses["total"].item()
-        total_cosine += losses["cosine"].item()
+        total_cosine += losses.get("cosine", torch.tensor(0.0)).item()
 
         angular_err = pof_angular_error(pred_pof, gt_pof).mean().item()
         total_angular_error += angular_err
@@ -284,9 +307,10 @@ def validate(
 
     result = {
         "loss": total_loss / num_batches,
-        "cosine": total_cosine / num_batches,
         "angular_error_deg": total_angular_error / num_batches,
+        "cosine": total_cosine / num_batches,
     }
+
     if temporal:
         result["z_sign_acc"] = total_z_sign_acc / num_batches
 
@@ -372,8 +396,9 @@ def main():
     )
     model = model.to(device)
 
-    # Loss
+    # Loss - choose based on model type
     if temporal:
+        # Temporal models use TemporalPOFLoss with POF + Z-sign supervision
         criterion = TemporalPOFLoss(
             cosine_weight=args.cosine_weight,
             z_sign_weight=args.z_sign_weight,
@@ -381,10 +406,12 @@ def main():
         )
         print(f"Using TemporalPOFLoss (z_sign_weight={args.z_sign_weight})")
     else:
+        # Non-temporal models use CameraPOFLoss (POF only)
         criterion = CameraPOFLoss(
             cosine_weight=args.cosine_weight,
             symmetry_weight=args.symmetry_weight,
         )
+        print(f"Using CameraPOFLoss")
 
     # Optimizer
     optimizer = optim.AdamW(
@@ -436,11 +463,15 @@ def main():
         # Train
         train_metrics = train_epoch(
             model, train_loader, optimizer, criterion,
-            scaler, device, use_amp, amp_dtype, temporal=temporal
+            scaler, device, use_amp, amp_dtype,
+            temporal=temporal,
         )
 
         # Validate
-        val_metrics = validate(model, val_loader, criterion, device, temporal=temporal)
+        val_metrics = validate(
+            model, val_loader, criterion, device,
+            temporal=temporal,
+        )
 
         # Update scheduler
         scheduler.step()

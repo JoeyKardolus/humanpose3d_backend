@@ -3,34 +3,38 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 import subprocess
-from typing import Dict, List
+from typing import Dict, List, TYPE_CHECKING
 
 import cv2
-import mediapipe as mp
 import numpy as np
-from mediapipe.framework.formats import landmark_pb2
-from mediapipe.tasks.python import vision
 
 from src.datastream.data_stream import LandmarkRecord
 
+# Lazy import for mediapipe - only loaded when extract_world_landmarks is called
+# This avoids loading TensorFlow (~3s) on module import
+if TYPE_CHECKING:
+    import mediapipe as mp
+
+# MediaPipe pose landmark indices (stable, from PoseLandmark enum)
+# https://developers.google.com/mediapipe/solutions/vision/pose_landmarker
 POSE_NAME_MAP: Dict[int, str] = {
-    mp.solutions.pose.PoseLandmark.NOSE.value: "Nose",
-    mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER.value: "RShoulder",
-    mp.solutions.pose.PoseLandmark.LEFT_SHOULDER.value: "LShoulder",
-    mp.solutions.pose.PoseLandmark.RIGHT_ELBOW.value: "RElbow",
-    mp.solutions.pose.PoseLandmark.LEFT_ELBOW.value: "LElbow",
-    mp.solutions.pose.PoseLandmark.RIGHT_WRIST.value: "RWrist",
-    mp.solutions.pose.PoseLandmark.LEFT_WRIST.value: "LWrist",
-    mp.solutions.pose.PoseLandmark.RIGHT_HIP.value: "RHip",
-    mp.solutions.pose.PoseLandmark.LEFT_HIP.value: "LHip",
-    mp.solutions.pose.PoseLandmark.RIGHT_KNEE.value: "RKnee",
-    mp.solutions.pose.PoseLandmark.LEFT_KNEE.value: "LKnee",
-    mp.solutions.pose.PoseLandmark.RIGHT_ANKLE.value: "RAnkle",
-    mp.solutions.pose.PoseLandmark.LEFT_ANKLE.value: "LAnkle",
-    mp.solutions.pose.PoseLandmark.RIGHT_HEEL.value: "RHeel",
-    mp.solutions.pose.PoseLandmark.LEFT_HEEL.value: "LHeel",
-    mp.solutions.pose.PoseLandmark.RIGHT_FOOT_INDEX.value: "RBigToe",
-    mp.solutions.pose.PoseLandmark.LEFT_FOOT_INDEX.value: "LBigToe",
+    0: "Nose",           # NOSE
+    12: "RShoulder",     # RIGHT_SHOULDER
+    11: "LShoulder",     # LEFT_SHOULDER
+    14: "RElbow",        # RIGHT_ELBOW
+    13: "LElbow",        # LEFT_ELBOW
+    16: "RWrist",        # RIGHT_WRIST
+    15: "LWrist",        # LEFT_WRIST
+    24: "RHip",          # RIGHT_HIP
+    23: "LHip",          # LEFT_HIP
+    26: "RKnee",         # RIGHT_KNEE
+    25: "LKnee",         # LEFT_KNEE
+    28: "RAnkle",        # RIGHT_ANKLE
+    27: "LAnkle",        # LEFT_ANKLE
+    30: "RHeel",         # RIGHT_HEEL
+    29: "LHeel",         # LEFT_HEEL
+    32: "RBigToe",       # RIGHT_FOOT_INDEX
+    31: "LBigToe",       # LEFT_FOOT_INDEX
 }
 
 
@@ -51,6 +55,11 @@ def extract_world_landmarks(
         return_2d_landmarks: If True, also returns dict of 2D normalized image coordinates
                             for depth refinement. Format: {(timestamp, landmark): (x, y)}
     """
+    # Lazy import mediapipe to avoid loading TensorFlow (~3s) unless actually needed
+    import mediapipe as mp
+    from mediapipe.framework.formats import landmark_pb2
+    from mediapipe.tasks.python import vision
+
     if video_rgb.size == 0:
         raise ValueError("Video contains no frames")
 

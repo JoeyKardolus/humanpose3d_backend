@@ -15,7 +15,21 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "replace-me-with-a-secret-key")
 
 DEBUG = True
 
-ALLOWED_HOSTS: list[str] = []
+# Allow localhost and ngrok tunnels for internet access
+ALLOWED_HOSTS: list[str] = [
+    "localhost",
+    "127.0.0.1",
+    ".ngrok-free.app",  # ngrok free tier domains
+    ".ngrok-free.dev",  # ngrok current domains
+    ".ngrok.io",  # ngrok legacy domains
+]
+
+# CSRF trusted origins for external access via tunnels
+CSRF_TRUSTED_ORIGINS: list[str] = [
+    "https://*.ngrok-free.app",
+    "https://*.ngrok-free.dev",
+    "https://*.ngrok.io",
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",

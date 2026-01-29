@@ -28,6 +28,7 @@ from .least_squares import (
     solve_depth_least_squares_pof,
     normalize_2d_for_pof,
     denormalize_pose_3d,
+    enforce_bone_lengths,
 )
 
 
@@ -383,6 +384,9 @@ def reconstruct_skeleton_least_squares(
     denormalize: bool = False,
     output_depth: float = 2.0,
     metric_torso_scale: Optional[float] = None,
+    enforce_bones: bool = False,
+    use_2d_xy: bool = True,
+    enforce_width: bool = False,
 ) -> np.ndarray:
     """Reconstruct 3D skeleton using MTC-style least-squares solver.
 
@@ -400,6 +404,12 @@ def reconstruct_skeleton_least_squares(
         metric_torso_scale: If provided, use for true metric scale output.
                            Computed as: subject_height / HEIGHT_TO_TORSO_RATIO
                            When None, uses 2D-derived scale (approximate).
+        enforce_bones: If True, enforce bone length constraints by adjusting Z.
+                      Default False - rely on POF predictions for bone lengths.
+        use_2d_xy: If True (default), derive orient_xy from 2D observations.
+                  Only uses |Z| from POF. This fixes the torso collapse issue.
+        enforce_width: If True, enforce hip and shoulder width bone lengths.
+                      Fixes collapsed width in side views.
 
     Returns:
         (17, 3) or (batch, 17, 3) reconstructed 3D pose
@@ -435,16 +445,37 @@ def reconstruct_skeleton_least_squares(
     if denormalize:
         # Normalize, solve, then denormalize
         normalized_2d, pelvis_2d, torso_scale = normalize_2d_for_pof(kp_t)
+
+        # Normalize bone_lengths to unit-torso scale (to match normalized 2D space)
+        # In normalized space, torso = 1 unit, so divide by metric torso length
+        # This fixes scale clamping: e.g., 0.5m / 0.52m ≈ 0.96 units instead of 0.5
+        bl_normalized = None
+        if bl_t is not None:
+            if metric_torso_scale is not None:
+                # Use known metric torso scale from subject height
+                bl_normalized = bl_t / metric_torso_scale
+            else:
+                # Use average torso bone length as normalizer
+                # Limbs 10, 11 are L/R torso (shoulder→hip)
+                avg_torso = (bl_t[10] + bl_t[11]) / 2
+                bl_normalized = bl_t / avg_torso.clamp(min=1e-6)
+
+        # Solve in NORMALIZED space with NORMALIZED bone_lengths
         pose_3d = solve_depth_least_squares_pof(
             pof_t, normalized_2d,
-            bone_lengths=bl_t,
+            bone_lengths=bl_normalized,  # Now in unit-torso scale
             pelvis_depth=pelvis_depth,
             normalize_input=False,
+            use_2d_xy=use_2d_xy,
+            enforce_width=enforce_width,
         )
         pose_3d = denormalize_pose_3d(
             pose_3d, pelvis_2d, torso_scale, output_depth,
             metric_torso_scale=metric_torso_scale
         )
+        # Optionally enforce bone lengths in metric space (bl_t is in meters)
+        if enforce_bones and bl_t is not None:
+            pose_3d = enforce_bone_lengths(pose_3d, bl_t, strength=1.0)
     else:
         # Stay in normalized space
         pose_3d = solve_depth_least_squares_pof(
@@ -452,6 +483,8 @@ def reconstruct_skeleton_least_squares(
             bone_lengths=bl_t,
             pelvis_depth=pelvis_depth,
             normalize_input=True,
+            use_2d_xy=use_2d_xy,
+            enforce_width=enforce_width,
         )
 
     # Handle single frame
@@ -473,6 +506,8 @@ def reconstruct_skeleton_least_squares_batch(
     denormalize: bool = False,
     output_depth: float = 2.0,
     metric_torso_scale: Optional[float] = None,
+    enforce_bones: bool = False,
+    use_2d_xy: bool = True,
 ) -> np.ndarray:
     """Batch version of reconstruct_skeleton_least_squares.
 
@@ -484,6 +519,8 @@ def reconstruct_skeleton_least_squares_batch(
         denormalize: If True, denormalize output
         output_depth: Target pelvis depth when denormalizing
         metric_torso_scale: If provided, use for true metric scale output
+        enforce_bones: If True, enforce bone length constraints
+        use_2d_xy: If True (default), derive orient_xy from 2D observations
 
     Returns:
         (batch, 17, 3) reconstructed 3D poses
@@ -491,5 +528,7 @@ def reconstruct_skeleton_least_squares_batch(
     return reconstruct_skeleton_least_squares(
         pof, keypoints_2d, bone_lengths,
         pelvis_depth, denormalize, output_depth,
-        metric_torso_scale=metric_torso_scale
+        metric_torso_scale=metric_torso_scale,
+        enforce_bones=enforce_bones,
+        use_2d_xy=use_2d_xy,
     )

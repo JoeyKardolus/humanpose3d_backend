@@ -8,6 +8,9 @@ Example:
     >>> estimator = create_pose_estimator("mediapipe")
     >>> result = estimator.detect(frames, fps=30.0)
     >>> print(result.keypoints_2d.shape)  # (N, 17, 2)
+
+Note: Detector imports are lazy to avoid loading TensorFlow/MediaPipe on startup.
+      Use create_pose_estimator() or import the detector class directly when needed.
 """
 
 from .base import (
@@ -17,13 +20,21 @@ from .base import (
     COCO_TO_MARKER_NAME,
 )
 from .factory import create_pose_estimator, list_available_estimators
-from .mediapipe_detector import (
-    MediaPipeDetector,
-    MEDIAPIPE_TO_COCO,
-    COCO_TO_MEDIAPIPE,
-    MEDIAPIPE_TO_MARKER_NAME,
-)
-from .rtmpose_detector import RTMPoseDetector, RTMPOSE_MODELS
+
+# Lazy imports for detectors - these load heavy dependencies (TensorFlow, ONNX)
+# Import them directly when needed: from src.posedetector.mediapipe_detector import MediaPipeDetector
+
+
+def __getattr__(name):
+    """Lazy import for detector classes and their constants."""
+    if name in ("MediaPipeDetector", "MEDIAPIPE_TO_COCO", "COCO_TO_MEDIAPIPE", "MEDIAPIPE_TO_MARKER_NAME"):
+        from . import mediapipe_detector
+        return getattr(mediapipe_detector, name)
+    elif name in ("RTMPoseDetector", "RTMPOSE_MODELS"):
+        from . import rtmpose_detector
+        return getattr(rtmpose_detector, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     # Base classes
@@ -32,12 +43,12 @@ __all__ = [
     # Factory
     "create_pose_estimator",
     "list_available_estimators",
-    # MediaPipe
+    # MediaPipe (lazy)
     "MediaPipeDetector",
     "MEDIAPIPE_TO_COCO",
     "COCO_TO_MEDIAPIPE",
     "MEDIAPIPE_TO_MARKER_NAME",
-    # RTMPose
+    # RTMPose (lazy)
     "RTMPoseDetector",
     "RTMPOSE_MODELS",
     # Constants

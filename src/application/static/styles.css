@@ -1,5 +1,6 @@
 /* Global styles for the webapp UI. */
 :root {
+  color-scheme: light dark;
   --bs-body-font-family: "Segoe UI", "Helvetica Neue", sans-serif;
   --ui-surface: #ffffff;
   --ui-surface-muted: rgba(15, 23, 42, 0.06);
@@ -14,15 +15,165 @@
   --chart-color-x: #9ad9ff;
   --chart-color-y: #0b5d5b;
   --chart-color-z: #2effb3;
+  --ui-bg-base: #e3ffff;
+  --ui-bg-gradient-1: rgba(37, 99, 235, 0.38);
+  --ui-bg-gradient-2: rgba(59, 130, 246, 0.32);
+  --ui-bg-gradient-3: rgba(14, 165, 233, 0.34);
+  --ui-bg-gradient-4: rgba(56, 189, 248, 0.26);
+  --ui-text: #212529;
+  --ui-text-muted: #6c757d;
 }
 
-body {
-  background: radial-gradient(1200px at 12% 18%, rgba(37, 99, 235, 0.38), transparent 35%),
-              radial-gradient(900px at 85% 0%, rgba(59, 130, 246, 0.32), transparent 32%),
-              radial-gradient(900px at 20% 90%, rgba(14, 165, 233, 0.34), transparent 40%),
-              radial-gradient(700px at 92% 72%, rgba(56, 189, 248, 0.26), transparent 42%),
-              #e3ffff;
-  min-height: 100vh;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ui-surface: #1e293b;
+    --ui-surface-muted: rgba(255, 255, 255, 0.06);
+    --ui-surface-muted-strong: rgba(255, 255, 255, 0.1);
+    --ui-shadow-card: 0 18px 40px rgba(0, 0, 0, 0.3);
+    --ui-shadow-float: 0 20px 60px rgba(0, 0, 0, 0.4);
+    --ui-bg-base: #0f172a;
+    --ui-bg-gradient-1: rgba(37, 99, 235, 0.25);
+    --ui-bg-gradient-2: rgba(59, 130, 246, 0.2);
+    --ui-bg-gradient-3: rgba(14, 165, 233, 0.22);
+    --ui-bg-gradient-4: rgba(56, 189, 248, 0.18);
+    --ui-text: #f1f5f9;
+    --ui-text-muted: #94a3b8;
+    --bs-body-color: #f1f5f9;
+    --bs-body-bg: #0f172a;
+  }
+
+  body {
+    background: radial-gradient(1200px at 12% 18%, rgba(37, 99, 235, 0.25), transparent 35%),
+                radial-gradient(900px at 85% 0%, rgba(59, 130, 246, 0.2), transparent 32%),
+                radial-gradient(900px at 20% 90%, rgba(14, 165, 233, 0.22), transparent 40%),
+                radial-gradient(700px at 92% 72%, rgba(56, 189, 248, 0.18), transparent 42%),
+                #0f172a !important;
+    color: #f1f5f9 !important;
+  }
+
+  .text-muted {
+    color: #94a3b8 !important;
+  }
+
+  .form-control,
+  .form-select {
+    background-color: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: #f1f5f9 !important;
+  }
+
+  .form-control:focus,
+  .form-select:focus {
+    background-color: #1e293b !important;
+    border-color: rgba(59, 130, 246, 0.5) !important;
+    color: #f1f5f9 !important;
+    box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25) !important;
+  }
+
+  .form-control::placeholder {
+    color: #94a3b8 !important;
+  }
+
+  .form-control[type="file"] {
+    background-color: #1e293b !important;
+    color: #94a3b8 !important;
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    background-color: #334155 !important;
+    color: #f1f5f9 !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+  }
+
+  .form-control[type="file"]:hover::file-selector-button {
+    background-color: #475569 !important;
+  }
+
+  .form-text {
+    color: #94a3b8 !important;
+  }
+
+  .form-label {
+    color: #f1f5f9 !important;
+  }
+
+  .form-check-label {
+    color: #f1f5f9 !important;
+  }
+
+  .modal-content {
+    background-color: #1e293b !important;
+    color: #f1f5f9 !important;
+  }
+
+  .modal-header,
+  .modal-footer {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  .btn-outline-secondary {
+    color: #f1f5f9 !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+  }
+
+  .btn-outline-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+  }
+
+  .btn-outline-primary {
+    color: #60a5fa !important;
+    border-color: #60a5fa !important;
+  }
+
+  .btn-outline-primary:hover {
+    background-color: #60a5fa !important;
+    color: #0f172a !important;
+  }
+
+  .panel-card,
+  .card {
+    background-color: #1e293b !important;
+    color: #f1f5f9 !important;
+  }
+
+  .card-body {
+    color: #f1f5f9 !important;
+  }
+
+  .alert-danger {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+  }
+
+  .alert-info {
+    background-color: rgba(59, 130, 246, 0.15) !important;
+    color: #93c5fd !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+  }
+
+  a:not(.btn) {
+    color: #60a5fa !important;
+  }
+
+  a:not(.btn):hover {
+    color: #93c5fd !important;
+  }
+
+  h1, h2, h3, h4, h5, h6,
+  .h1, .h2, .h3, .h4, .h5, .h6 {
+    color: #f1f5f9 !important;
+  }
+
+  #processingOverlay .bg-white {
+    background-color: #1e293b !important;
+    color: #f1f5f9 !important;
+  }
+
+  .progress {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+  }
 }
 
 .page-body {
