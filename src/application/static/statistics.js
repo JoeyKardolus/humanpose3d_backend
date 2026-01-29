@@ -983,6 +983,227 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // DOF Configuration
+  const dofConfigStorageKey = `kinetiq:stats:dof:${runKey}`;
+  const dofApplyBtn = document.getElementById("dofApplyBtn");
+  const dofResetBtn = document.getElementById("dofResetBtn");
+  const dofApplySpinner = document.getElementById("dofApplySpinner");
+  const dofApplyIcon = document.getElementById("dofApplyIcon");
+  const dofErrorAlert = document.getElementById("dofErrorAlert");
+  const dofConfigBadge = document.getElementById("dofConfigBadge");
+
+  const DOF_DEFAULTS = {
+    pelvis: ["flex", "abd", "rot"],
+    trunk: ["flex", "abd", "rot"],
+    hip_R: ["flex", "abd", "rot"],
+    hip_L: ["flex", "abd", "rot"],
+    knee_R: ["flex", "abd", "rot"],
+    knee_L: ["flex", "abd", "rot"],
+    ankle_R: ["flex", "abd", "rot"],
+    ankle_L: ["flex", "abd", "rot"],
+    shoulder_R: ["flex", "abd", "rot"],
+    shoulder_L: ["flex", "abd", "rot"],
+    elbow_R: ["flex"],
+    elbow_L: ["flex"],
+  };
+
+  const getCookie = (name) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+      return parts.pop().split(";").shift();
+    }
+    return "";
+  };
+
+  const collectDofConfig = () => {
+    const config = {};
+    document.querySelectorAll(".dof-joint").forEach((jointEl) => {
+      const joint = jointEl.dataset.joint;
+      if (!joint) return;
+      const enabledDofs = [];
+      jointEl.querySelectorAll(".dof-toggle.btn-primary").forEach((btn) => {
+        const dof = btn.dataset.dof;
+        if (dof) enabledDofs.push(dof);
+      });
+      config[joint] = enabledDofs;
+    });
+    return config;
+  };
+
+  const applyDofConfigToUI = (config) => {
+    document.querySelectorAll(".dof-joint").forEach((jointEl) => {
+      const joint = jointEl.dataset.joint;
+      if (!joint) return;
+      const enabledDofs = config[joint] || DOF_DEFAULTS[joint] || [];
+      jointEl.querySelectorAll(".dof-toggle").forEach((btn) => {
+        const dof = btn.dataset.dof;
+        const isEnabled = enabledDofs.includes(dof);
+        btn.classList.toggle("btn-primary", isEnabled);
+        btn.classList.toggle("btn-outline-secondary", !isEnabled);
+      });
+    });
+    updateDofBadge();
+  };
+
+  const updateDofBadge = () => {
+    if (!dofConfigBadge) return;
+    const config = collectDofConfig();
+    let totalEnabled = 0;
+    let totalPossible = 0;
+    Object.keys(DOF_DEFAULTS).forEach((joint) => {
+      totalPossible += DOF_DEFAULTS[joint].length;
+      totalEnabled += (config[joint] || []).length;
+    });
+    if (totalEnabled === totalPossible) {
+      dofConfigBadge.textContent = "All enabled";
+      dofConfigBadge.className = "badge text-bg-secondary";
+    } else if (totalEnabled === 0) {
+      dofConfigBadge.textContent = "All disabled";
+      dofConfigBadge.className = "badge text-bg-warning";
+    } else {
+      dofConfigBadge.textContent = `${totalEnabled}/${totalPossible} DOF`;
+      dofConfigBadge.className = "badge text-bg-info";
+    }
+  };
+
+  const saveDofConfig = (config) => {
+    try {
+      localStorage.setItem(dofConfigStorageKey, JSON.stringify(config));
+    } catch (error) {
+      // Ignore storage failures
+    }
+  };
+
+  const loadDofConfig = () => {
+    try {
+      const stored = localStorage.getItem(dofConfigStorageKey);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      // Ignore
+    }
+    return null;
+  };
+
+  const updateSeriesFromResponse = (newSeries) => {
+    // Update the series object with new data
+    Object.keys(newSeries).forEach((key) => {
+      series[key] = newSeries[key];
+    });
+    // Remove joint series that are no longer present
+    Object.keys(series).forEach((key) => {
+      if (key.startsWith("joint:") && !newSeries[key]) {
+        delete series[key];
+      }
+    });
+    // Update markers list for joints
+    const existingMarkerValues = new Set(markers.map((m) => m.value));
+    Object.keys(newSeries).forEach((key) => {
+      if (!existingMarkerValues.has(key)) {
+        const jointName = key.replace("joint:", "").replace(/_/g, " ");
+        markers.push({
+          value: key,
+          label: `Joint — ${jointName.charAt(0).toUpperCase() + jointName.slice(1)}`,
+        });
+      }
+    });
+    // Remove markers for deleted joints
+    for (let i = markers.length - 1; i >= 0; i--) {
+      const m = markers[i];
+      if (m.value.startsWith("joint:") && !newSeries[m.value]) {
+        markers.splice(i, 1);
+      }
+    }
+    // Rebuild select options
+    markers.sort((a, b) => a.label.localeCompare(b.label));
+    selects.forEach((select, index) => {
+      const currentValue = select.value;
+      createOptions(select, markers.find((m) => m.value === currentValue));
+    });
+    // Rebuild charts with new data
+    charts.forEach((chart, index) => {
+      const markerValue = activeMarkerValues[index];
+      const marker = markers.find((m) => m.value === markerValue);
+      chart.data = buildDataset(marker);
+      chart.update();
+      updateValueSet(index, timelineStart + Number.parseFloat(slider.value));
+    });
+  };
+
+  const applyDofConfiguration = async () => {
+    const config = collectDofConfig();
+    if (!dofApplyBtn || !dofApplySpinner || !dofApplyIcon) return;
+
+    // Show loading state
+    dofApplyBtn.disabled = true;
+    dofApplySpinner.classList.remove("d-none");
+    dofApplyIcon.classList.add("d-none");
+    if (dofErrorAlert) dofErrorAlert.classList.add("d-none");
+
+    try {
+      const response = await fetch(`/results/${runKey}/joint-angles/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken"),
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: JSON.stringify({ dof_config: config }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to recompute joint angles");
+      }
+
+      if (data.series) {
+        updateSeriesFromResponse(data.series);
+      }
+
+      saveDofConfig(config);
+      updateDofBadge();
+    } catch (error) {
+      if (dofErrorAlert) {
+        dofErrorAlert.textContent = error.message || "An error occurred";
+        dofErrorAlert.classList.remove("d-none");
+      }
+    } finally {
+      dofApplyBtn.disabled = false;
+      dofApplySpinner.classList.add("d-none");
+      dofApplyIcon.classList.remove("d-none");
+    }
+  };
+
+  // DOF toggle button click handlers
+  document.querySelectorAll(".dof-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      btn.classList.toggle("btn-primary");
+      btn.classList.toggle("btn-outline-secondary");
+      updateDofBadge();
+    });
+  });
+
+  if (dofApplyBtn) {
+    dofApplyBtn.addEventListener("click", applyDofConfiguration);
+  }
+
+  if (dofResetBtn) {
+    dofResetBtn.addEventListener("click", () => {
+      applyDofConfigToUI(DOF_DEFAULTS);
+    });
+  }
+
+  // Load persisted DOF config on page load
+  const persistedDofConfig = loadDofConfig();
+  if (persistedDofConfig) {
+    applyDofConfigToUI(persistedDofConfig);
+  } else {
+    updateDofBadge();
+  }
+
   let initialVisual = "video";
   try {
     const storedVisual = localStorage.getItem(visualStorageKey);

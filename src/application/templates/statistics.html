@@ -65,6 +65,168 @@
         </div>
 
         {% if not error %}
+          <div class="card panel-card border-0 rounded-4 shadow mb-4">
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between mb-0" data-bs-toggle="collapse" data-bs-target="#dofConfigPanel" aria-expanded="false" aria-controls="dofConfigPanel" role="button">
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-sliders"></i>
+                  <span class="fw-semibold">DOF Configuration</span>
+                  <span class="badge text-bg-secondary" id="dofConfigBadge">All enabled</span>
+                </div>
+                <i class="bi bi-chevron-down" id="dofConfigChevron"></i>
+              </div>
+              <div class="collapse" id="dofConfigPanel">
+                <hr class="my-3">
+                <div class="row g-3" id="dofConfigToggles">
+                  <div class="col-md-6 col-lg-4">
+                    <div class="dof-joint-group">
+                      <div class="fw-semibold small mb-2">Trunk & Pelvis</div>
+                      <div class="d-flex flex-column gap-2">
+                        <div class="dof-joint" data-joint="pelvis">
+                          <span class="dof-joint-label">Pelvis</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Lateral Flexion">Lat</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Rotation">Rot</button>
+                          </div>
+                        </div>
+                        <div class="dof-joint" data-joint="trunk">
+                          <span class="dof-joint-label">Trunk</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Lateral Flexion">Lat</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Rotation">Rot</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6 col-lg-4">
+                    <div class="dof-joint-group">
+                      <div class="fw-semibold small mb-2">Hips</div>
+                      <div class="d-flex flex-column gap-2">
+                        <div class="dof-joint" data-joint="hip_R">
+                          <span class="dof-joint-label">Right</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Abduction/Adduction">Abd</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Internal/External Rotation">Rot</button>
+                          </div>
+                        </div>
+                        <div class="dof-joint" data-joint="hip_L">
+                          <span class="dof-joint-label">Left</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Abduction/Adduction">Abd</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Internal/External Rotation">Rot</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6 col-lg-4">
+                    <div class="dof-joint-group">
+                      <div class="fw-semibold small mb-2">Knees</div>
+                      <div class="d-flex flex-column gap-2">
+                        <div class="dof-joint" data-joint="knee_R">
+                          <span class="dof-joint-label">Right</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Abduction/Adduction">Abd</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Internal/External Rotation">Rot</button>
+                          </div>
+                        </div>
+                        <div class="dof-joint" data-joint="knee_L">
+                          <span class="dof-joint-label">Left</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Abduction/Adduction">Abd</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Internal/External Rotation">Rot</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6 col-lg-4">
+                    <div class="dof-joint-group">
+                      <div class="fw-semibold small mb-2">Ankles</div>
+                      <div class="d-flex flex-column gap-2">
+                        <div class="dof-joint" data-joint="ankle_R">
+                          <span class="dof-joint-label">Right</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Dorsi/Plantarflexion">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Inversion/Eversion">Inv</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Internal/External Rotation">Rot</button>
+                          </div>
+                        </div>
+                        <div class="dof-joint" data-joint="ankle_L">
+                          <span class="dof-joint-label">Left</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Dorsi/Plantarflexion">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Inversion/Eversion">Inv</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Internal/External Rotation">Rot</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6 col-lg-4">
+                    <div class="dof-joint-group">
+                      <div class="fw-semibold small mb-2">Shoulders</div>
+                      <div class="d-flex flex-column gap-2">
+                        <div class="dof-joint" data-joint="shoulder_R">
+                          <span class="dof-joint-label">Right</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Abduction/Adduction">Abd</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Internal/External Rotation">Rot</button>
+                          </div>
+                        </div>
+                        <div class="dof-joint" data-joint="shoulder_L">
+                          <span class="dof-joint-label">Left</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="abd" title="Abduction/Adduction">Abd</button>
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="rot" title="Internal/External Rotation">Rot</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-6 col-lg-4">
+                    <div class="dof-joint-group">
+                      <div class="fw-semibold small mb-2">Elbows (1 DOF)</div>
+                      <div class="d-flex flex-column gap-2">
+                        <div class="dof-joint" data-joint="elbow_R">
+                          <span class="dof-joint-label">Right</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                          </div>
+                        </div>
+                        <div class="dof-joint" data-joint="elbow_L">
+                          <span class="dof-joint-label">Left</span>
+                          <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm dof-toggle btn-primary" data-dof="flex" title="Flexion/Extension">Flex</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="dofResetBtn">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Default
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm" id="dofApplyBtn">
+                    <span class="spinner-border spinner-border-sm d-none me-1" id="dofApplySpinner" role="status" aria-hidden="true"></span>
+                    <i class="bi bi-check-lg me-1" id="dofApplyIcon"></i>Apply
+                  </button>
+                </div>
+                <div class="alert alert-danger mt-3 mb-0 d-none" id="dofErrorAlert" role="alert"></div>
+              </div>
+            </div>
+          </div>
+
           <div class="card panel-card border-0 rounded-4 shadow mb-4 timeline-dock">
             <div class="card-body">
               <div class="d-flex flex-column flex-md-row align-items-md-center gap-3">

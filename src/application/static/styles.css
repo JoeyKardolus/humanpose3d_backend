@@ -451,6 +451,55 @@
   object-fit: contain;
 }
 
+/* DOF Configuration Panel */
+.dof-joint-group {
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 0.5rem;
+}
+
+.dof-joint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.dof-joint-label {
+  font-size: 0.875rem;
+  color: #64748b;
+  min-width: 50px;
+}
+
+.dof-toggle {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  min-width: 40px;
+}
+
+.dof-toggle.btn-outline-secondary {
+  color: #94a3b8;
+  border-color: #e2e8f0;
+}
+
+.dof-toggle.btn-outline-secondary:hover {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+#dofConfigChevron {
+  transition: transform 0.2s ease;
+}
+
+#dofConfigPanel.show ~ div #dofConfigChevron,
+[aria-expanded="true"] #dofConfigChevron {
+  transform: rotate(180deg);
+}
+
+[data-bs-toggle="collapse"]:hover {
+  cursor: pointer;
+}
 
 @media (max-width: 576px) {
   .timeline-dock {
