@@ -12,7 +12,8 @@
 
 | Document | Purpose |
 |----------|---------|
-| [NEURAL_MODELS.md](NEURAL_MODELS.md) | Neural refinement models (depth + joint + MainRefiner) |
+| [NEURAL_MODELS.md](NEURAL_MODELS.md) | Neural refinement models (POF + joint + MainRefiner) |
+| [POF_EXPLANATION.md](POF_EXPLANATION.md) | Part Orientation Fields math and concepts |
 | [OUTPUT_ORGANIZATION.md](OUTPUT_ORGANIZATION.md) | Output file structure and naming |
 
 ## Development

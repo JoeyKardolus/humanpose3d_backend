@@ -46,7 +46,8 @@ import cv2
 import mediapipe as mp
 from scipy.spatial.transform import Rotation
 
-from src.depth_refinement.data_utils import align_body_frames
+# Note: align_body_frames was previously used for depth refinement training
+# but is no longer needed for POF training (POF uses camera rotation matrix instead)
 
 
 # COCO 17 keypoints (AIST++ format)
@@ -502,11 +503,8 @@ def process_sequence(
         mp_centered[:, 1] = -mp_centered[:, 1]  # Y: down -> up
         mp_centered[:, 2] = -mp_centered[:, 2]  # Z: toward camera -> away
 
-        # === BODY FRAME ALIGNMENT (CRITICAL) ===
-        # MediaPipe world landmarks are body-centric (aligned to torso).
-        # AIST++ ground truth is in world coordinates.
-        # Rotate MediaPipe to match GT's body frame orientation.
-        mp_centered = align_body_frames(mp_centered, gt_centered)
+        # Note: align_body_frames was previously used here for depth refinement training
+        # POF training uses camera rotation matrix (camera_R) instead, which is already saved
 
         # === SCALE NORMALIZATION (CRITICAL) ===
         # MediaPipe and AIST++ may have different body size estimates.
@@ -546,6 +544,7 @@ def process_sequence(
             azimuth=np.float32(azimuth),                   # Horizontal angle: 0-360° (from camera pos!)
             elevation=np.float32(elevation),               # Vertical angle: -90 to +90° (from camera pos!)
             camera_relative=camera_relative.astype(np.float32),  # (3,) Camera pos relative to pelvis
+            camera_R=camera_R.astype(np.float32),          # (3, 3) Camera rotation matrix (world → camera)
             mp_scale=np.float32(mp_scale),                 # Original MediaPipe torso scale (for denorm)
             gt_scale=np.float32(gt_scale),                 # Original AIST++ torso scale (for denorm)
             sequence=sequence_name,

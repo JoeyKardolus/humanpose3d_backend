@@ -25,7 +25,7 @@ Ground truth orientation:
   Result: (x, y, z) where x² + y² + z² = 1
 ```
 
-So instead of 2 global angles, you get **12 limbs × 3D = 36 values**.
+So instead of 2 global angles, you get **14 limbs × 3D = 42 values**.
 
 ## The Key Insight
 
@@ -85,7 +85,7 @@ loss = 1 - cos_sim                          # Range: 0 to 2
 | Approach | Frame | Output | Depth Info |
 |----------|-------|--------|------------|
 | Global (torso) | Whole body | 2 angles | Same for all joints |
-| POF (per-limb) | Each segment | 12 × 3D vectors | Independent per limb |
+| POF (per-limb) | Each segment | 14 × 3D vectors | Independent per limb |
 
 It's the same geometric principle (orientation encodes depth) but **localized**. Each limb segment gets its own "mini camera angle" that can differ from its neighbors.
 
@@ -108,7 +108,7 @@ POF approach:
 
 The network learns that "short-looking upper arm in 2D + these joint features → Z component is large negative (toward camera)".
 
-## 12 Limbs Defined
+## 14 Limbs Defined
 
 Using COCO-17 joint indices:
 
@@ -122,10 +122,14 @@ Using COCO-17 joint indices:
 | 5 | 13 → 15 | L knee → ankle |
 | 6 | 12 → 14 | R hip → knee |
 | 7 | 14 → 16 | R knee → ankle |
-| 8 | 5 → 6 | Shoulder width |
-| 9 | 11 → 12 | Hip width |
+| 8 | 5 ↔ 6 | Shoulder width |
+| 9 | 11 ↔ 12 | Hip width |
 | 10 | 5 → 11 | L torso |
 | 11 | 6 → 12 | R torso |
+| 12 | 5 → 12 | L cross-body (L shoulder → R hip) |
+| 13 | 6 → 11 | R cross-body (R shoulder → L hip) |
+
+The cross-body limbs (12, 13) help capture torso rotation and twisting motions.
 
 ## Reference
 

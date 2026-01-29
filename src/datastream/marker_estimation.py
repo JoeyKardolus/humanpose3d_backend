@@ -98,6 +98,61 @@ def estimate_missing_markers(records: List[LandmarkRecord]) -> List[LandmarkReco
                 visibility=0.3
             ))
 
+        # Estimate foot markers from ankle positions when not available
+        # This enables Pose2Sim LSTM to compute lower body augmented markers
+        # when using RTMPose/POF which only outputs ankle positions
+        if "RHeel" not in landmarks and "RAnkle" in landmarks:
+            ankle = landmarks["RAnkle"]
+            # Heel is ~8cm behind ankle (negative X in camera space for right foot)
+            # and ~5cm below ankle (positive Y in camera space, Y-down)
+            estimated_records.append(LandmarkRecord(
+                timestamp_s=timestamp_s,
+                landmark="RHeel",
+                x_m=ankle.x_m - 0.02,  # Slightly medial
+                y_m=ankle.y_m + 0.05,  # Below ankle
+                z_m=ankle.z_m + 0.08,  # Behind ankle (positive Z = away from camera)
+                visibility=0.3
+            ))
+            landmarks["RHeel"] = estimated_records[-1]
+
+        if "LHeel" not in landmarks and "LAnkle" in landmarks:
+            ankle = landmarks["LAnkle"]
+            estimated_records.append(LandmarkRecord(
+                timestamp_s=timestamp_s,
+                landmark="LHeel",
+                x_m=ankle.x_m + 0.02,  # Slightly medial
+                y_m=ankle.y_m + 0.05,  # Below ankle
+                z_m=ankle.z_m + 0.08,  # Behind ankle
+                visibility=0.3
+            ))
+            landmarks["LHeel"] = estimated_records[-1]
+
+        if "RBigToe" not in landmarks and "RAnkle" in landmarks:
+            ankle = landmarks["RAnkle"]
+            # BigToe is ~18cm forward from ankle (negative Z = toward camera)
+            # and ~10cm below ankle
+            estimated_records.append(LandmarkRecord(
+                timestamp_s=timestamp_s,
+                landmark="RBigToe",
+                x_m=ankle.x_m + 0.02,  # Slightly lateral
+                y_m=ankle.y_m + 0.10,  # Below ankle
+                z_m=ankle.z_m - 0.18,  # In front of ankle (toward camera)
+                visibility=0.3
+            ))
+            landmarks["RBigToe"] = estimated_records[-1]
+
+        if "LBigToe" not in landmarks and "LAnkle" in landmarks:
+            ankle = landmarks["LAnkle"]
+            estimated_records.append(LandmarkRecord(
+                timestamp_s=timestamp_s,
+                landmark="LBigToe",
+                x_m=ankle.x_m - 0.02,  # Slightly lateral
+                y_m=ankle.y_m + 0.10,  # Below ankle
+                z_m=ankle.z_m - 0.18,  # In front of ankle
+                visibility=0.3
+            ))
+            landmarks["LBigToe"] = estimated_records[-1]
+
         # Estimate SmallToes from BigToes and Heels
         if "RSmallToe" not in landmarks and "RBigToe" in landmarks and "RHeel" in landmarks:
             big_toe = landmarks["RBigToe"]

@@ -788,8 +788,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pillow" },
     { name = "pose2sim" },
-    { name = "pyside6", marker = "sys_platform == 'win32'" },
-    { name = "pytesseract" },
+    { name = "rtmlib" },
     { name = "tensorflow" },
     { name = "torch" },
 ]
@@ -811,8 +810,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pillow", specifier = ">=10.2.0" },
     { name = "pose2sim", specifier = ">=0.10.0" },
-    { name = "pyside6", marker = "sys_platform == 'win32'" },
-    { name = "pytesseract", specifier = ">=0.3.13" },
+    { name = "rtmlib", specifier = ">=0.0.10" },
     { name = "tensorflow", specifier = ">=2.13.0" },
     { name = "torch", specifier = ">=2.9.1" },
 ]

@@ -2,6 +2,30 @@
 
 Development history for HumanPose3D MediaPipe pipeline.
 
+## 2026-01-21 - Architecture Simplification (POF-Only)
+
+### Removed depth_refinement Module
+- Deleted entire `src/depth_refinement/` module (7 files)
+- Deleted `scripts/train/depth_model.py` training script
+- Removed `--neural-depth-refinement` and `--depth-model-path` CLI flags
+
+### MainRefiner Now Uses POF
+- `--main-refiner` flag now auto-enables `--camera-pof`
+- Replaced `DepthOutputEncoder` with `POFOutputEncoder` in fusion model
+- MainRefiner blends between raw pose and POF's reconstructed 3D (not delta corrections)
+- Training script changed from `--depth-checkpoint` to `--pof-checkpoint`
+
+### New Pipeline Flow
+```
+2D keypoints → [POF Model] → 3D reconstruction → Augmentation → Joint Angles → [Joint Model] → refined angles
+```
+
+### Updated Documentation
+- README.md: Replaced depth refinement with POF throughout
+- NEURAL_MODELS.md: Complete rewrite focusing on POF + joint models
+- ARCHITECTURE.md: Updated module list and pipeline diagram
+- CLAUDE.md: Updated flags, module structure, and neural refinement section
+
 ## 2026-01-19 - Documentation Overhaul
 
 ### Cleanup After Codebase Refactor

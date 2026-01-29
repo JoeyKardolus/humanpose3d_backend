@@ -36,8 +36,9 @@ class PipelineCommandBuilder:
                 return
             command.extend([name, value])
 
+        # Core parameters
         _add_flag("--height", form_data.get("height"), default="1.78")
-        _add_flag("--weight", form_data.get("weight"), default="75.0")
+        _add_flag("--mass", form_data.get("weight"), default="75.0")
         _add_flag("--visibility-min", form_data.get("visibility_min"), default="0.1")
         _add_flag("--depth-model-path", form_data.get("depth_model_path"))
         _add_flag("--joint-model-path", form_data.get("joint_model_path"))
@@ -50,30 +51,22 @@ class PipelineCommandBuilder:
             form_data.get("joint_angle_smooth_window"),
             default="9",
         )
-        _add_flag("--temporal-smoothing", form_data.get("temporal_smoothing"))
 
+        # Boolean flags
         if self._coerce_bool(form_data.get("estimate_missing")):
             command.append("--estimate-missing")
         if self._coerce_bool(form_data.get("force_complete")):
             command.append("--force-complete")
-        if self._coerce_bool(form_data.get("main_refiner")):
-            command.append("--main-refiner")
+        if self._coerce_bool(form_data.get("camera_pof")):
+            command.append("--camera-pof")
+        if self._coerce_bool(form_data.get("joint_refinement")):
+            command.append("--joint-refinement")
         if self._coerce_bool(form_data.get("compute_all_joint_angles")):
             command.append("--compute-all-joint-angles")
         if self._coerce_bool(form_data.get("plot_all_joint_angles")):
             command.append("--plot-all-joint-angles")
-        if self._coerce_bool(form_data.get("save_angle_comparison")):
-            command.append("--save-angle-comparison")
-        if self._coerce_bool(form_data.get("show_all_markers")):
-            command.append("--show-all-markers")
-        if self._coerce_bool(form_data.get("show_video")):
-            command.append("--show-video")
-        if self._coerce_bool(form_data.get("export_preview")):
-            command.append("--export-preview")
-        if self._coerce_bool(form_data.get("plot_landmarks")):
-            command.append("--plot-landmarks")
-        if self._coerce_bool(form_data.get("plot_augmented")):
-            command.append("--plot-augmented")
+
+        command.append("--export-preview")
         return command
 
     def _coerce_bool(self, value: str | None) -> bool:

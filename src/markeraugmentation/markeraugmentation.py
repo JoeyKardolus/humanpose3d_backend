@@ -81,61 +81,122 @@ def run_pose2sim_augment(
     height: float,
     weight: float,
     augmentation_cycles: int = 1,
+    camera_space: bool = False,
 ) -> Path:
-    """Invoke Pose2Sim's augment_markers_all with multi-cycle averaging for better results."""
+    """Invoke Pose2Sim's augment_markers_all with multi-cycle averaging for better results.
+
+    Args:
+        trc_path: Path to input TRC file
+        out_dir: Output directory
+        height: Subject height in meters
+        mass: Subject mass in kg
+        augmentation_cycles: Number of cycles for averaging (default 1)
+        camera_space: If True, transform camera-space input to Pose2Sim convention
+                     before augmentation, and transform output back to camera-space.
+                     Required when using POF 3D reconstruction.
+
+    Returns:
+        Path to augmented TRC file
+    """
     if augmentation_cycles < 1:
         raise ValueError(f"augmentation_cycles must be >= 1, got {augmentation_cycles}")
 
-    if augmentation_cycles == 1:
-        # Single cycle - use original fast path
-        return _run_single_augmentation_cycle(
-            trc_path, out_dir, height, weight, cycle_num=0
+    # Handle camera-space input by transforming coordinates
+    if camera_space:
+        from src.datastream.trc_transforms import (
+            parse_trc_to_array,
+            array_to_trc,
+            camera_to_pose2sim,
+            pose2sim_to_camera,
         )
 
-    # Multi-cycle averaging approach
-    print(f"[augment] running {augmentation_cycles} augmentation cycles with averaging")
-    cycle_results = []
+        print("[augment] transforming camera-space input to Pose2Sim convention")
+        marker_data, marker_names, frame_rate = parse_trc_to_array(trc_path)
+        transformed_data, pelvis_offset, scale = camera_to_pose2sim(marker_data, marker_names)
 
-    for cycle_num in range(augmentation_cycles):
-        print(f"[augment] cycle {cycle_num + 1}/{augmentation_cycles}")
-        try:
-            cycle_output = _run_single_augmentation_cycle(
-                trc_path, out_dir, height, weight, cycle_num
-            )
-            cycle_results.append(cycle_output)
-        except Exception as exc:
-            print(f"[augment] warning: cycle {cycle_num + 1} failed: {exc}")
-            continue
+        # Write transformed TRC for Pose2Sim
+        transformed_trc = out_dir / f"{trc_path.stem}_transformed.trc"
+        array_to_trc(transformed_data, marker_names, transformed_trc, frame_rate)
+        working_trc = transformed_trc
+    else:
+        working_trc = trc_path
 
-    if not cycle_results:
-        raise RuntimeError("All augmentation cycles failed")
+    if augmentation_cycles == 1:
+        # Single cycle - use original fast path
+        augmented_output = _run_single_augmentation_cycle(
+            working_trc, out_dir, height, mass, cycle_num=0
+        )
+    else:
+        # Multi-cycle averaging approach
+        print(f"[augment] running {augmentation_cycles} augmentation cycles with averaging")
+        cycle_results = []
 
-    # Average the results
-    averaged_output = _average_trc_files(cycle_results, out_dir, trc_path.stem)
-    print(
-        f"[augment] averaged {len(cycle_results)}/{augmentation_cycles} successful cycles"
-    )
+        for cycle_num in range(augmentation_cycles):
+            print(f"[augment] cycle {cycle_num + 1}/{augmentation_cycles}")
+            try:
+                cycle_output = _run_single_augmentation_cycle(
+                    working_trc, out_dir, height, mass, cycle_num
+                )
+                cycle_results.append(cycle_output)
+            except Exception as exc:
+                print(f"[augment] warning: cycle {cycle_num + 1} failed: {exc}")
+                continue
+
+        if not cycle_results:
+            raise RuntimeError("All augmentation cycles failed")
+
+        # Average the results
+        augmented_output = _average_trc_files(cycle_results, out_dir, working_trc.stem)
+        print(
+            f"[augment] averaged {len(cycle_results)}/{augmentation_cycles} successful cycles"
+        )
 
     # Clean up intermediate cycle files and project directories
-    for cycle_num in range(augmentation_cycles):
-        # Remove cycle-specific TRC files
-        cycle_trc = out_dir / f"{trc_path.stem}_LSTM_cycle{cycle_num}.trc"
-        if cycle_trc.exists():
-            cycle_trc.unlink()
+    if augmentation_cycles > 1:
+        for cycle_num in range(augmentation_cycles):
+            # Remove cycle-specific TRC files
+            cycle_trc = out_dir / f"{working_trc.stem}_LSTM_cycle{cycle_num}.trc"
+            if cycle_trc.exists():
+                cycle_trc.unlink()
 
-        # Remove cycle-specific config files
-        cycle_config = out_dir / f"Config_cycle{cycle_num}.toml"
-        if cycle_config.exists():
-            cycle_config.unlink()
+            # Remove cycle-specific config files
+            cycle_config = out_dir / f"Config_cycle{cycle_num}.toml"
+            if cycle_config.exists():
+                cycle_config.unlink()
 
-        # Remove cycle-specific project directories
-        cycle_project = out_dir / f"pose2sim_project_cycle{cycle_num}"
-        if cycle_project.exists():
-            shutil.rmtree(cycle_project)
+            # Remove cycle-specific project directories
+            cycle_project = out_dir / f"pose2sim_project_cycle{cycle_num}"
+            if cycle_project.exists():
+                shutil.rmtree(cycle_project)
 
-    print(f"[augment] cleaned up {augmentation_cycles} intermediate cycle files")
+        print(f"[augment] cleaned up {augmentation_cycles} intermediate cycle files")
 
-    return averaged_output
+    # Handle camera-space output
+    # Transform output to kinematics convention (Y-up) for ISB-compliant joint angles
+    if camera_space:
+        from src.datastream.trc_transforms import parse_trc_to_array, array_to_trc, pose2sim_to_kinematics
+
+        print("[augment] transforming output to kinematics convention (Y-up)")
+
+        # Read augmented markers (still in camera Y-down convention)
+        aug_data, aug_marker_names, aug_frame_rate = parse_trc_to_array(augmented_output)
+
+        # Apply Y-inversion for kinematics (camera Y-down → kinematics Y-up)
+        kinematics_data = pose2sim_to_kinematics(aug_data)
+
+        # Write final output with original filename convention
+        final_output = out_dir / f"{trc_path.stem}_LSTM.trc"
+        array_to_trc(kinematics_data, aug_marker_names, final_output, aug_frame_rate)
+
+        # Clean up intermediate files
+        if transformed_trc.exists():
+            transformed_trc.unlink()
+        if augmented_output != final_output and augmented_output.exists():
+            augmented_output.unlink()
+
+        return final_output
+
+    return augmented_output
 
 
 def _run_single_augmentation_cycle(

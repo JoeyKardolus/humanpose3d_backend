@@ -78,7 +78,7 @@ class RunPipelineAsyncUseCase:
             spec.run_key,
             {
                 "progress": 2.0,
-                "stage": "Initializing models",
+                "stage": "Starting pipeline",
                 "done": False,
                 "error": None,
                 "started_at": time.monotonic(),

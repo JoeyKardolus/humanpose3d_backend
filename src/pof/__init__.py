@@ -5,7 +5,6 @@ This module provides a camera-space approach to 3D pose estimation from
 coordinates without requiring azimuth/elevation prediction.
 
 Key components:
-- FacingDirection: Detect person's facing direction from ear/nose visibility
 - AnatomicalProportions: Estimate bone lengths from body height
 - CameraPOFModel: Neural network to predict POF unit vectors
 - CameraPOFInference: Easy-to-use inference wrapper
@@ -36,17 +35,6 @@ from .constants import (
     HEIGHT_TO_TORSO_RATIO,
 )
 
-# Facing direction detection
-from .facing import (
-    FacingDirection,
-    detect_facing_direction,
-    detect_facing_from_pose,
-    facing_to_one_hot,
-    detect_facing_direction_batch,
-    facing_batch_to_one_hot,
-    interpret_forward_direction,
-)
-
 # Bone length estimation
 from .bone_lengths import (
     AnatomicalProportions,
@@ -56,16 +44,37 @@ from .bone_lengths import (
     compute_bone_lengths_from_pose,
 )
 
-# Neural network model
+# Neural network model (Transformer)
 from .model import (
     CameraPOFModel,
     create_pof_model,
     load_pof_model,
 )
 
+# Graph Neural Network models
+from .gnn_model import (
+    POFGraphModel,
+    SemGCNPOFModel,
+    SemGCNTemporalZSign,
+    TemporalPOFInference,
+    create_gnn_pof_model,
+    load_gnn_pof_model,
+    build_orientation_from_geometry,
+    build_orientation_from_z_magnitude,  # Deprecated
+)
+
+# Graph utilities
+from .graph_utils import (
+    build_joint_sharing_adj,
+    build_kinematic_adj,
+    build_symmetry_adj,
+    get_combined_adj,
+)
+
 # Dataset and training
 from .dataset import (
     CameraPOFDataset,
+    TemporalPOFDataset,
     create_pof_dataloaders,
     compute_gt_pof_from_3d,
     compute_gt_pof_from_3d_torch,
@@ -76,10 +85,17 @@ from .dataset import (
 # Loss functions
 from .losses import (
     CameraPOFLoss,
+    TemporalPOFLoss,
+    ZSignOnlyLoss,
+    CleanSeparationPOFLoss,  # Deprecated
     LeastSquaresPOFLoss,
     pof_cosine_loss,
     pof_angular_error,
     symmetry_loss,
+    z_sign_loss,
+    z_sign_accuracy,
+    z_magnitude_loss,
+    z_magnitude_l1_loss,
     projection_consistency_loss,
     scale_factor_regularization,
     solved_depth_loss,
@@ -92,6 +108,8 @@ from .least_squares import (
     normalize_2d_for_pof,
     denormalize_pose_3d,
     solve_with_denormalization,
+    compute_limb_delta_2d,
+    build_orientation_from_z_magnitude_and_logits,
 )
 
 # Reconstruction
@@ -131,26 +149,33 @@ __all__ = [
     "KINEMATIC_CHAINS",
     "RECONSTRUCTION_ORDER",
     "HEIGHT_TO_TORSO_RATIO",
-    # Facing
-    "FacingDirection",
-    "detect_facing_direction",
-    "detect_facing_from_pose",
-    "facing_to_one_hot",
-    "detect_facing_direction_batch",
-    "facing_batch_to_one_hot",
-    "interpret_forward_direction",
     # Bone lengths
     "AnatomicalProportions",
     "estimate_bone_lengths_from_height",
     "estimate_bone_lengths_array",
     "bone_lengths_to_array",
     "compute_bone_lengths_from_pose",
-    # Model
+    # Model (Transformer)
     "CameraPOFModel",
     "create_pof_model",
     "load_pof_model",
+    # GNN Models
+    "POFGraphModel",
+    "SemGCNPOFModel",
+    "SemGCNTemporalZSign",
+    "TemporalPOFInference",
+    "create_gnn_pof_model",
+    "load_gnn_pof_model",
+    "build_orientation_from_geometry",
+    "build_orientation_from_z_magnitude",  # Deprecated
+    # Graph utilities
+    "build_joint_sharing_adj",
+    "build_kinematic_adj",
+    "build_symmetry_adj",
+    "get_combined_adj",
     # Dataset
     "CameraPOFDataset",
+    "TemporalPOFDataset",
     "create_pof_dataloaders",
     "compute_gt_pof_from_3d",
     "compute_gt_pof_from_3d_torch",
@@ -158,10 +183,17 @@ __all__ = [
     "compute_limb_features_2d",
     # Loss
     "CameraPOFLoss",
+    "TemporalPOFLoss",
+    "ZSignOnlyLoss",
+    "CleanSeparationPOFLoss",  # Deprecated
     "LeastSquaresPOFLoss",
     "pof_cosine_loss",
     "pof_angular_error",
     "symmetry_loss",
+    "z_sign_loss",
+    "z_sign_accuracy",
+    "z_magnitude_loss",
+    "z_magnitude_l1_loss",
     "projection_consistency_loss",
     "scale_factor_regularization",
     "solved_depth_loss",
@@ -171,6 +203,8 @@ __all__ = [
     "normalize_2d_for_pof",
     "denormalize_pose_3d",
     "solve_with_denormalization",
+    "compute_limb_delta_2d",
+    "build_orientation_from_z_magnitude_and_logits",
     # Reconstruction
     "reconstruct_skeleton_from_pof",
     "reconstruct_skeleton_batch",

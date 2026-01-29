@@ -2,68 +2,19 @@
 
 ## Directory Structure
 
-```
-src/
-├── application/          # Django web interface
-│   ├── webapp/
-│   │   ├── controllers/  # View functions (thin entry points)
-│   │   ├── services/     # Business logic
-│   │   ├── use_cases/    # Orchestration (multi-service workflows)
-│   │   ├── repositories/ # Data access layer
-│   │   ├── validators/   # Request validation
-│   │   ├── dto/          # Data transfer objects
-│   │   └── config/       # Configuration
-│   ├── static/           # CSS, JavaScript
-│   └── templates/        # HTML templates
-├── api/                  # REST API endpoints
-├── cli/                  # Django management commands
-├── mediastream/          # Video I/O (OpenCV)
-├── posedetector/         # MediaPipe inference
-├── datastream/           # CSV/TRC conversion
-├── markeraugmentation/   # Pose2Sim LSTM (GPU-accelerated)
-├── depth_refinement/     # Neural depth correction
-├── joint_refinement/     # Neural joint constraints
-├── main_refinement/      # Fusion model (depth + joint)
-├── kinematics/           # ISB joint angle computation
-├── pipeline/             # Pipeline orchestration
-├── postprocessing/       # Temporal smoothing
-└── visualizedata/        # 3D visualization
-```
-
-## Core Modules
-
-| Module | Purpose | Key Components |
-|--------|---------|----------------|
-| `mediastream/` | Video I/O | `read_video_rgb()`, `probe_video_rotation()` |
-| `posedetector/` | MediaPipe inference | 33 landmarks → 22 Pose2Sim markers via `POSE_NAME_MAP` |
-| `datastream/` | Data conversion | CSV/TRC conversion, marker estimation |
-| `markeraugmentation/` | LSTM augmentation | Pose2Sim integration (22 → 64 markers), GPU acceleration |
-| `depth_refinement/` | Neural depth model | POF + view angle transformer (~3M params) |
-| `joint_refinement/` | Neural joint model | Cross-joint attention (~916K params) |
-| `main_refinement/` | Fusion model | Depth + joint gating (~1.2M params) |
-| `kinematics/` | Joint angles | ISB-compliant, 12 joint groups, Euler decomposition |
-| `pipeline/` | Orchestration | `runner.py`, `refinement.py`, `cleanup.py` |
-| `postprocessing/` | Post-processing | Temporal smoothing |
-| `visualizedata/` | Visualization | 3D Matplotlib plotting, skeleton connections |
-
-## Application Layer (Django)
-
-Following strict separation of concerns per `AGENTS.md` principles:
-
-| Component | Purpose | Rule |
-|-----------|---------|------|
-| `application/webapp/controllers/` | HTTP entry points | Thin, request → response only |
-| `application/webapp/use_cases/` | Orchestration | Coordinates multiple services |
-| `application/webapp/services/` | Business logic | Domain operations |
-| `application/webapp/repositories/` | Data access | File I/O, state management |
-| `application/webapp/validators/` | Validation | Input validation, path checking |
-| `application/webapp/dto/` | Data transfer | Request/response objects |
-| `application/templates/` | Presentation | HTML only (no inline JS/CSS) |
-| `application/static/` | Assets | Dedicated CSS/JS files |
-| `api/` | REST API | JSON endpoints for programmatic access |
-| `cli/` | Management commands | `run_pipeline` Django command |
-
-**Architectural rule**: All application logic stays in `src/application/`. Pipeline logic stays outside.
+| Module | Purpose |
+|--------|---------|
+| `mediastream/` | Video I/O (`read_video_rgb`, `probe_video_rotation`) |
+| `posedetector/` | MediaPipe inference (33 landmarks → 22 Pose2Sim markers) |
+| `datastream/` | CSV/TRC conversion, marker estimation |
+| `markeraugmentation/` | Pose2Sim LSTM integration (22 → 64 markers), GPU acceleration |
+| `pof/` | Part Orientation Fields (3D reconstruction from 2D) |
+| `joint_refinement/` | Neural joint constraints (cross-joint attention) |
+| `main_refinement/` | Fusion model (POF + joint gating) |
+| `kinematics/` | ISB joint angles (12 joint groups, Euler decomposition) |
+| `pipeline/` | Orchestration (`refinement.py`, `cleanup.py`) |
+| `visualizedata/` | 3D Matplotlib plotting, skeleton connections |
+| `application/webapp/` | Django web interface |
 
 ## Pipeline Flow
 
@@ -84,11 +35,11 @@ Following strict separation of concerns per `AGENTS.md` principles:
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Step 2: NEURAL DEPTH REFINEMENT (depth_refinement) [--main-refiner]    │
-│  - Part Orientation Fields predict limb 3D vectors                      │
-│  - Camera view angle prediction from 2D pose                            │
-│  - Transformer corrects MediaPipe depth errors                          │
-│  Output: Refined 17 COCO joints                                         │
+│  Step 2: POF 3D RECONSTRUCTION (pof) [--main-refiner or --camera-pof]   │
+│  - Part Orientation Fields predict 14 per-limb 3D unit vectors          │
+│  - Least-squares solver reconstructs 3D joints from limb vectors        │
+│  - Bypasses MediaPipe depth errors entirely                             │
+│  Output: Reconstructed 17 COCO joints in 3D                             │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -149,29 +100,14 @@ Following strict separation of concerns per `AGENTS.md` principles:
 
 ## Entry Points
 
-### Main Entry Points
-
-| File | Purpose | Usage |
-|------|---------|-------|
-| `manage.py` | Django management (recommended) | `uv run python manage.py run_pipeline --video ...` |
-
-The pipeline entry point lives in `src/pipeline/runner.py` and is invoked by the `run_pipeline` management command.
-
-### Scripts
-
-| Script | Purpose |
-|--------|---------|
-| **Training Scripts** | |
-| `scripts/train/depth_model.py` | Train depth refinement model (POF transformer) |
-| `scripts/train/joint_model.py` | Train joint constraint model |
-| `scripts/train/main_refiner.py` | Train MainRefiner fusion model |
-| **Data Processing** | |
-| `scripts/data/convert_aistpp.py` | Convert AIST++ dataset to training format |
-| `scripts/data/convert_cmu_mtc.py` | Convert CMU Panoptic MTC dataset |
-| **Visualization** | |
-| `scripts/viz/visualize_interactive.py` | Interactive 3D TRC viewer |
-| `scripts/viz/visualize_depth_comparison.py` | Compare depth refinement results |
-| `scripts/viz/visualize_joint_refinement.py` | Visualize joint refinement corrections |
+| File | Purpose |
+|------|---------|
+| `main.py` | Full pipeline orchestrator |
+| `scripts/train/pof_model.py` | POF model training |
+| `scripts/train/joint_model.py` | Joint constraint model training |
+| `scripts/train/main_refiner.py` | MainRefiner fusion model training |
+| `scripts/data/convert_aistpp.py` | AIST++ training data conversion |
+| `scripts/viz/visualize_interactive.py` | Interactive TRC viewer |
 
 ## Marker Count Progression
 
@@ -187,11 +123,11 @@ Final: 59-64 markers (unreliable removed)
 
 ## Neural Models
 
-| Model | Params | Input | Output | Stage |
-|-------|--------|-------|--------|-------|
-| **Depth Refiner** | ~3M | 17 COCO joints (3D) + 2D pose | Refined 3D positions | Pre-augmentation |
-| **Joint Refiner** | ~916K | 12 joint groups (angles) | Refined angles | Post-augmentation |
-| **MainRefiner** | ~1.2M | Combined features | Gated fusion output | Both stages |
+| Model | Params | Purpose |
+|-------|--------|---------|
+| POF | ~3M | 3D reconstruction from 2D via Part Orientation Fields |
+| Joint Refiner | ~916K | Cross-joint attention → angle corrections |
+| MainRefiner | ~1.2M | Fusion gating (POF + joint) |
 
 **Training data**: AIST++ (1.2M frames, 6 camera views) + CMU Panoptic MTC (~28K frames, 31 cameras)
 
@@ -315,4 +251,4 @@ Following `AGENTS.md` architectural guidelines:
 
 ---
 
-*Last updated: 2026-01-19*
+*Last updated: 2026-01-21*

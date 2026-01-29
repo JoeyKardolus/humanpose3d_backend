@@ -19,6 +19,7 @@ dependencies = [
     "django>=6.0.1",
     "PySide6 ; sys_platform == 'win32'",
     "torch>=2.9.1",
+    "rtmlib>=0.0.10",
 ]
 
 neural = [

@@ -619,12 +619,22 @@ def process_sequence(args: Tuple[str, List[Tuple[Path, int]], Path]) -> Tuple[in
             gt_aug = run_augmentation(gt_trc, temp_path / 'gt_aug', gt_height)
             gt_angles = compute_angles_from_trc(gt_aug)
 
-            # Save individual frame NPZ files
+            # Save individual frame NPZ files with temporal linking
             success = 0
+            prev_corrupted_angles = None
+            prev_gt_angles = None
+
             for i, (npz_path, frame_idx) in enumerate(file_list):
                 output_path = output_dir / npz_path.name
 
                 if output_path.exists():
+                    # Still need to track prev angles for next frame
+                    try:
+                        existing_data = np.load(output_path)
+                        prev_corrupted_angles = existing_data.get('corrupted_angles')
+                        prev_gt_angles = existing_data.get('ground_truth_angles')
+                    except Exception:
+                        pass
                     success += 1
                     continue
 
@@ -634,11 +644,15 @@ def process_sequence(args: Tuple[str, List[Tuple[Path, int]], Path]) -> Tuple[in
 
                     # Skip frames where GT angle computation failed (bad ground truth)
                     if np.allclose(gt_angle_array, 0):
+                        prev_corrupted_angles = None  # Reset temporal link
+                        prev_gt_angles = None
                         continue  # GT failed - unusable
 
                     # Keep corrupted data even if very wrong - that's what we're training to fix!
                     # Only skip if corrupted is all zeros (computation completely failed)
                     if np.allclose(corrupted_angle_array, 0):
+                        prev_corrupted_angles = None  # Reset temporal link
+                        prev_gt_angles = None
                         continue  # Corrupted computation failed completely
 
                     # Save with original data plus angles
@@ -652,10 +666,32 @@ def process_sequence(args: Tuple[str, List[Tuple[Path, int]], Path]) -> Tuple[in
                     output_data['corrupted_angles'] = corrupted_angle_array
                     output_data['ground_truth_angles'] = gt_angle_array
 
+                    # Add temporal linking fields
+                    output_data['sequence_id'] = seq_name
+                    output_data['frame_idx'] = i
+
+                    # Add previous frame's angles for temporal context
+                    if prev_corrupted_angles is not None and prev_gt_angles is not None:
+                        output_data['prev_corrupted_angles'] = prev_corrupted_angles
+                        output_data['prev_gt_angles'] = prev_gt_angles
+                        output_data['has_prev'] = True
+                    else:
+                        # First frame or gap in sequence - use zeros
+                        output_data['prev_corrupted_angles'] = np.zeros((12, 3), dtype=np.float32)
+                        output_data['prev_gt_angles'] = np.zeros((12, 3), dtype=np.float32)
+                        output_data['has_prev'] = False
+
                     np.savez_compressed(output_path, **output_data)
+
+                    # Update previous frame angles for next iteration
+                    prev_corrupted_angles = corrupted_angle_array
+                    prev_gt_angles = gt_angle_array
+
                     success += 1
                 except Exception as e:
                     print(f"    Error saving {npz_path.name}: {e}")
+                    prev_corrupted_angles = None  # Reset temporal link on error
+                    prev_gt_angles = None
 
             return success, len(file_list) - success
 

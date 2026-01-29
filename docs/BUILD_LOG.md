@@ -215,71 +215,185 @@ NOTE: New build logs are written to ~/.humanpose3d/logs/BUILD_LOG.md.
 - 2026-01-19 14:37:38 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
 - 2026-01-19 14:37:52 UTC | main step3 augment data/output/joey/joey_LSTM.trc
 - 2026-01-19 14:37:52 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
-- 2026-01-19 15:59:12 UTC | main step1 CSV data/output/Max-c66ef8a1/Max-c66ef8a1.csv (514 frames, 10280 rows)
-- 2026-01-19 15:59:12 UTC | main step2 TRC data/output/Max-c66ef8a1/Max-c66ef8a1.trc (514 frames, 21 markers)
-- 2026-01-19 15:59:32 UTC | main step3 augment data/output/Max-c66ef8a1/Max-c66ef8a1_LSTM.trc
-- 2026-01-19 15:59:32 UTC | main step3.5 complete data/output/Max-c66ef8a1/Max-c66ef8a1_LSTM_complete.trc
-- 2026-01-19 16:13:46 UTC | main step1 CSV data/output/Jaap-d83921b8/Jaap-d83921b8.csv (710 frames, 14099 rows)
-- 2026-01-19 16:13:46 UTC | main step2 TRC data/output/Jaap-d83921b8/Jaap-d83921b8.trc (710 frames, 21 markers)
-- 2026-01-19 16:14:06 UTC | main step3 augment data/output/Jaap-d83921b8/Jaap-d83921b8_LSTM.trc
-- 2026-01-19 16:14:06 UTC | main step3.5 complete data/output/Jaap-d83921b8/Jaap-d83921b8_LSTM_complete.trc
-- main step1 CSV data/output/Max-c56fa9ab/Max-c56fa9ab.csv (514 frames, 10280 rows) (2026-01-19 19:27:04Z)
-- main step2 TRC data/output/Max-c56fa9ab/Max-c56fa9ab.trc (514 frames, 21 markers) (2026-01-19 19:27:04Z)
-- main step3 augment data/output/Max-c56fa9ab/Max-c56fa9ab_LSTM.trc (2026-01-19 19:27:23Z)
-- main step3.5 complete data/output/Max-c56fa9ab/Max-c56fa9ab_LSTM_complete.trc (2026-01-19 19:27:24Z)
-- main step1 CSV data/output/Max-8f7e7434/Max-8f7e7434.csv (514 frames, 10280 rows) (2026-01-20 06:14:01Z)
-- main step2 TRC data/output/Max-8f7e7434/Max-8f7e7434.trc (514 frames, 21 markers) (2026-01-20 06:14:01Z)
-- main step3 augment data/output/Max-8f7e7434/Max-8f7e7434_LSTM.trc (2026-01-20 06:14:21Z)
-- main step3.5 complete data/output/Max-8f7e7434/Max-8f7e7434_LSTM_complete.trc (2026-01-20 06:14:21Z)
-- main step1 CSV data/output/Jaap-d6668064/Jaap-d6668064.csv (710 frames, 14099 rows) (2026-01-20 06:21:42Z)
-- main step2 TRC data/output/Jaap-d6668064/Jaap-d6668064.trc (710 frames, 21 markers) (2026-01-20 06:21:42Z)
-- main step3 augment data/output/Jaap-d6668064/Jaap-d6668064_LSTM.trc (2026-01-20 06:22:02Z)
-- main step3.5 complete data/output/Jaap-d6668064/Jaap-d6668064_LSTM_complete.trc (2026-01-20 06:22:03Z)
-- main step1 CSV data/output/Jaap-cfc089f8/Jaap-cfc089f8.csv (710 frames, 14099 rows) (2026-01-20 06:40:54Z)
-- main step2 TRC data/output/Jaap-cfc089f8/Jaap-cfc089f8.trc (710 frames, 21 markers) (2026-01-20 06:40:54Z)
-- main step3 augment data/output/Jaap-cfc089f8/Jaap-cfc089f8_LSTM.trc (2026-01-20 06:41:14Z)
-- main step3.5 complete data/output/Jaap-cfc089f8/Jaap-cfc089f8_LSTM_complete.trc (2026-01-20 06:41:15Z)
-- main step1 CSV data/output/Jaap-a927691e/Jaap-a927691e.csv (710 frames, 14099 rows) (2026-01-20 06:47:34Z)
-- main step2 TRC data/output/Jaap-a927691e/Jaap-a927691e.trc (710 frames, 21 markers) (2026-01-20 06:47:34Z)
-- main step3 augment data/output/Jaap-a927691e/Jaap-a927691e_LSTM.trc (2026-01-20 06:47:54Z)
-- main step3.5 complete data/output/Jaap-a927691e/Jaap-a927691e_LSTM_complete.trc (2026-01-20 06:47:54Z)
-- main step1 CSV data/output/Jaap-8de554a7/Jaap-8de554a7.csv (710 frames, 14099 rows) (2026-01-20 06:52:56Z)
-- main step2 TRC data/output/Jaap-8de554a7/Jaap-8de554a7.trc (710 frames, 21 markers) (2026-01-20 06:52:56Z)
-- main step3 augment data/output/Jaap-8de554a7/Jaap-8de554a7_LSTM.trc (2026-01-20 06:53:17Z)
-- main step3.5 complete data/output/Jaap-8de554a7/Jaap-8de554a7_LSTM_complete.trc (2026-01-20 06:53:17Z)
-- main step1 CSV data/output/Max-3695a52e/Max-3695a52e.csv (514 frames, 10280 rows) (2026-01-20 06:56:17Z)
-- main step2 TRC data/output/Max-3695a52e/Max-3695a52e.trc (514 frames, 21 markers) (2026-01-20 06:56:17Z)
-- main step3 augment data/output/Max-3695a52e/Max-3695a52e_LSTM.trc (2026-01-20 06:56:35Z)
-- main step3.5 complete data/output/Max-3695a52e/Max-3695a52e_LSTM_complete.trc (2026-01-20 06:56:35Z)
-- main step1 CSV data/output/Mama-22d2d785/Mama-22d2d785.csv (260 frames, 5058 rows) (2026-01-20 06:57:41Z)
-- main step2 TRC data/output/Mama-22d2d785/Mama-22d2d785.trc (260 frames, 21 markers) (2026-01-20 06:57:41Z)
-- main step3 augment data/output/Mama-22d2d785/Mama-22d2d785_LSTM.trc (2026-01-20 06:57:59Z)
-- main step3.5 complete data/output/Mama-22d2d785/Mama-22d2d785_LSTM_complete.trc (2026-01-20 06:57:59Z)
-- main step1 CSV data/output/Mama-49dc29c3/Mama-49dc29c3.csv (260 frames, 5058 rows) (2026-01-20 06:58:12Z)
-- main step2 TRC data/output/Mama-49dc29c3/Mama-49dc29c3.trc (260 frames, 21 markers) (2026-01-20 06:58:12Z)
-- main step3 augment data/output/Mama-49dc29c3/Mama-49dc29c3_LSTM.trc (2026-01-20 06:58:29Z)
-- main step3.5 complete data/output/Mama-49dc29c3/Mama-49dc29c3_LSTM_complete.trc (2026-01-20 06:58:29Z)
-- main step1 CSV data/output/Jaap-994c6aa2/Jaap-994c6aa2.csv (710 frames, 14099 rows) (2026-01-20 07:00:08Z)
-- main step2 TRC data/output/Jaap-994c6aa2/Jaap-994c6aa2.trc (710 frames, 21 markers) (2026-01-20 07:00:08Z)
-- main step3 augment data/output/Jaap-994c6aa2/Jaap-994c6aa2_LSTM.trc (2026-01-20 07:00:29Z)
-- main step3.5 complete data/output/Jaap-994c6aa2/Jaap-994c6aa2_LSTM_complete.trc (2026-01-20 07:00:29Z)
-- main step1 CSV data/output/Jaap-02475912/Jaap-02475912.csv (710 frames, 14099 rows) (2026-01-20 07:04:42Z)
-- main step2 TRC data/output/Jaap-02475912/Jaap-02475912.trc (710 frames, 21 markers) (2026-01-20 07:04:42Z)
-- main step3 augment data/output/Jaap-02475912/Jaap-02475912_LSTM.trc (2026-01-20 07:05:02Z)
-- main step3.5 complete data/output/Jaap-02475912/Jaap-02475912_LSTM_complete.trc (2026-01-20 07:05:03Z)
-- main step1 CSV data/output/Jaap-18d94a56/Jaap-18d94a56.csv (710 frames, 14099 rows) (2026-01-20 07:11:52Z)
-- main step2 TRC data/output/Jaap-18d94a56/Jaap-18d94a56.trc (710 frames, 21 markers) (2026-01-20 07:11:52Z)
-- main step3 augment data/output/Jaap-18d94a56/Jaap-18d94a56_LSTM.trc (2026-01-20 07:12:12Z)
-- main step3.5 complete data/output/Jaap-18d94a56/Jaap-18d94a56_LSTM_complete.trc (2026-01-20 07:12:13Z)
-- main step1 CSV data/output/Mama-75fb08be/Mama-75fb08be.csv (260 frames, 5058 rows) (2026-01-20 07:18:18Z)
-- main step2 TRC data/output/Mama-75fb08be/Mama-75fb08be.trc (260 frames, 21 markers) (2026-01-20 07:18:18Z)
-- main step3 augment data/output/Mama-75fb08be/Mama-75fb08be_LSTM.trc (2026-01-20 07:18:36Z)
-- main step3.5 complete data/output/Mama-75fb08be/Mama-75fb08be_LSTM_complete.trc (2026-01-20 07:18:36Z)
-- main step1 CSV data/output/Jaap-ffbd05b3/Jaap-ffbd05b3.csv (710 frames, 14099 rows) (2026-01-22 09:49:40Z)
-- main step2 TRC data/output/Jaap-ffbd05b3/Jaap-ffbd05b3.trc (710 frames, 21 markers) (2026-01-22 09:49:40Z)
-- main step3 augment data/output/Jaap-ffbd05b3/Jaap-ffbd05b3_LSTM.trc (2026-01-22 09:50:02Z)
-- main step3.5 complete data/output/Jaap-ffbd05b3/Jaap-ffbd05b3_LSTM_complete.trc (2026-01-22 09:50:02Z)
-- main step1 CSV data/output/Max-7b041bd0/Max-7b041bd0.csv (514 frames, 10280 rows) (2026-01-22 20:08:29Z)
-- main step2 TRC data/output/Max-7b041bd0/Max-7b041bd0.trc (514 frames, 21 markers) (2026-01-22 20:08:29Z)
-- main step3 augment data/output/Max-7b041bd0/Max-7b041bd0_LSTM.trc (2026-01-22 20:08:50Z)
-- main step3.5 complete data/output/Max-7b041bd0/Max-7b041bd0_LSTM_complete.trc (2026-01-22 20:08:51Z)
+- 2026-01-19 15:10:40 UTC | main step1.5 depth refinement applied
+- 2026-01-19 15:10:40 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 14118 rows)
+- 2026-01-19 15:10:40 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-19 15:10:53 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-19 15:10:53 UTC | main step3.5 complete data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM_complete.trc
+- 2026-01-19 15:14:03 UTC | main step1.5 depth refinement applied
+- 2026-01-19 15:14:03 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 14118 rows)
+- 2026-01-19 15:14:03 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-19 15:14:17 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-19 15:14:17 UTC | main step3.5 complete data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM_complete.trc
+- 2026-01-19 15:15:23 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 14118 rows)
+- 2026-01-19 15:15:23 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-19 15:15:35 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-19 15:15:35 UTC | main step3.5 complete data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM_complete.trc
+- 2026-01-19 15:19:41 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 15:19:41 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 15:19:54 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 15:19:54 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-19 15:21:38 UTC | main step1.5 depth refinement applied
+- 2026-01-19 15:21:38 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-19 15:21:38 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-19 15:21:51 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-19 15:21:51 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-20 01:08:25 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-20 01:08:25 UTC | main step1 CSV data/output/PushUp/PushUp.csv (358 frames, 4654 rows)
+- 2026-01-20 01:08:25 UTC | main step2 TRC data/output/PushUp/PushUp.trc (358 frames, 21 markers)
+- 2026-01-20 01:08:42 UTC | main step3 augment data/output/PushUp/PushUp_LSTM.trc
+- 2026-01-20 11:14:07 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-20 11:14:07 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 6981 rows)
+- 2026-01-20 11:14:07 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-20 11:14:19 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-20 15:30:31 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-20 15:30:31 UTC | main step1 CSV data/output/PushUp/PushUp.csv (358 frames, 4654 rows)
+- 2026-01-20 15:30:31 UTC | main step2 TRC data/output/PushUp/PushUp.trc (358 frames, 21 markers)
+- 2026-01-20 15:30:42 UTC | main step3 augment data/output/PushUp/PushUp_LSTM.trc
+- 2026-01-20 15:37:53 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-20 15:37:53 UTC | main step1 CSV data/output/PushUp/PushUp.csv (358 frames, 4654 rows)
+- 2026-01-20 15:37:53 UTC | main step2 TRC data/output/PushUp/PushUp.trc (358 frames, 21 markers)
+- 2026-01-20 15:38:04 UTC | main step3 augment data/output/PushUp/PushUp_LSTM.trc
+- 2026-01-20 15:43:03 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-20 15:43:03 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 9230 rows)
+- 2026-01-20 15:43:03 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-20 15:43:15 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-20 15:45:09 UTC | main step1 CSV data/output/PushUp/PushUp.csv (358 frames, 5902 rows)
+- 2026-01-20 15:45:09 UTC | main step2 TRC data/output/PushUp/PushUp.trc (358 frames, 21 markers)
+- 2026-01-20 15:45:20 UTC | main step3 augment data/output/PushUp/PushUp_LSTM.trc
+- 2026-01-20 15:48:09 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-20 15:48:09 UTC | main step1 CSV data/output/PushUp/PushUp.csv (358 frames, 5902 rows)
+- 2026-01-20 15:48:09 UTC | main step2 TRC data/output/PushUp/PushUp.trc (358 frames, 21 markers)
+- 2026-01-20 15:48:19 UTC | main step3 augment data/output/PushUp/PushUp_LSTM.trc
+- 2026-01-20 15:50:08 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-20 15:50:08 UTC | main step1 CSV data/output/PushUp/PushUp.csv (358 frames, 5902 rows)
+- 2026-01-20 15:50:08 UTC | main step2 TRC data/output/PushUp/PushUp.trc (358 frames, 21 markers)
+- 2026-01-20 15:50:19 UTC | main step3 augment data/output/PushUp/PushUp_LSTM.trc
+- 2026-01-20 15:50:31 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-20 15:50:31 UTC | main step1 CSV data/output/PushUp/PushUp.csv (358 frames, 5902 rows)
+- 2026-01-20 15:50:31 UTC | main step2 TRC data/output/PushUp/PushUp.trc (358 frames, 21 markers)
+- 2026-01-20 15:50:42 UTC | main step3 augment data/output/PushUp/PushUp_LSTM.trc
+- 2026-01-22 13:42:15 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 8343 rows)
+- 2026-01-22 13:42:15 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 13:42:27 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 13:43:11 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 8343 rows)
+- 2026-01-22 13:43:11 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 13:43:13 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 14:25:06 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:25:06 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 11988 rows)
+- 2026-01-22 14:25:06 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-22 14:25:10 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-22 14:26:10 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:26:11 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 11988 rows)
+- 2026-01-22 14:26:11 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-22 14:26:14 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-22 14:27:44 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:27:44 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 11988 rows)
+- 2026-01-22 14:27:44 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-22 14:27:45 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-22 14:31:54 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:31:54 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 11988 rows)
+- 2026-01-22 14:31:54 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-22 14:32:34 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:32:34 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 11988 rows)
+- 2026-01-22 14:32:34 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-22 14:32:38 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-22 14:36:21 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:36:21 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 9230 rows)
+- 2026-01-22 14:36:21 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-22 14:38:11 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:38:11 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 9230 rows)
+- 2026-01-22 14:38:11 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-22 14:38:15 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-22 14:44:18 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:44:18 UTC | main step1 CSV data/output/MicrosoftTeams-video/MicrosoftTeams-video.csv (710 frames, 9230 rows)
+- 2026-01-22 14:44:18 UTC | main step2 TRC data/output/MicrosoftTeams-video/MicrosoftTeams-video.trc (710 frames, 21 markers)
+- 2026-01-22 14:44:21 UTC | main step3 augment data/output/MicrosoftTeams-video/MicrosoftTeams-video_LSTM.trc
+- 2026-01-22 14:49:01 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:49:01 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 6981 rows)
+- 2026-01-22 14:49:01 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 14:49:14 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 14:50:20 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:50:20 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 6981 rows)
+- 2026-01-22 14:50:20 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 14:50:30 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 14:54:13 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:54:13 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 6981 rows)
+- 2026-01-22 14:54:13 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 14:54:25 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 14:55:24 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 14:55:24 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 6981 rows)
+- 2026-01-22 14:55:24 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 14:55:25 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 15:00:46 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 15:00:46 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 6981 rows)
+- 2026-01-22 15:00:46 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 15:00:57 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 15:02:27 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 15:02:27 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-22 15:02:27 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 15:02:38 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 15:05:58 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 15:05:58 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-22 15:05:58 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 15:06:10 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 15:11:33 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 15:11:33 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-22 15:11:33 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 15:11:46 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 15:15:19 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 15:15:19 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-22 15:15:19 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 15:15:32 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 15:18:40 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 15:18:40 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-22 15:18:40 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 15:18:53 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 15:20:40 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 15:20:40 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-22 15:20:40 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 15:20:53 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 15:23:34 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 15:23:34 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-22 15:23:34 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 15:23:47 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-22 15:26:11 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-22 15:26:11 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-22 15:26:11 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-22 15:26:25 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-23 23:21:22 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-23 23:21:22 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-23 23:21:22 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-23 23:21:46 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-23 23:21:47 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-23 23:31:42 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-23 23:31:42 UTC | main step1 CSV data/output/joey/joey.csv (537 frames, 10740 rows)
+- 2026-01-23 23:31:42 UTC | main step2 TRC data/output/joey/joey.trc (537 frames, 21 markers)
+- 2026-01-23 23:31:54 UTC | main step3 augment data/output/joey/joey_LSTM.trc
+- 2026-01-23 23:31:54 UTC | main step3.5 complete data/output/joey/joey_LSTM_complete.trc
+- 2026-01-28 17:07:41 UTC | main step1 CSV data/output/MicrosoftTeams-video-76200f7c/MicrosoftTeams-video-76200f7c.csv (710 frames, 14118 rows)
+- 2026-01-28 17:07:41 UTC | main step2 TRC data/output/MicrosoftTeams-video-76200f7c/MicrosoftTeams-video-76200f7c.trc (710 frames, 21 markers)
+- 2026-01-28 17:07:53 UTC | main step3 augment data/output/MicrosoftTeams-video-76200f7c/MicrosoftTeams-video-76200f7c_LSTM.trc
+- 2026-01-28 17:18:15 UTC | main step1 CSV data/output/Max-b8f68ed1/Max-b8f68ed1.csv (514 frames, 10280 rows)
+- 2026-01-28 17:18:15 UTC | main step2 TRC data/output/Max-b8f68ed1/Max-b8f68ed1.trc (514 frames, 21 markers)
+- 2026-01-28 17:18:27 UTC | main step3 augment data/output/Max-b8f68ed1/Max-b8f68ed1_LSTM.trc
+- 2026-01-28 17:21:57 UTC | main step1 CSV data/output/Max-fa1e5142/Max-fa1e5142.csv (514 frames, 10280 rows)
+- 2026-01-28 17:21:57 UTC | main step2 TRC data/output/Max-fa1e5142/Max-fa1e5142.trc (514 frames, 21 markers)
+- 2026-01-28 17:22:10 UTC | main step3 augment data/output/Max-fa1e5142/Max-fa1e5142_LSTM.trc
+- 2026-01-28 17:26:23 UTC | main step1 CSV data/output/Max-2cefa6cb/Max-2cefa6cb.csv (514 frames, 10280 rows)
+- 2026-01-28 17:26:23 UTC | main step2 TRC data/output/Max-2cefa6cb/Max-2cefa6cb.trc (514 frames, 21 markers)
+- 2026-01-28 17:26:35 UTC | main step3 augment data/output/Max-2cefa6cb/Max-2cefa6cb_LSTM.trc
+- 2026-01-28 20:04:00 UTC | main step1 CSV data/output/testvideorennen-f414823f/testvideorennen-f414823f.csv (765 frames, 14095 rows)
+- 2026-01-28 20:04:00 UTC | main step2 TRC data/output/testvideorennen-f414823f/testvideorennen-f414823f.trc (759 frames, 21 markers)
+- 2026-01-28 20:04:03 UTC | main step3 augment data/output/testvideorennen-f414823f/testvideorennen-f414823f_LSTM.trc
+- 2026-01-28 20:04:03 UTC | main step3.5 complete data/output/testvideorennen-f414823f/testvideorennen-f414823f_LSTM_complete.trc
+- 2026-01-28 20:08:46 UTC | main step1.5 camera-space POF reconstruction applied
+- 2026-01-28 20:08:46 UTC | main step1 CSV data/output/testvideorennen-d4539771/testvideorennen-d4539771.csv (765 frames, 14095 rows)
+- 2026-01-28 20:08:46 UTC | main step2 TRC data/output/testvideorennen-d4539771/testvideorennen-d4539771.trc (759 frames, 21 markers)
+- 2026-01-28 20:10:23 UTC | main step1 CSV data/output/testvideorennen-c157e6e0/testvideorennen-c157e6e0.csv (765 frames, 14095 rows)
+- 2026-01-28 20:10:23 UTC | main step2 TRC data/output/testvideorennen-c157e6e0/testvideorennen-c157e6e0.trc (759 frames, 21 markers)
+- 2026-01-28 20:10:36 UTC | main step3 augment data/output/testvideorennen-c157e6e0/testvideorennen-c157e6e0_LSTM.trc
+- 2026-01-28 20:10:36 UTC | main step3.5 complete data/output/testvideorennen-c157e6e0/testvideorennen-c157e6e0_LSTM_complete.trc
+- 2026-01-28 20:17:49 UTC | main step1 CSV data/output/testvideorennen-e0904dab/testvideorennen-e0904dab.csv (765 frames, 14095 rows)
+- 2026-01-28 20:17:49 UTC | main step2 TRC data/output/testvideorennen-e0904dab/testvideorennen-e0904dab.trc (759 frames, 21 markers)
+- 2026-01-28 20:18:02 UTC | main step3 augment data/output/testvideorennen-e0904dab/testvideorennen-e0904dab_LSTM.trc

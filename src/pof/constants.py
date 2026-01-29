@@ -6,7 +6,7 @@ Part Orientation Fields (POF) based 3D pose reconstruction.
 
 from typing import Dict, List, Tuple
 
-# MediaPipe COCO-17 joint names (used in this module)
+# COCO-17 joint names (standard format used by MediaPipe, RTMPose, etc.)
 COCO_JOINT_NAMES: List[str] = [
     "nose",           # 0
     "left_eye",       # 1

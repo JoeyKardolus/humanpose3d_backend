@@ -25,10 +25,19 @@ class PipelineProgressTracker:
         # Map known log markers to progress and stage labels.
         if "Created TensorFlow Lite delegate for GPU" in line or "[GPU]" in line:
             progress = 3.0
-            stage = "Initializing ML backends"
-        elif "gl_context" in line or "cuda" in line or "TensorFlow" in line:
+            stage = "Initializing GPU"
+        elif "gl_context" in line or "TensorFlow Lite XNNPACK" in line:
             progress = 4.0
-            stage = "Loading models"
+            stage = "Initializing pose detector"
+        elif "cuda" in line or "TensorFlow" in line:
+            # TensorFlow/CUDA warnings during MediaPipe init - ignore
+            pass
+        elif "[pof]" in line and "Reconstructing" in line:
+            progress = 12.0
+            stage = "POF 3D reconstruction"
+        elif "[joint]" in line and "Applied neural" in line:
+            progress = 93.0
+            stage = "Applying joint constraints"
         elif "[main] estimated" in line:
             progress = 10.0
             stage = "Estimating missing markers"
