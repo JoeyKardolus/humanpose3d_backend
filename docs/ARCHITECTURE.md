@@ -10,11 +10,10 @@
 | `markeraugmentation/` | Pose2Sim LSTM integration (22 → 64 markers), GPU acceleration |
 | `pof/` | Part Orientation Fields (3D reconstruction from 2D) |
 | `joint_refinement/` | Neural joint constraints (cross-joint attention) |
-| `main_refinement/` | Fusion model (POF + joint gating) |
 | `kinematics/` | ISB joint angles (12 joint groups, Euler decomposition) |
 | `pipeline/` | Orchestration (`refinement.py`, `cleanup.py`) |
 | `visualizedata/` | 3D Matplotlib plotting, skeleton connections |
-| `application/webapp/` | Django web interface |
+| `application/` | Django web interface (see [APPLICATION.md](APPLICATION.md)) |
 
 ## Pipeline Flow
 
@@ -35,7 +34,7 @@
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Step 2: POF 3D RECONSTRUCTION (pof) [--main-refiner or --camera-pof]   │
+│  Step 2: POF 3D RECONSTRUCTION (pof) [--camera-pof]                     │
 │  - Part Orientation Fields predict 14 per-limb 3D unit vectors          │
 │  - Least-squares solver reconstructs 3D joints from limb vectors        │
 │  - Bypasses MediaPipe depth errors entirely                             │
@@ -72,7 +71,7 @@
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Step 6: NEURAL JOINT REFINEMENT (joint_refinement) [--main-refiner]    │
+│  Step 6: NEURAL JOINT REFINEMENT (joint_refinement) [--joint-refinement]│
 │  - Cross-joint attention with kinematic chain bias                      │
 │  - Learned soft constraints from AIST++ motion capture                  │
 │  - Per-joint delta corrections                                          │
@@ -103,9 +102,10 @@
 | File | Purpose |
 |------|---------|
 | `main.py` | Full pipeline orchestrator |
-| `scripts/train/pof_model.py` | POF model training |
+| `manage.py` | Django web interface |
+| `scripts/train/pof_model.py` | POF Transformer training |
+| `scripts/train/pof_gnn_model.py` | POF SemGCN-Temporal training |
 | `scripts/train/joint_model.py` | Joint constraint model training |
-| `scripts/train/main_refiner.py` | MainRefiner fusion model training |
 | `scripts/data/convert_aistpp.py` | AIST++ training data conversion |
 | `scripts/viz/visualize_interactive.py` | Interactive TRC viewer |
 
@@ -125,11 +125,11 @@ Final: 59-64 markers (unreliable removed)
 
 | Model | Params | Purpose |
 |-------|--------|---------|
-| POF | ~3M | 3D reconstruction from 2D via Part Orientation Fields |
+| POF Transformer | ~3M | 3D reconstruction from 2D via Part Orientation Fields |
+| POF SemGCN-Temporal | ~1.7M | GNN-based POF with temporal context (~7° error) |
 | Joint Refiner | ~916K | Cross-joint attention → angle corrections |
-| MainRefiner | ~1.2M | Fusion gating (POF + joint) |
 
-**Training data**: AIST++ (1.2M frames, 6 camera views) + CMU Panoptic MTC (~28K frames, 31 cameras)
+**Training data**: AIST++ (1.2M frames, 6 camera views)
 
 ### Model Architecture Details
 
@@ -144,11 +144,6 @@ Final: 59-64 markers (unreliable removed)
 - Kinematic chain bias (parent-child joint relationships)
 - Per-joint delta corrections
 - Performance: Mean correction 3.47°, handles errors up to 73°
-
-**MainRefiner (Fusion Model)**:
-- Gating mechanism combines depth and joint refinements
-- Two-stage pipeline integration
-- Per-joint confidence estimation
 - Total inference: <10ms per frame on CPU
 
 ## Data Flow
@@ -251,4 +246,4 @@ Following `AGENTS.md` architectural guidelines:
 
 ---
 
-*Last updated: 2026-01-21*
+*Last updated: 2026-01-29*
