@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from typing import Mapping
@@ -10,6 +11,8 @@ from src.application.dto.pipeline_run_spec import PipelineRunSpec
 from src.application.repositories.run_status_repository import (
     RunStatusRepository,
 )
+from src.application.services.analytics_service import AnalyticsService
+from src.application.services.kinematics_quality_service import KinematicsQualityService
 from src.application.services.pipeline_command_builder import (
     PipelineCommandBuilder,
 )
@@ -21,6 +24,8 @@ from src.application.services.pipeline_result_service import (
 )
 from src.application.services.pipeline_runner import PipelineRunner
 from src.application.services.upload_service import UploadService
+
+logger = logging.getLogger(__name__)
 
 
 class RunPipelineAsyncUseCase:
@@ -34,6 +39,8 @@ class RunPipelineAsyncUseCase:
         upload_service: UploadService,
         status_repo: RunStatusRepository,
         progress_tracker: PipelineProgressTracker,
+        analytics_service: AnalyticsService | None = None,
+        quality_service: KinematicsQualityService | None = None,
     ) -> None:
         self._command_builder = command_builder
         self._pipeline_runner = pipeline_runner
@@ -41,6 +48,8 @@ class RunPipelineAsyncUseCase:
         self._upload_service = upload_service
         self._status_repo = status_repo
         self._progress_tracker = progress_tracker
+        self._analytics_service = analytics_service
+        self._quality_service = quality_service
 
     def enqueue(
         self,
@@ -60,6 +69,13 @@ class RunPipelineAsyncUseCase:
                 "results_url": results_url,
             },
         )
+        # Track run started for analytics
+        if self._analytics_service:
+            try:
+                self._analytics_service.track_run_started(spec.run_key, form_data)
+            except Exception as e:
+                logger.warning(f"Failed to track run started: {e}")
+
         worker = threading.Thread(
             target=self._run_worker,
             args=(spec, form_data, fix_header),
@@ -105,6 +121,14 @@ class RunPipelineAsyncUseCase:
                     "stage": "Failed",
                 },
             )
+            # Track error for analytics
+            if self._analytics_service:
+                try:
+                    self._analytics_service.track_run_error(
+                        spec.run_key, "startup_error", str(exc)
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to track run error: {e}")
             return
 
         if execution.return_code != 0:
@@ -129,6 +153,26 @@ class RunPipelineAsyncUseCase:
                     "last_update": time.monotonic(),
                 },
             )
+            # Track error for analytics
+            if self._analytics_service:
+                try:
+                    # Extract error type from stderr
+                    stderr_lower = execution.stderr_text.lower()
+                    if "no landmarks" in stderr_lower or "no pose" in stderr_lower:
+                        error_type = "no_landmarks_detected"
+                    elif "out of memory" in stderr_lower:
+                        error_type = "out_of_memory"
+                    elif "cuda" in stderr_lower and "error" in stderr_lower:
+                        error_type = "cuda_error"
+                    elif "video duration" in stderr_lower:
+                        error_type = "video_too_long"
+                    else:
+                        error_type = "pipeline_error"
+                    self._analytics_service.track_run_error(
+                        spec.run_key, error_type, execution.stderr_text[:500]
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to track run error: {e}")
             return
 
         log_path = spec.pipeline_run_dir / "pipeline.log"
@@ -143,12 +187,33 @@ class RunPipelineAsyncUseCase:
             encoding="utf-8",
         )
         self._result_service.move_output(spec.pipeline_run_dir, spec.output_dir)
-        self._result_service.persist_input_video(
-            spec.upload_path,
-            spec.output_dir,
-            spec.safe_run_id,
-        )
+        # Skip saving source video - only keep marker data
+        # self._result_service.persist_input_video(
+        #     spec.upload_path,
+        #     spec.output_dir,
+        #     spec.safe_run_id,
+        # )
         self._upload_service.remove_upload(spec.safe_run_id)
+
+        # Analyze kinematics quality and track completion
+        quality_metrics = None
+        if self._quality_service:
+            try:
+                joint_angles_dir = spec.output_dir / "joint_angles"
+                quality_metrics = self._quality_service.analyze(joint_angles_dir)
+                if quality_metrics:
+                    self._quality_service.save_metrics(quality_metrics, spec.output_dir)
+            except Exception as e:
+                logger.warning(f"Failed to analyze kinematics quality: {e}")
+
+        # Track successful completion for analytics
+        if self._analytics_service:
+            try:
+                self._analytics_service.track_run_completed(
+                    spec.run_key, spec.output_dir, quality_metrics
+                )
+            except Exception as e:
+                logger.warning(f"Failed to track run completed: {e}")
 
         self._status_repo.set_status(
             spec.run_key,

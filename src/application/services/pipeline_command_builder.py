@@ -65,7 +65,8 @@ class PipelineCommandBuilder:
         if self._coerce_bool(form_data.get("plot_all_joint_angles")):
             command.append("--plot-all-joint-angles")
 
-        command.append("--export-preview")
+        # Skip preview video generation - only keep marker data
+        # command.append("--export-preview")
         return command
 
     def _coerce_bool(self, value: str | None) -> bool:

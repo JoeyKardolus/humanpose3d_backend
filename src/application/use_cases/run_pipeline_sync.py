@@ -81,11 +81,12 @@ class RunPipelineSyncUseCase:
             encoding="utf-8",
         )
         self._result_service.move_output(spec.pipeline_run_dir, spec.output_dir)
-        self._result_service.persist_input_video(
-            spec.upload_path,
-            spec.output_dir,
-            spec.safe_run_id,
-        )
+        # Skip saving source video - only keep marker data
+        # self._result_service.persist_input_video(
+        #     spec.upload_path,
+        #     spec.output_dir,
+        #     spec.safe_run_id,
+        # )
         self._upload_service.remove_upload(spec.safe_run_id)
         return PipelineSyncResult(
             return_code=execution.return_code,
