@@ -11,7 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
   <script src="{% static 'main.js' %}" defer></script>
 </head>
-<body class="page-body">
+<body class="page-body" data-run-key="{{ run_key }}" data-report-bug-url="{% url 'report_bug' %}">
   <div class="page-content">
     <main class="py-5">
       <div class="container container-wide">
@@ -24,6 +24,9 @@
                 <p class="text-muted mb-0">Your files are ready to download. Keep these files secure and delete the input video if needed.</p>
               </div>
               <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#bugReportModal">
+                  <i class="bi bi-bug me-1"></i> Report Issue
+                </button>
                 <a class="btn btn-outline-primary" href="{% url 'home' %}">Home</a>
                 <a class="btn btn-primary" href="{% url 'statistics' run_key=run_key %}">Statistics</a>
               </div>
@@ -158,5 +161,7 @@
       </div>
     </main>
   </div>
+
+  {% include "partials/bug_report_modal.html" %}
 </body>
 </html>

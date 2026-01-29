@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import mimetypes
 import tempfile
 import zipfile
@@ -18,11 +19,15 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
-from src.application.config.paths import AppPaths
+from src.application.config.paths import AppPaths, StoragePaths
+from src.application.dto.dof_config import DofConfig
 from src.application.dto.pipeline_request import PipelineRequestData
+from src.application.repositories.analytics_repository import AnalyticsRepository
 from src.application.repositories.run_status_repository import (
     RunStatusRepository,
 )
+from src.application.services.analytics_service import AnalyticsService
+from src.application.services.kinematics_quality_service import KinematicsQualityService
 from src.application.services.media_service import MediaService
 from src.application.services.output_directory_service import (
     OutputDirectoryService,
@@ -39,6 +44,9 @@ from src.application.services.pipeline_result_service import (
 )
 from src.application.services.pipeline_runner import PipelineRunner
 from src.application.services.progress_service import ProgressService
+from src.application.services.joint_angle_recompute_service import (
+    JointAngleRecomputeService,
+)
 from src.application.services.run_cleanup_service import RunCleanupService
 from src.application.services.run_id_factory import RunIdFactory
 from src.application.services.run_key_service import RunKeyService
@@ -116,6 +124,7 @@ def _parse_pipeline_error(
 
 # Module-level wiring keeps view classes thin and testable.
 _APP_PATHS = AppPaths.from_anchor(Path(__file__))
+_STORAGE_PATHS = StoragePaths.load()
 _PATH_VALIDATOR = PathValidator()
 _STATUS_REPO = RunStatusRepository()
 
@@ -124,6 +133,11 @@ _PIPELINE_RESULTS = PipelineResultService(_APP_PATHS.repo_root)
 _PIPELINE_COMMANDS = PipelineCommandBuilder(_APP_PATHS.repo_root)
 _PROGRESS_TRACKER = PipelineProgressTracker(_STATUS_REPO)
 _PROGRESS_SERVICE = ProgressService(_STATUS_REPO)
+
+# Analytics and quality services
+_ANALYTICS_REPO = AnalyticsRepository(_STORAGE_PATHS.logs_root)
+_ANALYTICS_SERVICE = AnalyticsService(_ANALYTICS_REPO)
+_QUALITY_SERVICE = KinematicsQualityService()
 
 _UPLOAD_SERVICE = UploadService(_APP_PATHS.upload_root)
 _OUTPUT_DIRS = OutputDirectoryService(_APP_PATHS.output_root, _APP_PATHS.repo_root)
@@ -155,9 +169,12 @@ _RUN_PIPELINE_ASYNC = RunPipelineAsyncUseCase(
     upload_service=_UPLOAD_SERVICE,
     status_repo=_STATUS_REPO,
     progress_tracker=_PROGRESS_TRACKER,
+    analytics_service=_ANALYTICS_SERVICE,
+    quality_service=_QUALITY_SERVICE,
 )
 
 _STATISTICS_SERVICE = StatisticsService()
+_JOINT_ANGLE_RECOMPUTE_SERVICE = JointAngleRecomputeService()
 _MEDIA_SERVICE = MediaService(
     _APP_PATHS.output_root,
     _APP_PATHS.upload_root,
@@ -430,3 +447,52 @@ class DeleteRunView(View):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"deleted": True})
         return redirect("home")
+
+
+class JointAngleConfigView(View):
+    """API endpoint for recomputing joint angles with DOF configuration."""
+
+    def post(self, request: HttpRequest, run_key: str) -> HttpResponse:
+        """Recompute joint angles with specified DOF configuration.
+
+        Request body:
+        {
+            "dof_config": {
+                "pelvis": ["flex", "abd", "rot"],
+                "hip_R": ["flex"],
+                ...
+            }
+        }
+
+        Response:
+        {
+            "series": { ... },
+            "success": true
+        }
+        """
+        run_dir = _PATH_VALIDATOR.resolve_output_dir(_APP_PATHS.output_root, run_key)
+        if not run_dir.exists():
+            return JsonResponse({"error": "Run not found."}, status=404)
+
+        try:
+            body = json.loads(request.body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse({"error": "Invalid JSON body."}, status=400)
+
+        dof_config_data = body.get("dof_config", {})
+        try:
+            dof_config = DofConfig.from_json(dof_config_data)
+        except ValueError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+
+        try:
+            series = _JOINT_ANGLE_RECOMPUTE_SERVICE.recompute(run_dir, dof_config)
+        except FileNotFoundError as exc:
+            return JsonResponse({"error": str(exc)}, status=404)
+        except Exception as exc:
+            return JsonResponse(
+                {"error": f"Failed to recompute joint angles: {exc}"},
+                status=500,
+            )
+
+        return JsonResponse({"series": series, "success": True})

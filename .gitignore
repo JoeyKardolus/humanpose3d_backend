@@ -39,3 +39,4 @@ wget-log
 external/
 
 docs/BUILD_log.md
+.env

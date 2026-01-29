@@ -609,4 +609,96 @@ document.addEventListener("DOMContentLoaded", () => {
         target.addEventListener("shown.bs.collapse", () => updateCollapseToggle(button, true));
         target.addEventListener("hidden.bs.collapse", () => updateCollapseToggle(button, false));
     });
+
+    // Bug report modal handling
+    const bugReportForm = document.getElementById("bugReportForm");
+    const bugReportModal = document.getElementById("bugReportModal");
+    const bugReportSubmit = document.getElementById("bugReportSubmit");
+    const bugReportSuccess = document.getElementById("bugReportSuccess");
+    const bugReportError = document.getElementById("bugReportError");
+    const bugReportErrorMessage = document.getElementById("bugReportErrorMessage");
+    const bugReportRunKey = document.getElementById("bugReportRunKey");
+    const reportBugUrl = document.body?.dataset.reportBugUrl;
+    const runKey = document.body?.dataset.runKey;
+
+    if (bugReportModal && window.bootstrap) {
+        // Initialize run key from page data
+        if (bugReportRunKey && runKey) {
+            bugReportRunKey.value = runKey;
+        }
+
+        // Reset form when modal opens
+        bugReportModal.addEventListener("show.bs.modal", () => {
+            bugReportForm?.reset();
+            bugReportSuccess?.classList.add("d-none");
+            bugReportError?.classList.add("d-none");
+            if (bugReportSubmit) {
+                bugReportSubmit.disabled = false;
+                bugReportSubmit.innerHTML = '<i class="bi bi-bug me-1"></i> Submit Report';
+            }
+            // Pre-fill run key if available
+            if (bugReportRunKey && runKey) {
+                bugReportRunKey.value = runKey;
+            }
+        });
+    }
+
+    if (bugReportForm && reportBugUrl) {
+        bugReportForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            bugReportSuccess?.classList.add("d-none");
+            bugReportError?.classList.add("d-none");
+
+            if (bugReportSubmit) {
+                bugReportSubmit.disabled = true;
+                bugReportSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Submitting...';
+            }
+
+            const formData = new FormData(bugReportForm);
+            const data = {};
+            formData.forEach((value, key) => {
+                data[key] = value;
+            });
+
+            try {
+                const response = await fetch(reportBugUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": getCookie("csrftoken"),
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || "Failed to submit report");
+                }
+
+                bugReportSuccess?.classList.remove("d-none");
+                if (bugReportSubmit) {
+                    bugReportSubmit.innerHTML = '<i class="bi bi-check me-1"></i> Submitted';
+                }
+
+                // Close modal after short delay
+                setTimeout(() => {
+                    const modalInstance = bootstrap.Modal.getInstance(bugReportModal);
+                    modalInstance?.hide();
+                }, 2000);
+
+            } catch (error) {
+                if (bugReportErrorMessage) {
+                    bugReportErrorMessage.textContent = error.message || "Failed to submit report. Please try again.";
+                }
+                bugReportError?.classList.remove("d-none");
+                if (bugReportSubmit) {
+                    bugReportSubmit.disabled = false;
+                    bugReportSubmit.innerHTML = '<i class="bi bi-bug me-1"></i> Submit Report';
+                }
+            }
+        });
+    }
 });

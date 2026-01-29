@@ -1,0 +1,242 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KinetIQ Analytics</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'styles.css' %}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
+</head>
+<body class="page-body">
+  <div class="page-content">
+    <main class="py-5">
+      <div class="container container-wide">
+        <div class="card panel-card border-0 rounded-4 shadow mb-4">
+          <div class="card-body">
+            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+              <div>
+                <p class="text-uppercase text-success fw-semibold small mb-2">Analytics</p>
+                <h1 class="h3 fw-semibold mb-2">Usage Dashboard</h1>
+                <p class="text-muted mb-0">Monitor pipeline usage, quality metrics, and error trends.</p>
+              </div>
+              <div>
+                <a class="btn btn-outline-primary" href="{% url 'home' %}">Back to Home</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+          <div class="col-md-3">
+            <div class="card panel-card border-0 rounded-4 shadow h-100">
+              <div class="card-body text-center">
+                <p class="text-uppercase text-muted small mb-1">Today</p>
+                <h2 class="h1 fw-bold text-primary mb-0">{{ stats.today_completed }}</h2>
+                <p class="text-muted small mb-0">runs completed</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card panel-card border-0 rounded-4 shadow h-100">
+              <div class="card-body text-center">
+                <p class="text-uppercase text-muted small mb-1">This Week</p>
+                <h2 class="h1 fw-bold text-success mb-0">{{ stats.week_completed }}</h2>
+                <p class="text-muted small mb-0">runs completed</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card panel-card border-0 rounded-4 shadow h-100">
+              <div class="card-body text-center">
+                <p class="text-uppercase text-muted small mb-1">Success Rate</p>
+                <h2 class="h1 fw-bold mb-0">{{ stats.success_rate|floatformat:0 }}%</h2>
+                <p class="text-muted small mb-0">of {{ stats.total_runs }} total runs</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card panel-card border-0 rounded-4 shadow h-100">
+              <div class="card-body text-center">
+                <p class="text-uppercase text-muted small mb-1">Avg Duration</p>
+                <h2 class="h1 fw-bold text-info mb-0">{{ stats.avg_duration_seconds|floatformat:0 }}s</h2>
+                <p class="text-muted small mb-0">per completed run</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+          <div class="col-lg-8">
+            <div class="card panel-card border-0 rounded-4 shadow h-100">
+              <div class="card-body">
+                <p class="text-uppercase text-success fw-semibold small mb-2">Quality Trend</p>
+                <h2 class="h4 mb-3">Plausibility Score Over Time</h2>
+                <div style="height: 300px;">
+                  <canvas id="qualityTrendChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4">
+            <div class="card panel-card border-0 rounded-4 shadow h-100">
+              <div class="card-body">
+                <p class="text-uppercase text-success fw-semibold small mb-2">Errors</p>
+                <h2 class="h4 mb-3">Error Breakdown</h2>
+                <div style="height: 250px;">
+                  <canvas id="errorPieChart"></canvas>
+                </div>
+                <p class="text-muted small mt-2 mb-0 text-center">{{ stats.error_runs }} errors in last 30 days</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel-card border-0 rounded-4 shadow">
+          <div class="card-body">
+            <p class="text-uppercase text-success fw-semibold small mb-2">Settings Analysis</p>
+            <h2 class="h4 mb-3">Settings vs Quality Correlation</h2>
+            <p class="text-muted small mb-3">Average plausibility scores for different pipeline settings.</p>
+            <div class="table-responsive">
+              <table class="table table-striped align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Setting</th>
+                    <th class="text-center">Enabled Avg Score</th>
+                    <th class="text-center">Disabled Avg Score</th>
+                    <th class="text-center">Enabled Runs</th>
+                    <th class="text-center">Disabled Runs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for flag, data in settings_correlation.items %}
+                  <tr>
+                    <td>
+                      <span class="fw-semibold">{{ flag }}</span>
+                    </td>
+                    <td class="text-center">
+                      {% if data.enabled_count > 0 %}
+                        <span class="badge {% if data.enabled_avg > data.disabled_avg %}bg-success{% else %}bg-secondary{% endif %}">
+                          {{ data.enabled_avg|floatformat:2 }}
+                        </span>
+                      {% else %}
+                        <span class="text-muted">--</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">
+                      {% if data.disabled_count > 0 %}
+                        <span class="badge {% if data.disabled_avg > data.enabled_avg %}bg-success{% else %}bg-secondary{% endif %}">
+                          {{ data.disabled_avg|floatformat:2 }}
+                        </span>
+                      {% else %}
+                        <span class="text-muted">--</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">{{ data.enabled_count }}</td>
+                    <td class="text-center">{{ data.disabled_count }}</td>
+                  </tr>
+                  {% empty %}
+                  <tr>
+                    <td colspan="5" class="text-muted text-center">No data available yet</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const trendLabels = {{ trend_labels_json|safe }};
+      const trendValues = {{ trend_values_json|safe }};
+      const errorLabels = {{ error_labels_json|safe }};
+      const errorValues = {{ error_values_json|safe }};
+
+      // Quality Trend Chart
+      const trendCtx = document.getElementById('qualityTrendChart');
+      if (trendCtx && trendLabels.length > 0) {
+        new Chart(trendCtx, {
+          type: 'line',
+          data: {
+            labels: trendLabels,
+            datasets: [{
+              label: 'Plausibility Score',
+              data: trendValues,
+              borderColor: 'rgb(75, 192, 192)',
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              tension: 0.3,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 1,
+                ticks: {
+                  callback: function(value) {
+                    return (value * 100).toFixed(0) + '%';
+                  }
+                }
+              }
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return 'Score: ' + (context.raw * 100).toFixed(1) + '%';
+                  }
+                }
+              }
+            }
+          }
+        });
+      } else if (trendCtx) {
+        trendCtx.parentElement.innerHTML = '<p class="text-muted text-center my-5">No quality data available yet</p>';
+      }
+
+      // Error Pie Chart
+      const pieCtx = document.getElementById('errorPieChart');
+      if (pieCtx && errorValues.some(v => v > 0)) {
+        new Chart(pieCtx, {
+          type: 'doughnut',
+          data: {
+            labels: errorLabels,
+            datasets: [{
+              data: errorValues,
+              backgroundColor: [
+                'rgb(255, 99, 132)',
+                'rgb(255, 159, 64)',
+                'rgb(255, 205, 86)',
+                'rgb(75, 192, 192)',
+                'rgb(54, 162, 235)',
+                'rgb(153, 102, 255)'
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom'
+              }
+            }
+          }
+        });
+      } else if (pieCtx) {
+        pieCtx.parentElement.innerHTML = '<p class="text-muted text-center my-5">No errors recorded</p>';
+      }
+    });
+  </script>
+</body>
+</html>

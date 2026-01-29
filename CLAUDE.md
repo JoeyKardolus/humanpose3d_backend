@@ -72,7 +72,7 @@ data/output/pose-3d/<video>/
 | `pof/` | POF models (Transformer, GCN, SemGCN-Temporal), LS solver, metric scale |
 | `joint_refinement/` | Neural joint constraint model |
 | `pipeline/` | Orchestration (refinement, cleanup) |
-| `application/` | Django web interface |
+| `application/` | Django web interface, analytics, feedback |
 
 ## GPU Acceleration
 
@@ -368,6 +368,56 @@ All joints use: `{joint}_flex_deg`, `{joint}_abd_deg`, `{joint}_rot_deg`
 - ISB-compliant anatomical axes for all segments
 - `ensure_continuity()` prevents 180° axis flips between frames
 - Pelvis from ASIS/PSIS markers, validated against reference implementation
+
+## Web Application
+
+### Running the Server
+
+```bash
+uv run python manage.py runserver
+# Open http://localhost:8000
+```
+
+### Analytics Dashboard
+
+Access at `/analytics/` to view:
+- Pipeline usage statistics (today/week/all-time)
+- Success rate and average processing time
+- Kinematics quality trends over time
+- Error breakdown by type
+- Settings correlation analysis (which flags produce better quality)
+
+Data stored in `~/.humanpose3d/logs/analytics.jsonl`.
+
+### Bug Reports
+
+Users can report issues via the "Report Issue" button on home and results pages. Reports are:
+- Saved to `~/.humanpose3d/logs/bug_reports/`
+- Emailed to configured recipient
+
+### Email Configuration
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=1
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password  # Google App Password
+DEFAULT_FROM_EMAIL=your-email@gmail.com
+BUG_REPORT_EMAIL=recipient@example.com
+```
+
+For Gmail, create an App Password at https://myaccount.google.com/apppasswords (requires 2FA).
+
+### Kinematics Quality Analysis
+
+Pipeline automatically analyzes joint angles against physiological limits:
+- 32 joint angles checked (pelvis, hip, knee, ankle, trunk, shoulder, elbow)
+- Plausibility score (% within anatomical limits)
+- Results saved to `quality_metrics.json` in output directory
 
 ## Code Style
 

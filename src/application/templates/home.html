@@ -12,7 +12,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
   <script defer src="{% static 'main.js' %}"></script>
 </head>
-<body class="page-body" data-model-status-url="{% url 'api_models_status' %}" data-model-download-url="{% url 'api_models_download' %}">
+<body class="page-body" data-model-status-url="{% url 'api_models_status' %}" data-model-download-url="{% url 'api_models_download' %}" data-report-bug-url="{% url 'report_bug' %}">
   <div class="modal fade" id="instructionsModal" tabindex="-1" aria-labelledby="instructionsTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
@@ -334,6 +334,26 @@
 
           <div class="col-12">
             <div class="card panel-card border-0 rounded-4 shadow">
+              <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                  <p class="text-uppercase text-success fw-semibold small mb-1">Analytics</p>
+                  <h2 class="h5 mb-0">Usage Dashboard</h2>
+                  <p class="text-muted small mb-0">View pipeline usage statistics and quality metrics.</p>
+                </div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#bugReportModal">
+                    <i class="bi bi-bug me-1"></i> Report Issue
+                  </button>
+                  <a class="btn btn-outline-primary btn-sm" href="{% url 'analytics' %}">
+                    <i class="bi bi-graph-up me-1"></i> View Analytics
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="card panel-card border-0 rounded-4 shadow">
               <div class="card-body">
                 <p class="text-uppercase text-success fw-semibold small mb-2">References</p>
                 <h2 class="h4 mb-3">Open Source & Research</h2>
@@ -374,5 +394,7 @@
     </main>
     </form>
   </div>
+
+  {% include "partials/bug_report_modal.html" %}
 </body>
 </html>

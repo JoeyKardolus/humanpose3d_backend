@@ -1,0 +1,66 @@
+<div class="modal fade" id="bugReportModal" tabindex="-1" aria-labelledby="bugReportTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <p class="label mb-1 text-danger">Feedback</p>
+          <h2 class="modal-title h4 fw-semibold" id="bugReportTitle">Report an Issue</h2>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="bugReportForm">
+        <div class="modal-body">
+          <p class="text-muted small mb-3">Help us improve by reporting any issues you encountered during processing.</p>
+
+          <input type="hidden" id="bugReportRunKey" name="run_key" value="">
+          <input type="hidden" id="bugReportSettings" name="pipeline_settings" value="">
+
+          <div class="mb-3">
+            <label for="bugReportSummary" class="form-label">Error Summary <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="bugReportSummary" name="error_summary" required maxlength="200" placeholder="Brief description of the issue">
+          </div>
+
+          <div class="mb-3">
+            <label for="bugReportComment" class="form-label">Additional Details</label>
+            <textarea class="form-control" id="bugReportComment" name="user_comment" rows="3" maxlength="2000" placeholder="Any additional context about what you were trying to do..."></textarea>
+            <div class="form-text text-muted">Optional: Provide more context about the issue.</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="bugReportEmail" class="form-label">Contact Email</label>
+            <input type="email" class="form-control" id="bugReportEmail" name="contact_email" placeholder="your@email.com">
+            <div class="form-text text-muted">Optional: We'll follow up if we need more information.</div>
+          </div>
+
+          <div class="collapse" id="bugReportTechnicalDetails">
+            <div class="mb-3">
+              <label class="form-label">Technical Details</label>
+              <pre class="bg-dark text-light p-3 rounded small mb-0" id="bugReportStderr" style="max-height: 150px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;"></pre>
+            </div>
+          </div>
+
+          <div class="alert alert-success d-none" id="bugReportSuccess" role="alert">
+            <i class="bi bi-check-circle me-2"></i>
+            Thank you! Your report has been submitted.
+          </div>
+
+          <div class="alert alert-danger d-none" id="bugReportError" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <span id="bugReportErrorMessage">Failed to submit report. Please try again.</span>
+          </div>
+        </div>
+        <div class="modal-footer justify-content-between">
+          <button type="button" class="btn btn-link text-muted p-0" data-bs-toggle="collapse" data-bs-target="#bugReportTechnicalDetails">
+            Show technical details
+          </button>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-danger" id="bugReportSubmit">
+              <i class="bi bi-bug me-1"></i> Submit Report
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
