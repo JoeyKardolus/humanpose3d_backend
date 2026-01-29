@@ -110,10 +110,10 @@ On first launch, required models are downloaded automatically:
 
 **Results Page** (`/results/<run_key>/`):
 - File listing with sizes
-- Source video player (with rotation metadata)
-- Preview video player (skeleton overlay)
 - Download individual files or ZIP archive
 - Delete run button
+
+**Note**: Input videos are not saved—only marker data (TRC, CSV, joint angles) is kept. Videos are temporarily stored during processing and automatically deleted after pipeline completion.
 
 **Statistics Page** (`/results/<run_key>/statistics/`):
 - Interactive Chart.js time-series plots
@@ -149,13 +149,15 @@ Default: `~/.humanpose3d/` (override with `HUMANPOSE3D_HOME` environment variabl
 
 ```
 ~/.humanpose3d/
-├── input/          # Uploaded videos (temporary)
-├── output/         # Processing results (persistent)
+├── input/          # Uploaded videos (temporary, deleted after processing)
+├── output/         # Processing results (marker data only, no videos)
 ├── models/         # Downloaded model files
 │   └── checkpoints/
 ├── logs/           # Application logs
 └── training/       # Training data (optional)
 ```
+
+**Privacy**: Input videos are never persisted. They are temporarily stored during processing and automatically deleted upon pipeline completion.
 
 ### Django Settings
 
@@ -335,4 +337,4 @@ See `src/api/` for full API implementation.
 
 ---
 
-*Last updated: 2026-01-29*
+*Last updated: 2026-01-29* (videos no longer saved, marker data only)
